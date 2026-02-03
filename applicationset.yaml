@@ -12,7 +12,7 @@ spec:
         repoURL: https://github.com/Younesic/dev-apps.git
         revision: main
         files:
-          - path: apps/dev/*/config.yaml
+          - path: apps/dev/*/app.yaml
   template:
     metadata:
       name: '{{ .name }}'
@@ -47,6 +47,24 @@ spec:
                     {{- range $k, $v := .config }}
                     {{ $k }}: "{{ $v }}"
                     {{- end }}
+{{- if hasKey . "sealedSecret" }}
+            - target:
+                kind: SealedSecret
+                name: '{{ default "app-secret" .sealedSecret.name }}'
+              patch: |-
+                apiVersion: bitnami.com/v1alpha1
+                kind: SealedSecret
+                metadata:
+                  name: '{{ default "app-secret" .sealedSecret.name }}'
+                spec:
+                  template:
+                    metadata:
+                      name: '{{ default "app-secret" .sealedSecret.name }}'
+                  encryptedData:
+                    {{- range $k, $v := .sealedSecret.encryptedData }}
+                    {{ $k }}: "{{ $v }}"
+                    {{- end }}
+{{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{ .namespace }}'
