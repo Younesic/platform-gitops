@@ -4,37 +4,51 @@ metadata:
   name: dev-apps
   namespace: argocd
 spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
   generators:
     - git:
         repoURL: https://github.com/Younesic/dev-apps.git
         revision: main
         files:
-          - path: apps/dev/*.yaml
+          - path: apps/dev/*/config.yaml
   template:
     metadata:
-      name: '{{name}}'
+      name: '{{ .name }}'
       labels:
         platform.example.com/environment: dev
         platform.example.com/managed-by: applicationset
     spec:
-      project: '{{project}}'
+      project: '{{ .project }}'
       source:
         repoURL: https://github.com/Younesic/platform-gitops.git
         targetRevision: main
-        path: apps/templates/{{template}}/overlays/dev
+        path: apps/templates/webapp/overlays/dev/default
         kustomize:
-          namePrefix: '{{name}}-'
-          namespace: '{{namespace}}'
+          namePrefix: '{{ .name }}-'
+          namespace: '{{ .namespace }}'
           images:
-            - name: example/app
-              newName: '{{imageName}}'
-              newTag: '{{imageTag}}'
+            - 'example/app={{ .imageName }}:{{ .imageTag }}'
           replicas:
             - name: app
-              count: {{replicas}}
+              count: '{{ .replicas }}'
+          patches:
+            - target:
+                kind: ConfigMap
+                name: app-config
+              patch: |-
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: app-config
+                data:
+                {{ range $k, $v := .config }}
+                  {{ $k }}: "{{ $v }}"
+                {{ end }}
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{namespace}}'
+        namespace: '{{ .namespace }}'
       syncPolicy:
         automated:
           prune: true

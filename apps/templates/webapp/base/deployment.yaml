@@ -19,3 +19,15 @@ spec:
           image: example/app:latest
           ports:
             - containerPort: 80
+          envFrom:
+            - secretRef:
+                name: app-secret
+                optional: true
+          volumeMounts:
+            - name: app-config
+              mountPath: /etc/app/config
+              readOnly: true
+      volumes:
+        - name: app-config
+          configMap:
+            name: app-config
