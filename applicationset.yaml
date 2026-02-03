@@ -49,16 +49,16 @@ spec:
                     {{- end }}
             - target:
                 kind: SealedSecret
-                name: '{{ .sealedSecret.name }}'
+                name: app-secret
               patch: |-
                 apiVersion: bitnami.com/v1alpha1
                 kind: SealedSecret
                 metadata:
-                  name: '{{ .sealedSecret.name }}'
+                  name: app-secret
                 spec:
                   template:
                     metadata:
-                      name: '{{ .sealedSecret.name }}'
+                      name: app-secret
                   encryptedData:
                     {{- range $k, $v := .sealedSecret.encryptedData }}
                     {{ $k }}: "{{ $v }}"
