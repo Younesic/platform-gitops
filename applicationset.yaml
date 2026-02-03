@@ -19,11 +19,19 @@ spec:
     spec:
       project: '{{project}}'
       source:
-        repoURL: '{{repoURL}}'
-        targetRevision: '{{revision}}'
-        path: '{{appPath}}'
+        repoURL: https://github.com/Younesic/platform-gitops.git
+        targetRevision: main
+        path: apps/templates/{{template}}/overlays/dev
         kustomize:
           namePrefix: '{{name}}-'
+          namespace: '{{namespace}}'
+          images:
+            - name: example/app
+              newName: '{{imageName}}'
+              newTag: '{{imageTag}}'
+          replicas:
+            - name: app
+              count: {{replicas}}
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
