@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dev-apps
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/Younesic/dev-apps.git
+        revision: main
+        files:
+          - path: apps/dev/*.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      labels:
+        platform.example.com/environment: dev
+        platform.example.com/managed-by: applicationset
+    spec:
+      project: '{{project}}'
+      source:
+        repoURL: '{{repoURL}}'
+        targetRevision: '{{revision}}'
+        path: '{{path}}'
+        kustomize:
+          namePrefix: '{{name}}-'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false
