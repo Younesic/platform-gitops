@@ -3,7 +3,7 @@ kind: Promise
 metadata:
   creationTimestamp: null
   labels:
-    kratix.io/promise-version: v0.0.1
+    kratix.io/promise-version: v0.0.2
   name: workspace
 spec:
   api:
@@ -43,6 +43,18 @@ spec:
                         - large
                         - restricted
                       type: string
+                    mesh:
+                      type: object
+                      description: Activer la mesh Istio sur le namespace
+                      properties:
+                        enabled:
+                          type: boolean
+                        mtls:
+                          type: string
+                          enum:
+                            - STRICT
+                            - PERMISSIVE
+                          default: STRICT
                   required:
                     - team
                     - environment
@@ -68,7 +80,7 @@ spec:
                   - name: CHART_URL
                     value: oci://harbor.212-47-226-56.nip.io/platform/workspace
                   - name: CHART_VERSION
-                    value: 0.1.0
+                    value: 0.2.0
                 image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
                 name: instance-configure
 status:
