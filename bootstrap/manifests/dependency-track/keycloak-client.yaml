@@ -1,0 +1,42 @@
+# Client OIDC Keycloak pour Dependency-Track — identity-as-code (Crossplane provider-keycloak).
+# SPA frontend -> client PUBLIC + Authorization Code (PKCE), pas de secret.
+apiVersion: openidclient.keycloak.crossplane.io/v1alpha1
+kind: Client
+metadata:
+  name: dependency-track
+spec:
+  forProvider:
+    realmId: platform
+    clientId: dependency-track
+    name: Dependency-Track
+    enabled: true
+    accessType: PUBLIC
+    standardFlowEnabled: true
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    rootUrl: https://dtrack.212-47-226-56.nip.io
+    validRedirectUris:
+      - https://dtrack.212-47-226-56.nip.io/*
+    webOrigins:
+      - "+"
+  providerConfigRef:
+    name: default
+---
+# Mapper "groups" -> claim `groups` (synchro users/teams DT depuis les groupes Keycloak).
+apiVersion: openidgroup.keycloak.crossplane.io/v1alpha1
+kind: GroupMembershipProtocolMapper
+metadata:
+  name: dependency-track-groups
+spec:
+  forProvider:
+    realmId: platform
+    clientIdRef:
+      name: dependency-track
+    name: groups
+    claimName: groups
+    fullPath: false
+    addToIdToken: true
+    addToAccessToken: true
+    addToUserinfo: true
+  providerConfigRef:
+    name: default

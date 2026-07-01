@@ -1,0 +1,57 @@
+# SonarQube (Community) — authentification LDAP DIRECTE sur OpenLDAP (legacy/AD), pas via Keycloak.
+community:
+  enabled: true
+
+# DB externe via CloudNativePG (pas de subchart Bitnami)
+postgresql:
+  enabled: false
+jdbcOverwrite:
+  enabled: true
+  jdbcUrl: "jdbc:postgresql://sonarqube-db-rw.sonarqube.svc.cluster.local:5432/sonarqube"
+  jdbcUsername: "sonarqube"
+  jdbcSecretName: "sonarqube-db-app"        # secret généré par CNPG
+  jdbcSecretPasswordKey: "password"
+
+# LDAP direct (props non-secrètes)
+sonarProperties:
+  sonar.forceAuthentication: "true"
+  sonar.security.realm: "LDAP"
+  sonar.security.localUsers: "admin"        # garde l'admin local (break-glass si LDAP KO)
+  ldap.url: "ldap://openldap.ldap.svc.cluster.local:389"
+  ldap.bindDn: "cn=admin,dc=platform,dc=local"
+  ldap.user.baseDn: "ou=users,dc=platform,dc=local"
+  ldap.user.request: "(&(objectClass=inetOrgPerson)(uid={login}))"
+  ldap.user.realNameAttribute: "cn"
+  ldap.user.emailAttribute: "mail"
+  ldap.group.baseDn: "ou=groups,dc=platform,dc=local"
+  ldap.group.request: "(&(objectClass=groupOfNames)(member={dn}))"
+# le ldap.bindPassword vient du secret (clé secret.properties)
+sonarSecretProperties: "sonarqube-ldap"
+
+# probe gate (obligatoire sinon le pod ne devient jamais Ready)
+monitoringPasscode: "Sonar-Mon-2026"
+
+# Elasticsearch embarqué : vm.max_map_count via initContainer privilégié (ns labellisé privileged)
+initSysctl:
+  enabled: true
+
+persistence:
+  enabled: true
+  storageClass: sbs-default
+  size: 5Gi
+
+resources:
+  requests: { cpu: 400m, memory: 2Gi }
+  limits:   { cpu: "1",  memory: 4Gi }
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - name: sonarqube.212-47-226-56.nip.io
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+  tls:
+    - secretName: sonarqube-tls
+      hosts: [sonarqube.212-47-226-56.nip.io]

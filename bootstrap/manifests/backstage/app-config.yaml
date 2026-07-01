@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-config
+  namespace: backstage
+data:
+  app-config.yaml: |
+    app:
+      title: Attijari Portal
+      baseUrl: https://backstage.212-47-226-56.nip.io
+    organization:
+      name: Attijari
+
+    backend:
+      baseUrl: https://backstage.212-47-226-56.nip.io
+      listen:
+        port: 7007
+        host: 0.0.0.0
+      csp:
+        connect-src: ["'self'", 'http:', 'https:']
+      cors:
+        origin: https://backstage.212-47-226-56.nip.io
+        methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+        credentials: true
+      auth:
+        keys:
+          - secret: ${BACKEND_SECRET}
+      database:
+        client: pg
+        pluginDivisionMode: schema
+        connection:
+          host: ${POSTGRES_HOST}
+          port: ${POSTGRES_PORT}
+          user: ${POSTGRES_USER}
+          password: ${POSTGRES_PASSWORD}
+          database: ${POSTGRES_DATABASE}
+
+    integrations:
+      github:
+        - host: github.com
+          token: ${GITHUB_TOKEN}
+
+    # === Sign-in : Guest + Keycloak (les 2 cartes, comme en local) ===
+    auth:
+      environment: production
+      session:
+        secret: ${AUTH_SESSION_SECRET}
+      providers:
+        guest: {}
+        oidc:
+          production:
+            metadataUrl: https://keycloak.212-47-226-56.nip.io/realms/platform/.well-known/openid-configuration
+            clientId: backstage
+            clientSecret: ${KEYCLOAK_CLIENT_SECRET}
+            prompt: auto
+            callbackUrl: https://backstage.212-47-226-56.nip.io/api/auth/oidc/handler/frame
+            additionalScopes: groups
+            signIn:
+              resolvers:
+                - resolver: emailLocalPartMatchingUserEntityName
+                  dangerouslyAllowSignInWithoutUserInCatalog: true
+
+    techdocs:
+      builder: local
+      generator:
+        runIn: local
+      publisher:
+        type: local
+
+    catalog:
+      # Modèle Syntasso PUSH : Backstage lit les Components que les WORKFLOWS Kratix poussent
+      # dans kratix-state/backstage/ (Resource Configure -> Component du provisionné).
+      providers:
+        github:
+          kratixCatalog:
+            organization: Younesic
+            catalogPath: /backstage/**/instance/*/backstage/*.yaml
+            filters:
+              repository: kratix-state
+            schedule:
+              frequency: { minutes: 1 }
+              timeout: { minutes: 2 }
+      import:
+        entityFilename: catalog-info.yaml
+        pullRequestBranchName: backstage-integration
+      rules:
+        - allow: [Component, System, API, Resource, Location, Template, Domain, Group, User]
+      locations:
+        - type: file
+          target: ../../examples/entities.yaml
+        - type: file
+          target: ../../examples/template/template.yaml
+          rules:
+            - allow: [Template]
+        - type: file
+          target: ../../examples/org.yaml
+          rules:
+            - allow: [User, Group]
+
+    kubernetes:
+      serviceLocatorMethod: { type: multiTenant }
+      clusterLocatorMethods:
+        - type: config
+          clusters:
+            - name: k8s-for-kratix
+              title: Plateforme
+              url: https://kubernetes.default.svc
+              authProvider: serviceAccount
+              caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              skipMetricsLookup: true
+      customResources:
+        - { group: platform.example.io, apiVersion: v1, plural: teamnamespaces }
+        - { group: platform.example.io, apiVersion: v1, plural: teamprojects }
+
+    # === INGESTOR : Templates depuis les CRD (Brique A) + claims en entités (Brique B) ===
+    kubernetesIngestor:
+      # Modèle Syntasso : le Component du provisionné est POUSSÉ par les workflows (Resource
+      # Configure -> kratix-state/backstage). On DÉSACTIVE donc le Component depuis le claim
+      # (sinon doublon de même nom) ; on garde genericCRDTemplates (Template auto depuis CRD).
+      components:
+        enabled: false
+        disableDefaultWorkloadTypes: true
+        customWorkloadTypes:
+          - { group: platform.example.io, apiVersion: v1, plural: teamnamespaces, defaultType: kratix-resource }
+          - { group: platform.example.io, apiVersion: v1, plural: teamprojects, defaultType: kratix-resource }
+        excludedNamespaces: [kube-system, kube-public]
+        taskRunner: { frequency: 30, timeout: 600 }
+      genericCRDTemplates:
+        crds:
+          - teamnamespaces.platform.example.io
+          - teamprojects.platform.example.io
+        publishPhase:
+          target: github
+          allowRepoSelection: false
+          allowedTargets: ['github.com']
+          git:
+            repoUrl: github.com?owner=Younesic&repo=portal-templates
+            targetBranch: main
+
+    permission:
+      enabled: true

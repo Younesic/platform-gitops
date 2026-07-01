@@ -1,0 +1,53 @@
+# Client OIDC Keycloak pour Backstage — identity-as-code (Crossplane provider-keycloak).
+# Client CONFIDENTIEL ; le secret généré est exporté via writeConnectionSecretToRef vers
+# `backstage-oidc-client` (lu par l'app-config Backstage : auth.providers.oidc).
+apiVersion: openidclient.keycloak.crossplane.io/v1alpha1
+kind: Client
+metadata:
+  name: backstage
+spec:
+  forProvider:
+    realmId: platform
+    clientId: backstage
+    name: Backstage
+    enabled: true
+    accessType: CONFIDENTIAL
+    standardFlowEnabled: true
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    rootUrl: https://backstage.212-47-226-56.nip.io
+    validRedirectUris:
+      - https://backstage.212-47-226-56.nip.io/api/auth/oidc/handler/frame
+      - https://backstage.212-47-226-56.nip.io/oauth2/callback
+      # dev LOCAL (yarn start, backstage-platform) — pour que l'OIDC marche aussi sur localhost
+      - http://localhost:7007/api/auth/oidc/handler/frame
+      - http://localhost:3000/api/auth/oidc/handler/frame
+      - http://127.0.0.1:7007/api/auth/oidc/handler/frame
+    webOrigins:
+      - "+"
+      - http://localhost:3000
+      - http://localhost:7007
+  writeConnectionSecretToRef:
+    name: backstage-oidc-client
+    namespace: backstage
+  providerConfigRef:
+    name: default
+---
+# Mapper "groups" -> claim `groups` (one-identity team-<slug> ; l'ingestor/RBAC en dérive l'ownership).
+apiVersion: openidgroup.keycloak.crossplane.io/v1alpha1
+kind: GroupMembershipProtocolMapper
+metadata:
+  name: backstage-groups
+spec:
+  forProvider:
+    realmId: platform
+    clientIdRef:
+      name: backstage
+    name: groups
+    claimName: groups
+    fullPath: false
+    addToIdToken: true
+    addToAccessToken: true
+    addToUserinfo: true
+  providerConfigRef:
+    name: default

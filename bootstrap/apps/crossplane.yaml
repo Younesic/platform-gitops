@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: crossplane, namespace: argocd }
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.crossplane.io/stable
+      chart: crossplane
+      targetRevision: "2.3.2"
+      helm:
+        valueFiles: [ $values/bootstrap/values/crossplane.yaml ]
+    - repoURL: git@github.com:Younesic/platform-gitops.git
+      targetRevision: main
+      ref: values
+  destination: { server: https://kubernetes.default.svc, namespace: crossplane-system }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: keycloak
+  namespace: keycloak
+# L'opérateur Keycloak ne crée PAS de PDB ; on le pose explicitement pour survivre aux drains/upgrades
+# de nœuds (avec instances: 2 → 1 disruption volontaire autorisée à la fois).
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: keycloak-operator
+      app.kubernetes.io/instance: keycloak

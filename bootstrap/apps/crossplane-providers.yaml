@@ -1,0 +1,10 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: crossplane-providers, namespace: argocd }
+spec:
+  project: default
+  source: { repoURL: git@github.com:Younesic/platform-gitops.git, targetRevision: main, path: bootstrap/manifests/crossplane-providers, directory: { recurse: true } }
+  destination: { server: https://kubernetes.default.svc, namespace: crossplane-system }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]

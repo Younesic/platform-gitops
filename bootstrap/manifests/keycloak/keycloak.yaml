@@ -1,0 +1,56 @@
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  # HA : 2 instances Keycloak (mode production).
+  instances: 2
+
+  # Base PostgreSQL fournie par CloudNativePG (service primaire + secret auto-généré).
+  db:
+    vendor: postgres
+    host: keycloak-db-rw
+    port: 5432
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-app
+      key: username
+    passwordSecret:
+      name: keycloak-db-app
+      key: password
+
+  # Hostname public (URL complète → frontend URLs correctes derrière le reverse-proxy).
+  # keycloak.212-47-226-56.nip.io est remplacé par scripts/deploy.sh une fois l'IP LoadBalancer connue
+  # (ex: keycloak.51-15-228-174.nip.io).
+  hostname:
+    hostname: https://keycloak.212-47-226-56.nip.io
+
+  # TLS terminé à l'edge (ingress-nginx) → Keycloak écoute en HTTP, derrière proxy X-Forwarded.
+  http:
+    httpEnabled: true
+  proxy:
+    headers: xforwarded
+
+  # On gère notre propre Ingress (cert-manager + buffers) → désactive l'ingress de l'opérateur.
+  ingress:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1024Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  # Scheduling pro : 2 instances sur 2 nœuds distincts + priorité plateforme.
+  scheduling:
+    priorityClassName: platform-high
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: keycloak

@@ -1,0 +1,23 @@
+# Dependency-Track (OWASP SCA/SBOM) — Helm + OIDC Keycloak, même pattern que sonarqube.
+# 3 sources : chart Helm + $values + manifests (DB CNPG + Client Keycloak Crossplane).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: dependency-track, namespace: argocd }
+spec:
+  project: default
+  sources:
+    - repoURL: https://dependencytrack.github.io/helm-charts
+      chart: dependency-track
+      targetRevision: "1.1.0"
+      helm:
+        valueFiles: [ $values/bootstrap/values/dependency-track.yaml ]
+    - repoURL: git@github.com:Younesic/platform-gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:Younesic/platform-gitops.git
+      targetRevision: main
+      path: bootstrap/manifests/dependency-track
+  destination: { server: https://kubernetes.default.svc, namespace: dependency-track }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]

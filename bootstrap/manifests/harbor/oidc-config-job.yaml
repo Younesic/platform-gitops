@@ -1,0 +1,63 @@
+# Job PostSync : configure l'authentification OIDC de Harbor (auth_mode=oidc_auth) via l'API.
+# Harbor stocke la conf d'auth en base (pas dans Helm) -> on la pose après chaque sync (idempotent).
+# Le secret client est lu par fichier (glob *client_secret*) pour être robuste au nom de clé du
+# connection-secret Crossplane (attribute.client_secret).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: harbor-oidc-config
+  namespace: harbor
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 900
+  template:
+    metadata:
+      labels: { app: harbor-oidc-config }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: configure-oidc
+          image: curlimages/curl:8.11.1
+          env:
+            - name: HARBOR_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: harbor-admin, key: HARBOR_ADMIN_PASSWORD }
+          volumeMounts:
+            - { name: oidc, mountPath: /oidc, readOnly: true }
+          command: [ /bin/sh, -c ]
+          args:
+            - |
+              set -eu
+              HARBOR="http://harbor-core.harbor.svc:80"
+              CS="$(cat /oidc/*client_secret* 2>/dev/null || true)"
+              if [ -z "$CS" ]; then echo "ERROR: client secret introuvable dans /oidc"; ls -la /oidc; exit 1; fi
+              echo "Attente de Harbor core..."
+              i=0
+              until curl -sf -o /dev/null "$HARBOR/api/v2.0/systeminfo"; do
+                i=$((i+1)); [ "$i" -gt 60 ] && { echo "Harbor core indisponible"; exit 1; }; sleep 5
+              done
+              echo "Configuration OIDC (auth_mode=oidc_auth)..."
+              code="$(curl -s -o /tmp/resp -w '%{http_code}' -u "admin:${HARBOR_ADMIN_PASSWORD}" \
+                -X PUT "$HARBOR/api/v2.0/configurations" -H 'Content-Type: application/json' -d "{
+                  \"auth_mode\":\"oidc_auth\",
+                  \"oidc_name\":\"keycloak\",
+                  \"oidc_endpoint\":\"https://keycloak.212-47-226-56.nip.io/realms/platform\",
+                  \"oidc_client_id\":\"harbor\",
+                  \"oidc_client_secret\":\"${CS}\",
+                  \"oidc_scope\":\"openid,profile,email,offline_access\",
+                  \"oidc_groups_claim\":\"groups\",
+                  \"oidc_user_claim\":\"preferred_username\",
+                  \"oidc_auto_onboard\":true,
+                  \"oidc_verify_cert\":true,
+                  \"oidc_admin_group\":\"harbor-admins\"
+                }")"
+              echo "PUT /api/v2.0/configurations -> HTTP $code"; cat /tmp/resp 2>/dev/null; echo
+              [ "$code" = "200" ] || exit 1
+              echo "OIDC Keycloak configuré sur Harbor."
+      volumes:
+        - name: oidc
+          secret:
+            secretName: harbor-oidc-client

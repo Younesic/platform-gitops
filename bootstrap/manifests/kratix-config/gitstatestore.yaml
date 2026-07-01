@@ -1,0 +1,17 @@
+# GitStateStore : Kratix ÉCRIT l'état réconcilié dans le repo kratix-state (via deploy-key SSH write).
+# ArgoCD (app kratix-destination) LIT ce repo et applique sur le cluster.
+apiVersion: platform.kratix.io/v1alpha1
+kind: GitStateStore
+metadata:
+  name: default
+spec:
+  url: git@github.com:Younesic/kratix-state.git
+  branch: main
+  path: .
+  authMethod: ssh
+  gitAuthor:
+    name: kratix-platform
+    email: platform@attijari.local
+  secretRef:
+    name: kratix-state-git-creds
+    namespace: kratix-platform-system

@@ -1,0 +1,55 @@
+# ingress-nginx — exposition via LoadBalancer Scaleway (IP publique stable).
+# Scheduling pro : 2 répliques réparties sur des nœuds distincts, requests/limits, PDB, priorityClass.
+controller:
+  replicaCount: 2
+  priorityClassName: platform-high
+
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Cluster   # robuste par défaut.
+    # --- Option pro : préservation de l'IP client réelle via proxy-protocol Scaleway ---
+    # annotations:
+    #   service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "true"
+    # (à coupler avec controller.config.use-proxy-protocol: "true" ci-dessous)
+
+  # Gros headers Keycloak (cookies/OIDC) — buffers larges par défaut au niveau contrôleur.
+  config:
+    proxy-buffer-size: "16k"
+    # use-proxy-protocol: "true"   # si proxy-protocol activé côté LB
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Répartition sur les 3 nœuds du pool (mono-zone) — soft pour ne pas bloquer les rollouts.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+          app.kubernetes.io/instance: ingress-nginx
+          app.kubernetes.io/component: controller
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # IngressClass "nginx" (non-default ; on référence ingressClassName explicitement dans les Ingress).
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: false
+
+  admissionWebhooks:
+    enabled: true
+    patch:
+      priorityClassName: platform-high
+
+defaultBackend:
+  enabled: false

@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: sonarqube, namespace: argocd }
+spec:
+  project: default
+  sources:
+    - repoURL: https://SonarSource.github.io/helm-chart-sonarqube
+      chart: sonarqube
+      targetRevision: "2026.3.1"
+      helm:
+        valueFiles: [ $values/bootstrap/values/sonarqube.yaml ]
+    - repoURL: git@github.com:Younesic/platform-gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:Younesic/platform-gitops.git
+      targetRevision: main
+      path: bootstrap/manifests/sonarqube
+  destination: { server: https://kubernetes.default.svc, namespace: sonarqube }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]

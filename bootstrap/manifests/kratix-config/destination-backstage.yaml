@@ -1,0 +1,13 @@
+# Destination Backstage (modèle Syntasso PUSH) : Kratix y écrit les Components/Templates
+# émis par les workflows ; BACKSTAGE lit ce path via son catalog provider (PAS ArgoCD).
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: backstage
+  labels:
+    environment: backstage
+spec:
+  stateStoreRef:
+    name: default
+    kind: GitStateStore
+  path: backstage

@@ -1,0 +1,15 @@
+# Kratix operator + CRDs (vendorisé figé depuis le release `latest`, image digest-pinnée).
+# Dépend de cert-manager (déjà déployé) pour le certificat du webhook.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kratix
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source: { repoURL: git@github.com:Younesic/platform-gitops.git, targetRevision: main, path: bootstrap/manifests/kratix, directory: { recurse: true } }
+  destination: { server: https://kubernetes.default.svc, namespace: kratix-platform-system }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]

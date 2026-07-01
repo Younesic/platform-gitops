@@ -1,0 +1,49 @@
+# Dependency-Track — OIDC Keycloak (realm platform), DB CNPG externe, ingress nip.io TLS prod.
+apiServer:
+  # Clé de signature auto-générée et persistée sur le PV (StatefulSet).
+  persistentVolume:
+    enabled: true
+    className: sbs-default
+    size: 5Gi
+  resources:
+    requests: { cpu: 500m, memory: 2Gi }
+    limits: { memory: 4Gi }
+  extraEnv:
+    # --- Base PostgreSQL externe (CloudNativePG) ---
+    - { name: ALPINE_DATABASE_MODE, value: "external" }
+    - { name: ALPINE_DATABASE_URL, value: "jdbc:postgresql://dependency-track-db-rw:5432/dependencytrack" }
+    - { name: ALPINE_DATABASE_DRIVER, value: "org.postgresql.Driver" }
+    - name: ALPINE_DATABASE_USERNAME
+      valueFrom: { secretKeyRef: { name: dependency-track-db-app, key: username } }
+    - name: ALPINE_DATABASE_PASSWORD
+      valueFrom: { secretKeyRef: { name: dependency-track-db-app, key: password } }
+    # --- OIDC Keycloak (validation des tokens + provisioning users/teams) ---
+    - { name: ALPINE_OIDC_ENABLED, value: "true" }
+    - { name: ALPINE_OIDC_ISSUER, value: "https://keycloak.212-47-226-56.nip.io/realms/platform" }
+    - { name: ALPINE_OIDC_CLIENT_ID, value: "dependency-track" }
+    - { name: ALPINE_OIDC_USERNAME_CLAIM, value: "preferred_username" }
+    - { name: ALPINE_OIDC_TEAMS_CLAIM, value: "groups" }
+    - { name: ALPINE_OIDC_USER_PROVISIONING, value: "true" }
+    - { name: ALPINE_OIDC_TEAM_SYNCHRONIZATION, value: "true" }
+
+frontend:
+  # URL publique de l'API (l'ingress route /api,/health,/mirror -> apiserver).
+  apiBaseUrl: "https://dtrack.212-47-226-56.nip.io"
+  extraEnv:
+    - { name: OIDC_ISSUER, value: "https://keycloak.212-47-226-56.nip.io/realms/platform" }
+    - { name: OIDC_CLIENT_ID, value: "dependency-track" }
+    - { name: OIDC_SCOPE, value: "openid profile email groups" }
+    - { name: OIDC_FLOW, value: "code" }
+    - { name: OIDC_LOGIN_BUTTON_TEXT, value: "Se connecter via Keycloak" }
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hostname: dtrack.212-47-226-56.nip.io
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  tls:
+    - secretName: dependency-track-tls
+      hosts:
+        - dtrack.212-47-226-56.nip.io

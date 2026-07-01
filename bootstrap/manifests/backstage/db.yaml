@@ -1,0 +1,16 @@
+# PostgreSQL CloudNativePG pour Backstage (base "backstage", owner "backstage").
+# Le secret -app `backstage-db-app` (user/password/host/dbname) est lu par l'app-config (database).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata: { name: backstage-db, namespace: backstage }
+spec:
+  instances: 1
+  priorityClassName: platform-high
+  storage: { storageClass: sbs-default, size: 5Gi }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+  bootstrap:
+    initdb:
+      database: backstage
+      owner: backstage

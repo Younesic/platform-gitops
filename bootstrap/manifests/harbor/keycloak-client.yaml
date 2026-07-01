@@ -1,0 +1,46 @@
+# Client OIDC Keycloak pour Harbor — identity-as-code (Crossplane provider-keycloak).
+# Harbor OIDC = client CONFIDENTIEL ; le secret généré est exporté via writeConnectionSecretToRef
+# vers le secret `harbor-oidc-client` (lu par le Job harbor-oidc-config).
+apiVersion: openidclient.keycloak.crossplane.io/v1alpha1
+kind: Client
+metadata:
+  name: harbor
+spec:
+  forProvider:
+    realmId: platform
+    clientId: harbor
+    name: Harbor
+    enabled: true
+    accessType: CONFIDENTIAL
+    standardFlowEnabled: true
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    rootUrl: https://harbor.212-47-226-56.nip.io
+    validRedirectUris:
+      - https://harbor.212-47-226-56.nip.io/c/oidc/callback
+    webOrigins:
+      - "+"
+  writeConnectionSecretToRef:
+    name: harbor-oidc-client
+    namespace: harbor
+  providerConfigRef:
+    name: default
+---
+# Mapper "groups" -> claim `groups` (mapping groupes Keycloak -> groupes Harbor, oidc_admin_group).
+apiVersion: openidgroup.keycloak.crossplane.io/v1alpha1
+kind: GroupMembershipProtocolMapper
+metadata:
+  name: harbor-groups
+spec:
+  forProvider:
+    realmId: platform
+    clientIdRef:
+      name: harbor
+    name: groups
+    claimName: groups
+    fullPath: false
+    addToIdToken: true
+    addToAccessToken: true
+    addToUserinfo: true
+  providerConfigRef:
+    name: default

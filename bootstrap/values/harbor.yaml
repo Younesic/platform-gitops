@@ -1,0 +1,60 @@
+# Harbor — ingress nip.io TLS prod, DB CNPG externe, Redis interne, secrets scellés.
+# OIDC (auth_mode) appliqué POST-install par le Job harbor-oidc-config (manifests/).
+expose:
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret          # cert émis par cert-manager dans le secret ci-dessous
+    secret:
+      secretName: harbor-tls
+  ingress:
+    hosts:
+      core: harbor.212-47-226-56.nip.io
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      ingress.kubernetes.io/ssl-redirect: "true"
+      ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+
+externalURL: https://harbor.212-47-226-56.nip.io
+
+# Mot de passe admin + clé de chiffrement via SealedSecrets (jamais en clair).
+existingSecretAdminPassword: harbor-admin
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+existingSecretSecretKey: harbor-core-secret   # clé attendue dans le secret : "secretKey"
+
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      storageClass: sbs-default
+      size: 20Gi
+    jobservice:
+      jobLog:
+        storageClass: sbs-default
+        size: 1Gi
+    redis:
+      storageClass: sbs-default
+      size: 1Gi
+    trivy:
+      storageClass: sbs-default
+      size: 5Gi
+
+database:
+  type: external
+  external:
+    host: harbor-db-rw
+    port: "5432"
+    username: harbor
+    coreDatabase: registry
+    existingSecret: harbor-db-app   # secret CNPG, clé "password"
+    sslmode: disable
+
+redis:
+  type: internal
+
+trivy:
+  enabled: true

@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openldap-bootstrap
+  namespace: ldap
+data:
+  01-structure.ldif: 'dn: ou=users,dc=platform,dc=local
+
+    objectClass: organizationalUnit
+
+    ou: users
+
+
+    dn: ou=groups,dc=platform,dc=local
+
+    objectClass: organizationalUnit
+
+    ou: groups
+
+
+    dn: uid=jdupont,ou=users,dc=platform,dc=local
+
+    objectClass: inetOrgPerson
+
+    objectClass: organizationalPerson
+
+    objectClass: person
+
+    uid: jdupont
+
+    cn: Jean Dupont
+
+    sn: Dupont
+
+    givenName: Jean
+
+    mail: jdupont@platform.local
+
+    userPassword: {SSHA}OvQ9U1g30NbuwW/kZgLdRzvl1RkwwCkC
+
+
+    dn: uid=mmartin,ou=users,dc=platform,dc=local
+
+    objectClass: inetOrgPerson
+
+    objectClass: organizationalPerson
+
+    objectClass: person
+
+    uid: mmartin
+
+    cn: Marie Martin
+
+    sn: Martin
+
+    givenName: Marie
+
+    mail: mmartin@platform.local
+
+    userPassword: {SSHA}ONM9DaAoLKz/+PFLFVPORbuuswhg8iqi
+
+
+    dn: cn=K8s-Admins,ou=groups,dc=platform,dc=local
+
+    objectClass: groupOfNames
+
+    cn: K8s-Admins
+
+    description: Cluster administrators (AD-style security group)
+
+    member: uid=jdupont,ou=users,dc=platform,dc=local
+
+    member: uid=mmartin,ou=users,dc=platform,dc=local
+
+    '
+

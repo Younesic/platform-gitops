@@ -1,0 +1,88 @@
+# ArgoCD — Helm (argo/argo-cd). Login Keycloak (realm platform), HA, ingress + cert prod.
+global:
+  domain: argocd.212-47-226-56.nip.io
+  priorityClassName: platform-high
+
+# On gère l'auth via Keycloak directement (OIDC), pas via Dex.
+dex:
+  enabled: false
+
+configs:
+  params:
+    # TLS terminé à l'edge (ingress-nginx) → argocd-server en HTTP.
+    server.insecure: true
+  cm:
+    url: https://argocd.212-47-226-56.nip.io
+    # Réconciliation rapprochée : la boucle Kratix->kratix-state->ArgoCD s'applique en ~20s
+    # (au lieu de 120-180s) -> cascades compound fluides sans refresh manuel. (POC ; prod = webhook.)
+    timeout.reconciliation: 20s
+    # OIDC Keycloak — le secret est référencé depuis le secret k8s argocd-oidc-keycloak
+    # (labellisé part-of=argocd), donc PAS dans les values/git.
+    oidc.config: |
+      name: Keycloak
+      issuer: https://keycloak.212-47-226-56.nip.io/realms/platform
+      clientID: argocd
+      clientSecret: $argocd-oidc-keycloak:clientSecret
+      requestedScopes:
+        - openid
+        - profile
+        - email
+        - groups
+  rbac:
+    # Le groupe Keycloak "cluster-admins" → admin ArgoCD ; le reste en lecture seule.
+    policy.default: role:readonly
+    scopes: "[groups]"
+    policy.csv: |
+      g, cluster-admins, role:admin
+
+controller:
+  replicas: 1
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: "1",  memory: 1Gi }
+
+server:
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostname: argocd.212-47-226-56.nip.io
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    tls: true
+
+repoServer:
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+applicationSet:
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 250m, memory: 256Mi }
+
+redis:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: 200m, memory: 256Mi }
+
+notifications:
+  enabled: false

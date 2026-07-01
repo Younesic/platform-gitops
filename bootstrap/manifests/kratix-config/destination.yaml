@@ -1,0 +1,13 @@
+# Destination unique (cluster plateforme = worker pour ce POC mono-cluster).
+# Kratix écrit les sorties sous <statestore.path>/worker-1/{dependencies,resources}.
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: worker-1
+  labels:
+    environment: platform
+spec:
+  path: worker-1
+  stateStoreRef:
+    name: default
+    kind: GitStateStore

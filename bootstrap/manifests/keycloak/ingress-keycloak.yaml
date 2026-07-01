@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Keycloak émet de gros headers (cookies OIDC) → buffers élargis.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "32k"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - keycloak.212-47-226-56.nip.io   # remplacé par scripts/deploy.sh
+      secretName: keycloak-tls
+  rules:
+    - host: keycloak.212-47-226-56.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak-service   # service HTTP créé par l'opérateur Keycloak
+                port:
+                  number: 8080

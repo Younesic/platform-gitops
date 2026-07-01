@@ -1,0 +1,18 @@
+# PostgreSQL CloudNativePG pour Harbor (base "registry", owner "harbor").
+# pgcrypto pré-créée (Harbor en a besoin ; l'owner n'est pas superuser).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata: { name: harbor-db, namespace: harbor }
+spec:
+  instances: 1
+  priorityClassName: platform-high
+  storage: { storageClass: sbs-default, size: 10Gi }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: "1", memory: 1Gi }
+  bootstrap:
+    initdb:
+      database: registry
+      owner: harbor
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS pgcrypto;

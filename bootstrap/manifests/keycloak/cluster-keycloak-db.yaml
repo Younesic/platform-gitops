@@ -1,0 +1,37 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  # HA : primary + standby (réplication streaming), bascule automatique.
+  instances: 2
+  primaryUpdateStrategy: unsupervised
+
+  # Anti-affinité stricte sur l'hôte : primary et standby sur des nœuds distincts.
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: required
+
+  priorityClassName: platform-high
+
+  storage:
+    storageClass: sbs-default   # CSI Scaleway (block storage), défaut du cluster.
+    size: 5Gi
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  # Crée la base "keycloak" possédée par le rôle "keycloak".
+  # CNPG génère automatiquement le secret "keycloak-db-app" (clés: username, password, dbname, host, port, uri, ...)
+  # et le service primaire "keycloak-db-rw".
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak

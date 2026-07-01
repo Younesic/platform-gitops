@@ -1,0 +1,60 @@
+# RBAC de l'ingestor Backstage : watch read-only des CRD (Brique A : génération de templates)
+# + des claims/ressources (Brique B : entités catalogue). Aucune lecture de Secrets.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backstage
+  namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-readonly
+rules:
+  - apiGroups: ['']
+    resources: [namespaces, nodes, pods, pods/log, services, endpoints, configmaps, limitranges, resourcequotas, events]
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['apps']
+    resources: ['deployments', 'replicasets', 'statefulsets', 'daemonsets']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['batch']
+    resources: ['jobs', 'cronjobs']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['networking.k8s.io']
+    resources: ['ingresses', 'networkpolicies']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['events.k8s.io']
+    resources: ['events']
+    verbs: ['get', 'list', 'watch']
+  # CRD/XRD -> génération de Templates (Brique A)
+  - apiGroups: ['apiextensions.k8s.io']
+    resources: ['customresourcedefinitions']
+    verbs: ['get', 'list', 'watch']
+  # Crossplane (read-only)
+  - apiGroups: ['apiextensions.crossplane.io', 'pkg.crossplane.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['cert-manager.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
+  # Kratix : promises + runtime (read-only)
+  - apiGroups: ['platform.kratix.io']
+    resources: [promises, healthrecords, works, workplacements, destinations, promisereleases]
+    verbs: ['get', 'list', 'watch']
+  # NOS claims de promises (platform.example.io) -> entités catalogue (Brique B)
+  - apiGroups: ['platform.example.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-readonly
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage

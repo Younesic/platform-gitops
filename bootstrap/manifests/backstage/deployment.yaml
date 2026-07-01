@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage
+  namespace: backstage
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: backstage }
+  template:
+    metadata:
+      labels: { app: backstage }
+      annotations:
+        # redéploie quand l'app-config change (hash injecté par ArgoCD via le ConfigMap)
+        configmap-revision: v1
+    spec:
+      serviceAccountName: backstage
+      priorityClassName: platform-high
+      containers:
+        - name: backstage
+          image: harbor.212-47-226-56.nip.io/platform/backstage:20260626-push
+          imagePullPolicy: IfNotPresent
+          command: ["node", "packages/backend"]
+          args: ["--config", "/app/config/app-config.yaml"]
+          ports:
+            - { name: http, containerPort: 7007 }
+          env:
+            # --- DB (CNPG) ---
+            - { name: POSTGRES_HOST, value: backstage-db-rw }
+            - { name: POSTGRES_PORT, value: "5432" }
+            - { name: POSTGRES_DATABASE, value: backstage }
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: backstage-db-app, key: username } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: backstage-db-app, key: password } }
+            # --- backend service auth (backstage-platform attend BACKEND_SECRET) ---
+            - name: BACKEND_SECRET
+              valueFrom: { secretKeyRef: { name: backstage-secrets, key: BACKEND_AUTH_KEY } }
+            - name: AUTH_SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: backstage-secrets, key: AUTH_SESSION_SECRET } }
+            # --- OIDC (Keycloak realm platform, client backstage) ---
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: backstage-oidc-client, key: attribute.client_secret } }
+            # --- GitHub ---
+            - name: GITHUB_TOKEN
+              valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_TOKEN } }
+            - { name: NODE_OPTIONS, value: --no-node-snapshot }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits:   { cpu: "1", memory: 1Gi }
+          volumeMounts:
+            - { name: backstage-config, mountPath: /app/config, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /healthcheck, port: 7007 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /healthcheck, port: 7007 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 3
+      volumes:
+        - name: backstage-config
+          configMap:
+            name: backstage-config
+            items:
+              - { key: app-config.yaml, path: app-config.yaml }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backstage
+  namespace: backstage
+spec:
+  selector: { app: backstage }
+  ports:
+    - { name: http, port: 80, targetPort: 7007 }

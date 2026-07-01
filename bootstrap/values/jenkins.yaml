@@ -1,0 +1,58 @@
+# Jenkins — authentification LDAP DIRECTE sur OpenLDAP (pas via Keycloak), comme une app legacy/AD.
+controller:
+  jenkinsUrl: https://jenkins.212-47-226-56.nip.io
+  priorityClassName: platform-high
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: "1",  memory: 2Gi }
+
+  # le plugin ldap n'est pas bundlé par défaut — l'ajouter (requis avant que JCasC parse securityRealm: ldap)
+  additionalPlugins:
+    - ldap:807.v7d7de30930cf
+
+  # mot de passe du compte de bind (manager) injecté en variable d'env depuis le secret
+  containerEnv:
+    - name: LDAP_MANAGER_PASSWORD
+      valueFrom:
+        secretKeyRef: { name: jenkins-ldap, key: manager-password }
+
+  JCasC:
+    defaultConfig: true
+    configScripts:
+      ldap-security: |
+        jenkins:
+          securityRealm:
+            ldap:
+              configurations:
+                - server: "ldap://openldap.ldap.svc.cluster.local:389"
+                  rootDN: "dc=platform,dc=local"
+                  inhibitInferRootDN: false
+                  managerDN: "cn=admin,dc=platform,dc=local"
+                  managerPasswordSecret: "${LDAP_MANAGER_PASSWORD}"
+                  userSearchBase: "ou=users"
+                  userSearch: "uid={0}"
+                  groupSearchBase: "ou=groups"
+                  groupSearchFilter: "(& (cn={0}) (objectclass=groupOfNames))"
+                  groupMembershipStrategy:
+                    fromGroupSearch:
+                      filter: "(& (objectClass=groupOfNames) (member={0}))"
+                  displayNameAttributeName: "cn"
+                  mailAddressAttributeName: "mail"
+          authorizationStrategy:
+            loggedInUsersCanDoAnything:
+              allowAnonymousRead: false
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostName: jenkins.212-47-226-56.nip.io
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - secretName: jenkins-tls
+        hosts: [jenkins.212-47-226-56.nip.io]
+
+persistence:
+  enabled: true
+  storageClass: sbs-default
+  size: 8Gi

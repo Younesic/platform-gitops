@@ -1,0 +1,25 @@
+# App identité — gérée par la root app-of-apps (single seed).
+# Réconcilie le contenu identité (cluster-admins/, platform/) ; exclut bootstrap/ (géré ailleurs).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-identity
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-identity.git
+    targetRevision: main
+    path: .
+    directory:
+      recurse: true
+      exclude: 'bootstrap/**'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crossplane-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
