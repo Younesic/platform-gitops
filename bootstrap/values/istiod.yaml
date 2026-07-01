@@ -1,0 +1,8 @@
+# istiod — control plane Istio.
+# Install PAR DÉFAUT (sans révision) → le label d'injection d'un namespace = istio-injection=enabled.
+# La mesh est est-ouest (sidecars + mTLS) ; pas de gateway ici (ingress-nginx gère le nord-sud).
+# Le mode mTLS est piloté PAR NAMESPACE via PeerAuthentication (rendu par le chart Workspace), pas ici.
+pilot:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
