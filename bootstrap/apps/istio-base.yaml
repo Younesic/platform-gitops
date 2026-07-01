@@ -11,6 +11,15 @@ spec:
       chart: base
       targetRevision: "1.30.2"
   destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  # istiod injecte le caBundle (et bascule failurePolicy) dans ce webhook au runtime
+  # → sinon diff perpétuel. On ignore ces champs gérés par istiod.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jqPathExpressions:
+        - '.webhooks[].clientConfig.caBundle'
+        - '.webhooks[].failurePolicy'
   syncPolicy:
     automated: { selfHeal: true, prune: false }
-    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]
