@@ -18,6 +18,34 @@ spec:
       targetRevision: main
       path: bootstrap/manifests/harbor
   destination: { server: https://kubernetes.default.svc, namespace: harbor }
+  # Le chart Harbor RÉGÉNÈRE ces secrets internes à chaque rendu (ArgoCD n'a pas d'accès
+  # cluster pour le lookup de réutilisation) → OutOfSync perpétuel + redémarrage des pods
+  # (via les annotations checksum/secret*). On FIGE le vivant : ignorer le /data de ces
+  # secrets + les annotations checksum/secret* des deployments ; RespectIgnoreDifferences
+  # empêche le selfHeal de les réécrire.
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: harbor-core
+      jsonPointers: [ /data ]
+    - group: ""
+      kind: Secret
+      name: harbor-jobservice
+      jsonPointers: [ /data ]
+    - group: ""
+      kind: Secret
+      name: harbor-registry
+      jsonPointers: [ /data ]
+    - group: ""
+      kind: Secret
+      name: harbor-registry-htpasswd
+      jsonPointers: [ /data ]
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - '.spec.template.metadata.annotations."checksum/secret"'
+        - '.spec.template.metadata.annotations."checksum/secret-core"'
+        - '.spec.template.metadata.annotations."checksum/secret-jobservice"'
   syncPolicy:
     automated: { selfHeal: true, prune: false }
-    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]
