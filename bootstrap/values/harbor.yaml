@@ -58,3 +58,9 @@ redis:
 
 trivy:
   enabled: true
+
+# PVC RWO (sbs-default = ReadWriteOnce) → Recreate tue l'ancien pod avant le nouveau,
+# évite le deadlock Multi-Attach au rollout (jobservice + registry ont des PVC RWO).
+# Cf. commentaire du chart : "Set it as Recreate when RWM for volumes isn't supported".
+updateStrategy:
+  type: Recreate
