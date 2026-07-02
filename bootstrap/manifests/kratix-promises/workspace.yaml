@@ -86,7 +86,7 @@ spec:
                 image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
                 name: instance-configure
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:d06740fcbe6c3ef31c56d03776525f740c430457f920009207db7c0c59dad772
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f34ad1124dbd532734d9f3a3237d058b7e786ad1b32fe903f9efdb1602c383d6
 status:
   workflows: 0
   workflowsFailed: 0
