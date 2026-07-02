@@ -1,0 +1,94 @@
+# MÉTA-PROMESSE : créer une promesse helm devient un claim (donc un formulaire
+# Backstage, via le Template poussé par promise-configure). Le pipeline rejoue le
+# MÊME outillage que le poste du platform engineer (plugin kratix new-helm-promise
+# + schema-to-crd) et pousse une BRANCHE DE REVUE sur platform-gitops — jamais
+# d'auto-apply : le merge humain reste le garde-fou de gouvernance.
+# Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
+# (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: promise-factory
+  labels:
+    kratix.io/promise-version: v0.1.0
+spec:
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: helmpromises.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: HelmPromise
+        plural: helmpromises
+        singular: helmpromise
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required:
+                    - kind
+                    - chartUrl
+                    - chartVersion
+                  properties:
+                    kind:
+                      type: string
+                      description: Kind de l'API de la future promesse (ex. Database)
+                      pattern: ^[A-Z][A-Za-z0-9]*$
+                    chartUrl:
+                      type: string
+                      description: Chart Helm implémentant la promesse (oci:// ou repo https://)
+                      pattern: ^(oci|https?)://.+
+                    chartVersion:
+                      type: string
+                      description: Version EXACTE du chart (pin de gouvernance — jamais latest)
+                    chartName:
+                      type: string
+                      description: Nom du chart (requis seulement pour un repo Helm non-OCI)
+                    group:
+                      type: string
+                      default: platform.example.io
+                      description: Groupe API de la future promesse
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+  workflows:
+    config: {}
+    promise:
+      configure:
+        # Template « HelmPromise » poussé au portail : créer une promesse = un formulaire.
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3c03775f53bfaba0afb7f49accfa63c3f7d9e4a394b72d1582aca445fb8723c4
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: factory
+          spec:
+            volumes:
+              - name: git-creds
+                secret:
+                  secretName: promise-factory-git
+                  defaultMode: 0400
+            containers:
+              - name: factory
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:c4dbd9d8d32906404a9fa612dded543c9d4b50af85473bfe9af021e759fa0140
+                volumeMounts:
+                  - name: git-creds
+                    mountPath: /kratix/secrets/git
+                    readOnly: true
