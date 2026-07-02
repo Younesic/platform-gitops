@@ -105,6 +105,23 @@ data:
               authProvider: serviceAccount
               caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
               skipMetricsLookup: true
+      # Types PAR DÉFAUT fetchés par l'onglet Kubernetes, restreints à ce que le SA
+      # backstage-readonly sait lister (sinon 403 -> carte « Error Reporting » sur chaque
+      # fiche). Exclus À DESSEIN : secrets (sensible), persistentvolume(claim)s,
+      # horizontalpodautoscalers (pas de RBAC).
+      objectTypes:
+        - pods
+        - services
+        - configmaps
+        - limitranges
+        - resourcequotas
+        - deployments
+        - replicasets
+        - statefulsets
+        - daemonsets
+        - jobs
+        - cronjobs
+        - ingresses
       # Option B : types provisionnés à afficher (le plugin standard montre les workloads
       # par défaut ; ces types-là s'ajoutent par config, bornés, pas par promesse).
       # NB : le plugin EXIGE un group non-vide -> les ressources CORE (group "" : namespaces,
