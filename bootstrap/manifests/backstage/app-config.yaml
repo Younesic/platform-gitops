@@ -108,8 +108,12 @@ data:
               authProvider: serviceAccount
               caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
               skipMetricsLookup: true
+      # Option B : types provisionnés à afficher (le plugin standard montre les workloads
+      # par défaut ; ces types-là s'ajoutent par config, bornés, pas par promesse).
       customResources:
-        - { group: platform.example.io, apiVersion: v1alpha1, plural: workspaces }
+        - { group: "", apiVersion: v1, plural: resourcequotas }
+        - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }
+        - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }
 
     # === INGESTOR : Templates depuis les CRD (Brique A) + claims en entités (Brique B) ===
     kubernetesIngestor:
