@@ -109,26 +109,26 @@ data:
               caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
               skipMetricsLookup: true
       customResources:
-        - { group: platform.example.io, apiVersion: v1, plural: teamnamespaces }
-        - { group: platform.example.io, apiVersion: v1, plural: teamprojects }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: workspaces }
 
     # === INGESTOR : Templates depuis les CRD (Brique A) + claims en entités (Brique B) ===
     kubernetesIngestor:
-      # Modèle Syntasso : le Component du provisionné est POUSSÉ par les workflows (Resource
-      # Configure -> kratix-state/backstage). On DÉSACTIVE donc le Component depuis le claim
-      # (sinon doublon de même nom) ; on garde genericCRDTemplates (Template auto depuis CRD).
+      # Niveau 3 (le provisionné) : on INGÈRE le claim en Component type kratix-resource (watch,
+      # status live). Pas de conteneur push -> pas de doublon. La page ADAPTÉE vient de
+      # EntityPage.tsx : isComponentType('kratix-resource') -> plugin kubernetes-resources (graphe).
       components:
-        enabled: false
+        enabled: true
         disableDefaultWorkloadTypes: true
         customWorkloadTypes:
-          - { group: platform.example.io, apiVersion: v1, plural: teamnamespaces, defaultType: kratix-resource }
-          - { group: platform.example.io, apiVersion: v1, plural: teamprojects, defaultType: kratix-resource }
+          - { group: platform.example.io, apiVersion: v1alpha1, plural: workspaces, defaultType: kratix-resource }
         excludedNamespaces: [kube-system, kube-public]
         taskRunner: { frequency: 30, timeout: 600 }
       genericCRDTemplates:
-        crds:
-          - teamnamespaces.platform.example.io
-          - teamprojects.platform.example.io
+        # AUTO-DÉCOUVERTE : toute promesse dont la CRD porte ce label -> Template automatiquement.
+        # Kratix propage le label depuis promise.spec.api.metadata.labels. Zéro edit par promesse.
+        crdLabelSelector:
+          key: platform.example.io/portal
+          value: "true"
         publishPhase:
           target: github
           allowRepoSelection: false
