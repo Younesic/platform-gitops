@@ -74,7 +74,7 @@ data:
         github:
           kratixCatalog:
             organization: Younesic
-            catalogPath: /backstage/**/instance/*/backstage/*.yaml
+            catalogPath: /backstage/**/backstage/*.yaml
             filters:
               repository: kratix-state
             schedule:
@@ -117,7 +117,7 @@ data:
       # status live). Pas de conteneur push -> pas de doublon. La page ADAPTÉE vient de
       # EntityPage.tsx : isComponentType('kratix-resource') -> plugin kubernetes-resources (graphe).
       components:
-        enabled: true
+        enabled: false
         disableDefaultWorkloadTypes: true
         customWorkloadTypes:
           - { group: platform.example.io, apiVersion: v1alpha1, plural: workspaces, defaultType: kratix-resource }
