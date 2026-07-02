@@ -11,6 +11,8 @@ spec:
     kind: CustomResourceDefinition
     metadata:
       name: workspaces.platform.example.io
+      labels:
+        platform.example.io/portal: "true"
     spec:
       group: platform.example.io
       names:
