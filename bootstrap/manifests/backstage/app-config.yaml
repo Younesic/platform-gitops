@@ -110,8 +110,9 @@ data:
               skipMetricsLookup: true
       # Option B : types provisionnés à afficher (le plugin standard montre les workloads
       # par défaut ; ces types-là s'ajoutent par config, bornés, pas par promesse).
+      # NB : le plugin EXIGE un group non-vide -> les ressources CORE (group "" : namespaces,
+      # resourcequotas) ne peuvent PAS y figurer. Seuls les types à group non-vide sont listables.
       customResources:
-        - { group: "", apiVersion: v1, plural: resourcequotas }
         - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }
         - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }
 
