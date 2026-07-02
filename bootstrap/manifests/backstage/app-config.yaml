@@ -74,7 +74,7 @@ data:
         github:
           kratixCatalog:
             organization: Younesic
-            catalogPath: /backstage/**/backstage/*.yaml
+            catalogPath: /backstage/**/*.yaml
             filters:
               repository: kratix-state
             schedule:
