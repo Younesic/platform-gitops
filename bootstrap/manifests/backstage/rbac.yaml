@@ -45,6 +45,14 @@ rules:
   - apiGroups: ['platform.example.io']
     resources: ['*']
     verbs: ['get', 'list', 'watch']
+  # Option B (plugin kubernetes standard) : lister le RBAC + le mesh que les workspaces
+  # provisionnent (kubernetes.customResources n'accepte que des groups non-vides).
+  - apiGroups: ['rbac.authorization.k8s.io']
+    resources: ['roles', 'rolebindings']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['security.istio.io']
+    resources: ['peerauthentications']
+    verbs: ['get', 'list', 'watch']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
