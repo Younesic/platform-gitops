@@ -75,12 +75,14 @@ data:
           kratixCatalog:
             organization: Younesic
             # ANCRÉ sur le sous-dossier backstage/ écrit par le conteneur push :
-            # backstage/resources/<ns>/<promise>/<claim>/<pipeline>/<hash>/backstage/*.yaml
+            #   resources/…    (Resource Configure -> fiches Component+Resource)
+            #   dependencies/… (Promise Configure  -> Templates poussés)
             # ⚠️ Kratix écrit aussi ses CANARIES (kratix-canary-{namespace,configmap}.yaml,
             # manifestes k8s bruts) sous backstage/ — un glob trop large les matche, le
             # catalogue les rejette (kind Namespace/ConfigMap interdit) et TOUTE la
             # location tombe en erreur -> plus AUCUNE ingestion depuis kratix-state.
-            catalogPath: /backstage/resources/**/backstage/*.yaml
+            # Le squelette de claim (skeleton/claim.yaml) est lui aussi hors-glob à dessein.
+            catalogPath: /backstage/*/**/backstage/*.yaml
             filters:
               repository: kratix-state
             schedule:

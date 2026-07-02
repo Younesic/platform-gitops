@@ -69,7 +69,19 @@ spec:
         environment: platform
   workflows:
     config: {}
-    promise: {}
+    # Promise Configure : pousse le Template scaffolder (généré depuis spec.api)
+    # + son squelette de claim vers la Destination backstage (même conteneur
+    # partagé que le mode resource ; il branche sur KRATIX_WORKFLOW_TYPE).
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3c03775f53bfaba0afb7f49accfa63c3f7d9e4a394b72d1582aca445fb8723c4
     resource:
       configure:
         - apiVersion: platform.kratix.io/v1alpha1
@@ -86,8 +98,4 @@ spec:
                 image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
                 name: instance-configure
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f34ad1124dbd532734d9f3a3237d058b7e786ad1b32fe903f9efdb1602c383d6
-status:
-  workflows: 0
-  workflowsFailed: 0
-  workflowsSucceeded: 0
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3c03775f53bfaba0afb7f49accfa63c3f7d9e4a394b72d1582aca445fb8723c4
