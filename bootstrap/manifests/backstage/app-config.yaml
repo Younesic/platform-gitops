@@ -74,7 +74,13 @@ data:
         github:
           kratixCatalog:
             organization: Younesic
-            catalogPath: /backstage/**/*.yaml
+            # ANCRÉ sur le sous-dossier backstage/ écrit par le conteneur push :
+            # backstage/resources/<ns>/<promise>/<claim>/<pipeline>/<hash>/backstage/*.yaml
+            # ⚠️ Kratix écrit aussi ses CANARIES (kratix-canary-{namespace,configmap}.yaml,
+            # manifestes k8s bruts) sous backstage/ — un glob trop large les matche, le
+            # catalogue les rejette (kind Namespace/ConfigMap interdit) et TOUTE la
+            # location tombe en erreur -> plus AUCUNE ingestion depuis kratix-state.
+            catalogPath: /backstage/resources/**/backstage/*.yaml
             filters:
               repository: kratix-state
             schedule:
@@ -85,17 +91,8 @@ data:
         pullRequestBranchName: backstage-integration
       rules:
         - allow: [Component, System, API, Resource, Location, Template, Domain, Group, User]
-      locations:
-        - type: file
-          target: ../../examples/entities.yaml
-        - type: file
-          target: ../../examples/template/template.yaml
-          rules:
-            - allow: [Template]
-        - type: file
-          target: ../../examples/org.yaml
-          rules:
-            - allow: [User, Group]
+      # (les locations examples/* du scaffold ont été retirées : absentes de l'image,
+      # elles échouaient en NotFoundError à chaque cycle de processing)
 
     kubernetes:
       serviceLocatorMethod: { type: multiTenant }
