@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.5.0
+    kratix.io/promise-version: v0.6.0
   annotations:
     backstage.example.io/ui-schema: '{"properties":{"recipe":{"properties":{"children":{"items":{"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}}'
     backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe","source"]}}'
@@ -100,11 +100,11 @@ spec:
                           description: Nom du chart (requis seulement pour un repo Helm non-OCI)
                     recipe:
                       type: object
-                      description: "compound (COMPOSER du portail) : recette INLINE — alternative à source. Relue en PR de claim puis dans la branche de revue de la promesse (gouvernance ×2)."
+                      description: "compound (COMPOSER du portail) : recette INLINE — alternative à source. L'API parent est DÉRIVÉE des promesses enfants choisies (union de leurs champs, contraintes réelles importées, mappings auto) ; fix/hide = curation. Relue en PR de claim puis dans la branche de revue (gouvernance ×2) — la branche montre l'API dérivée complète."
                       properties:
                         api:
                           type: array
-                          description: "Les champs du spec PARENT (le formulaire des futures demandes)"
+                          description: "OPTIONNEL — champs parent à AJOUTER (ou surcharger) EN PLUS de ceux dérivés des enfants"
                           items:
                             type: object
                             required: [name, type]
@@ -157,10 +157,18 @@ spec:
                               kind:
                                 type: string
                                 description: "VIDE = résolu depuis la promesse installée"
+                              fix:
+                                type: object
+                                additionalProperties: { type: string }
+                                description: "Curation : FIGER un champ de l'enfant (valeur constante, coercée) — il disparaît du formulaire parent"
+                              hide:
+                                type: array
+                                items: { type: string }
+                                description: "Curation : MASQUER un champ OPTIONNEL de l'enfant (un requis se fige avec fix)"
                               spec:
                                 type: object
                                 additionalProperties: { type: string }
-                                description: "champ → valeur : ${spec.x} (parent), ${children.<nom>.<export>} (T3), ou littéral (true/false/entiers coercés) ; clé pointée a.b = imbrication"
+                                description: "Override AVANCÉ (sinon mapping auto ${spec.<champ>} pour chaque champ dérivé) : ${spec.x} (parent), ${children.<nom>.<export>} (T3), littéral coercé ; clé pointée a.b = imbrication"
                               when:
                                 type: object
                                 description: "T2 : condition d'émission (déclaratif)"
@@ -219,7 +227,7 @@ spec:
                   defaultMode: 0400
             containers:
               - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:f481442e0e8acbac75f64c816f6ad6cb21d01fbe2a21edd4b3fe47237fa51fc6
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cdcbd3cec67cefc33c30ad6e744f86466bd7dbf417237ca7ae59a54a94160f65
                 volumeMounts:
                   - name: git-creds
                     mountPath: /kratix/secrets/git
