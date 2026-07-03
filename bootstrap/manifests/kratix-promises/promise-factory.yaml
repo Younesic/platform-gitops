@@ -62,8 +62,8 @@ spec:
                       properties:
                         url:
                           type: string
-                          description: "helm : chart (oci:// ou repo https://) · terraform : module git::"
-                          pattern: ^(oci|https?|git)(::)?(:)?//.*
+                          description: "helm : chart (oci:// ou repo https://) · terraform : module git::https://"
+                          pattern: ^(git::)?(oci|https?)://.+
                         version:
                           type: string
                           description: Version EXACTE (pin de gouvernance — jamais latest)
