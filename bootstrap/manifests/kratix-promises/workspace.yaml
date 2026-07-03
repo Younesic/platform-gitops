@@ -75,7 +75,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7f1e6a366461fb6f77b380bfffa7d3c3928670cdc280beb76244a1851173bbf5
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3e30d1e76938269b9cd7503647f71d8dcca3714c1e9dc007b0aeeb6063e1bede
             name: backstage
     resource:
       configure:
@@ -93,7 +93,7 @@ spec:
               value: 0.2.1
             image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
             name: instance-configure
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7f1e6a366461fb6f77b380bfffa7d3c3928670cdc280beb76244a1851173bbf5
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3e30d1e76938269b9cd7503647f71d8dcca3714c1e9dc007b0aeeb6063e1bede
             name: backstage
           jobOptions: {}
           rbac: {}
