@@ -6,10 +6,16 @@
 # BRANCHE DE REVUE sur platform-gitops — jamais d'auto-apply : le merge humain reste
 # le garde-fou de gouvernance. crossplane : source = repo git à une ref PINNÉE
 # (tag|SHA) contenant 1 XRD + Composition(s) — la XRD est le contrat, copiée telle
-# quelle dans l'API. compound : source = repo git à une ref PINNÉE contenant 1
-# compound.yaml — la recette (api parent + children) est le contrat ; les
-# sous-promesses composées deviennent requiredPromises (gate d'installation) et le
-# pipeline resource émet 1 claim enfant par entrée children retenue.
+# quelle dans l'API. compound : DEUX chemins à parité — source = repo git pinné
+# contenant compound.yaml (équipes) OU **spec.recipe INLINE** (le COMPOSER du
+# portail : les enfants se choisissent via EntityPicker sur les fiches
+# kratix-promise ; version/apiVersion/kind vides = résolus depuis la promesse
+# installée et PINNÉS à la génération). Les sous-promesses composées deviennent
+# requiredPromises (gate) ; le renderer partagé émet 1 claim enfant par entrée
+# retenue (when), attend les needs (T3, workflow-control officiel) et annote les
+# sync-waves (prune ordonné). Les annotations backstage.example.io/* pilotent le
+# FORMULAIRE poussé (ui-schema = EntityPicker ; form-switch = affichage
+# conditionnel source/recipe selon le type).
 # Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
 # (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
 apiVersion: platform.kratix.io/v1alpha1
@@ -17,7 +23,10 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.4.0
+    kratix.io/promise-version: v0.5.0
+  annotations:
+    backstage.example.io/ui-schema: '{"properties":{"recipe":{"properties":{"children":{"items":{"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe","source"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -44,15 +53,15 @@ spec:
                   required:
                     - kind
                     - type
-                    - source
-                  # validation par type (CEL) : helm et crossplane exigent source.url + source.version.
+                  # validation par type (CEL). ⚠️ source n'est plus requis globalement
+                  # (compound inline) → chaque règle DOIT garder has(self.source).
                   x-kubernetes-validations:
-                    - rule: "self.type != 'helm' || (has(self.source.url) && has(self.source.version))"
+                    - rule: "self.type != 'helm' || (has(self.source) && has(self.source.url) && has(self.source.version))"
                       message: "type helm : source.url et source.version sont requis (pin de gouvernance)"
-                    - rule: "self.type != 'crossplane' || (has(self.source.url) && has(self.source.version))"
+                    - rule: "self.type != 'crossplane' || (has(self.source) && has(self.source.url) && has(self.source.version))"
                       message: "type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
-                    - rule: "self.type != 'compound' || (has(self.source.url) && has(self.source.version))"
-                      message: "type compound : source.url (repo git de la recette) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
+                    - rule: "self.type != 'compound' || (has(self.source) && has(self.source.url) && has(self.source.version)) || (has(self.recipe) && has(self.recipe.children))"
+                      message: "type compound : soit source.url+version (recette compound.yaml dans git), soit recipe inline (composer du portail)"
                   properties:
                     type:
                       type: string
@@ -89,6 +98,90 @@ spec:
                         chartName:
                           type: string
                           description: Nom du chart (requis seulement pour un repo Helm non-OCI)
+                    recipe:
+                      type: object
+                      description: "compound (COMPOSER du portail) : recette INLINE — alternative à source. Relue en PR de claim puis dans la branche de revue de la promesse (gouvernance ×2)."
+                      properties:
+                        api:
+                          type: array
+                          description: "Les champs du spec PARENT (le formulaire des futures demandes)"
+                          items:
+                            type: object
+                            required: [name, type]
+                            properties:
+                              name:
+                                type: string
+                                pattern: ^[a-zA-Z][a-zA-Z0-9]*$
+                                description: Nom du champ
+                              type:
+                                type: string
+                                enum: [string, boolean, integer]
+                              title:
+                                type: string
+                                description: Libellé affiché dans le formulaire
+                              description:
+                                type: string
+                              required:
+                                type: boolean
+                                default: false
+                              enum:
+                                type: array
+                                items: { type: string }
+                                description: Valeurs permises (type string)
+                              default:
+                                type: string
+                                description: "Défaut (coercé selon type : true/false, entier, sinon texte)"
+                              pattern:
+                                type: string
+                                description: Regex de validation (type string)
+                        children:
+                          type: array
+                          description: "Les promesses composées — 1 ligne = 1 claim enfant"
+                          items:
+                            type: object
+                            required: [name, promise]
+                            properties:
+                              name:
+                                type: string
+                                pattern: ^[a-z][a-z0-9-]*$
+                                description: "Nom logique → claim enfant <parent>-<nom>"
+                              promise:
+                                type: string
+                                description: "La promesse enfant (choisir dans le catalogue)"
+                              version:
+                                type: string
+                                description: "Pin exact — VIDE = version installée, résolue et pinnée à la génération"
+                              apiVersion:
+                                type: string
+                                description: "VIDE = résolu depuis la promesse installée"
+                              kind:
+                                type: string
+                                description: "VIDE = résolu depuis la promesse installée"
+                              spec:
+                                type: object
+                                additionalProperties: { type: string }
+                                description: "champ → valeur : ${spec.x} (parent), ${children.<nom>.<export>} (T3), ou littéral (true/false/entiers coercés) ; clé pointée a.b = imbrication"
+                              when:
+                                type: object
+                                description: "T2 : condition d'émission (déclaratif)"
+                                properties:
+                                  field:
+                                    type: string
+                                    description: "Chemin du parent (ex. spec.message)"
+                                  equals:
+                                    type: string
+                                    description: "Émis si égal (true/false/entiers coercés)"
+                                  exists:
+                                    type: boolean
+                                    description: "Émis si présent (true) ou absent (false)"
+                              needs:
+                                type: array
+                                items: { type: string }
+                                description: "T3 : attendre ces enfants (readiness Kratix) avant d'émettre celui-ci"
+                              exports:
+                                type: object
+                                additionalProperties: { type: string }
+                                description: "T3 : valeurs publiées depuis le STATUS de cet enfant (clé → chemin .status.…)"
   destinationSelectors:
     - matchLabels:
         environment: platform
@@ -104,7 +197,7 @@ spec:
           spec:
             containers:
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3e30d1e76938269b9cd7503647f71d8dcca3714c1e9dc007b0aeeb6063e1bede
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:79211e4d3d79b530eedf1d60e493720b1be7501e22ed944031659cdc8fc56e40
     resource:
       configure:
         - apiVersion: platform.kratix.io/v1alpha1
@@ -112,6 +205,13 @@ spec:
           metadata:
             name: factory
           spec:
+            # composer inline : la factory résout version/apiVersion/kind des enfants
+            # depuis les promesses INSTALLÉES (GET) et les pinne à la génération.
+            rbac:
+              permissions:
+                - apiGroups: [platform.kratix.io]
+                  resources: [promises]
+                  verbs: [get, list]
             volumes:
               - name: git-creds
                 secret:
@@ -119,7 +219,7 @@ spec:
                   defaultMode: 0400
             containers:
               - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:65c9f7cb18b11e57560265552810c9245515892b032375818830aefbf94ada59
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:f481442e0e8acbac75f64c816f6ad6cb21d01fbe2a21edd4b3fe47237fa51fc6
                 volumeMounts:
                   - name: git-creds
                     mountPath: /kratix/secrets/git
