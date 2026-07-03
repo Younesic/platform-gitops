@@ -84,7 +84,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:482203d04ba6663933da59bce15a7d6f1b48fc03b1eb64367a55ab6f5f8328e4
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
             name: backstage
     resource:
       configure:
@@ -94,7 +94,7 @@ spec:
           name: instance-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:a116228512d8e6f8ce2ce3bb480c1cf0fe0451f8028a9665e78a8b7630d711ce
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
@@ -121,7 +121,7 @@ spec:
                 \  equals: dev\n  needs:\n  - sandbox\n"
             - name: COMPOUND_STAGE
               value: emit
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:482203d04ba6663933da59bce15a7d6f1b48fc03b1eb64367a55ab6f5f8328e4
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
             name: backstage
           jobOptions: {}
           rbac: {}
@@ -131,7 +131,7 @@ spec:
           name: gated-1
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:a116228512d8e6f8ce2ce3bb480c1cf0fe0451f8028a9665e78a8b7630d711ce
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
