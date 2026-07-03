@@ -1,11 +1,15 @@
-# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm ET crossplane
-# implémentés ; terraform/operator = slots) (donc un formulaire Backstage, via le
-# Template poussé par promise-configure). Le pipeline rejoue le MÊME outillage que
-# le poste du platform engineer (plugins kratix new-helm-promise /
-# new-crossplane-promise + schema-to-crd) et pousse une BRANCHE DE REVUE sur
-# platform-gitops — jamais d'auto-apply : le merge humain reste le garde-fou de
-# gouvernance. crossplane : source = repo git à une ref PINNÉE (tag|SHA) contenant
-# 1 XRD + Composition(s) — la XRD est le contrat, copiée telle quelle dans l'API.
+# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm, crossplane ET
+# compound implémentés ; terraform/operator = slots) (donc un formulaire Backstage,
+# via le Template poussé par promise-configure). Le pipeline rejoue le MÊME outillage
+# que le poste du platform engineer (plugins kratix new-helm-promise /
+# new-crossplane-promise / new-compound-promise + schema-to-crd) et pousse une
+# BRANCHE DE REVUE sur platform-gitops — jamais d'auto-apply : le merge humain reste
+# le garde-fou de gouvernance. crossplane : source = repo git à une ref PINNÉE
+# (tag|SHA) contenant 1 XRD + Composition(s) — la XRD est le contrat, copiée telle
+# quelle dans l'API. compound : source = repo git à une ref PINNÉE contenant 1
+# compound.yaml — la recette (api parent + children) est le contrat ; les
+# sous-promesses composées deviennent requiredPromises (gate d'installation) et le
+# pipeline resource émet 1 claim enfant par entrée children retenue.
 # Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
 # (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
 apiVersion: platform.kratix.io/v1alpha1
@@ -13,7 +17,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.3.4
+    kratix.io/promise-version: v0.4.0
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -47,11 +51,13 @@ spec:
                       message: "type helm : source.url et source.version sont requis (pin de gouvernance)"
                     - rule: "self.type != 'crossplane' || (has(self.source.url) && has(self.source.version))"
                       message: "type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
+                    - rule: "self.type != 'compound' || (has(self.source.url) && has(self.source.version))"
+                      message: "type compound : source.url (repo git de la recette) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
                   properties:
                     type:
                       type: string
-                      description: Moteur de la future promesse (helm et crossplane implémentés ; terraform/operator = slots)
-                      enum: [helm, crossplane, terraform, operator]
+                      description: Moteur de la future promesse (helm, crossplane et compound implémentés ; terraform/operator = slots)
+                      enum: [helm, crossplane, terraform, operator, compound]
                       default: helm
                     kind:
                       type: string
@@ -71,15 +77,15 @@ spec:
                       properties:
                         url:
                           type: string
-                          description: "helm : chart (oci:// ou repo https://) · crossplane : repo git (https:// ou git@hôte:…) · terraform : module git::https://"
+                          description: "helm : chart (oci:// ou repo https://) · crossplane/compound : repo git (https:// ou git@hôte:…) · terraform : module git::https://"
                           pattern: ^((git::)?(oci|https?)://|git@[A-Za-z0-9.-]+:).+
                         version:
                           type: string
-                          description: "Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane : tag semver ou SHA git"
+                          description: "Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane/compound : tag semver ou SHA git"
                           pattern: ^(v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?|[0-9a-f]{7,40})$
                         path:
                           type: string
-                          description: "crossplane : sous-dossier du repo contenant la XRD + Composition(s) (défaut : racine)"
+                          description: "crossplane : sous-dossier du repo contenant la XRD + Composition(s) · compound : sous-dossier contenant compound.yaml (défaut : racine)"
                         chartName:
                           type: string
                           description: Nom du chart (requis seulement pour un repo Helm non-OCI)
