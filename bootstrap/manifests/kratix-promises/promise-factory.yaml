@@ -8,14 +8,14 @@
 # (tag|SHA) contenant 1 XRD + Composition(s) — la XRD est le contrat, copiée telle
 # quelle dans l'API. compound : DEUX chemins à parité — source = repo git pinné
 # contenant compound.yaml (équipes) OU **spec.recipe INLINE** (le COMPOSER du
-# portail : les enfants se choisissent via EntityPicker sur les fiches
-# kratix-promise ; version/apiVersion/kind vides = résolus depuis la promesse
-# installée et PINNÉS à la génération). Les sous-promesses composées deviennent
-# requiredPromises (gate) ; le renderer partagé émet 1 claim enfant par entrée
-# retenue (when), attend les needs (T3, workflow-control officiel) et annote les
-# sync-waves (prune ordonné). Les annotations backstage.example.io/* pilotent le
-# FORMULAIRE poussé (ui-schema = EntityPicker ; form-switch = affichage
-# conditionnel source/recipe selon le type).
+# portail) : l'API parent se DÉRIVE des promesses enfants choisies (EntityPicker sur
+# les fiches kratix-promise ; version/apiVersion/kind vides = résolus et PINNÉS à la
+# génération ; curation fix/hide ; la branche de revue montre l'API dérivée).
+# requiredPromises = gate ; renderer partagé : when (T2), needs/exports + waits (T3),
+# sync-waves (prune ordonné). Annotations backstage.example.io/* = formulaire
+# (ui-schema : EntityPicker + ui:order [l'API server ALPHABÉTISE les properties du
+# CRD → l'ordre du formulaire se pilote ici] ; form-switch : affichage par type).
+# ⚠️ Annotations JSON une-ligne : TOUJOURS valider json.loads avant commit (vécu).
 # Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
 # (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
 apiVersion: platform.kratix.io/v1alpha1
@@ -25,7 +25,7 @@ metadata:
   labels:
     kratix.io/promise-version: v0.6.0
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"recipe":{"properties":{"children":{"items":{"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"recipe":{"ui:order":["children","api"],"properties":{"children":{"items":{"ui:order":["name","promise","when","needs","exports","fix","hide","spec","version","apiVersion","kind"],"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}}'
     backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe","source"]}}'
 spec:
   api:
@@ -41,194 +41,230 @@ spec:
         singular: promiserequest
       scope: Namespaced
       versions:
-        - name: v1alpha1
-          served: true
-          storage: true
-          schema:
-            openAPIV3Schema:
-              type: object
-              properties:
-                spec:
-                  type: object
-                  required:
-                    - kind
-                    - type
-                  # validation par type (CEL). ⚠️ source n'est plus requis globalement
-                  # (compound inline) → chaque règle DOIT garder has(self.source).
-                  x-kubernetes-validations:
-                    - rule: "self.type != 'helm' || (has(self.source) && has(self.source.url) && has(self.source.version))"
-                      message: "type helm : source.url et source.version sont requis (pin de gouvernance)"
-                    - rule: "self.type != 'crossplane' || (has(self.source) && has(self.source.url) && has(self.source.version))"
-                      message: "type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
-                    - rule: "self.type != 'compound' || (has(self.source) && has(self.source.url) && has(self.source.version)) || (has(self.recipe) && has(self.recipe.children))"
-                      message: "type compound : soit source.url+version (recette compound.yaml dans git), soit recipe inline (composer du portail)"
-                  properties:
-                    type:
-                      type: string
-                      description: Moteur de la future promesse (helm, crossplane et compound implémentés ; terraform/operator = slots)
-                      enum: [helm, crossplane, terraform, operator, compound]
-                      default: helm
-                    kind:
-                      type: string
-                      description: Kind de l'API de la future promesse (ex. Database)
-                      pattern: ^[A-Z][A-Za-z0-9]*$
-                    plural:
-                      type: string
-                      description: "Pluriel du kind (défaut : kind minuscule + 's' — à poser si ce pluriel est faux, ex. sandboxes)"
-                      pattern: ^[a-z][a-z0-9]*$
-                    group:
-                      type: string
-                      default: platform.example.io
-                      description: Groupe API de la future promesse
-                    source:
-                      type: object
-                      description: La source d'implémentation (forme selon le type)
-                      properties:
-                        url:
-                          type: string
-                          description: "helm : chart (oci:// ou repo https://) · crossplane/compound : repo git (https:// ou git@hôte:…) · terraform : module git::https://"
-                          pattern: ^((git::)?(oci|https?)://|git@[A-Za-z0-9.-]+:).+
-                        version:
-                          type: string
-                          description: "Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane/compound : tag semver ou SHA git"
-                          pattern: ^(v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?|[0-9a-f]{7,40})$
-                        path:
-                          type: string
-                          description: "crossplane : sous-dossier du repo contenant la XRD + Composition(s) · compound : sous-dossier contenant compound.yaml (défaut : racine)"
-                        chartName:
-                          type: string
-                          description: Nom du chart (requis seulement pour un repo Helm non-OCI)
-                    recipe:
-                      type: object
-                      description: "compound (COMPOSER du portail) : recette INLINE — alternative à source. L'API parent est DÉRIVÉE des promesses enfants choisies (union de leurs champs, contraintes réelles importées, mappings auto) ; fix/hide = curation. Relue en PR de claim puis dans la branche de revue (gouvernance ×2) — la branche montre l'API dérivée complète."
-                      properties:
-                        api:
-                          type: array
-                          description: "OPTIONNEL — champs parent à AJOUTER (ou surcharger) EN PLUS de ceux dérivés des enfants"
-                          items:
-                            type: object
-                            required: [name, type]
-                            properties:
-                              name:
-                                type: string
-                                pattern: ^[a-zA-Z][a-zA-Z0-9]*$
-                                description: Nom du champ
-                              type:
-                                type: string
-                                enum: [string, boolean, integer]
-                              title:
-                                type: string
-                                description: Libellé affiché dans le formulaire
-                              description:
-                                type: string
-                              required:
-                                type: boolean
-                                default: false
+      - name: v1alpha1
+        served: true
+        storage: true
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              spec:
+                type: object
+                required:
+                - kind
+                - type
+                # validation par type (CEL). ⚠️ source n'est plus requis globalement
+                # (compound inline) → chaque règle DOIT garder has(self.source).
+                x-kubernetes-validations:
+                - rule: self.type != 'helm' || (has(self.source) && has(self.source.url) && has(self.source.version))
+                  message: 'type helm : source.url et source.version sont requis (pin de gouvernance)'
+                - rule: self.type != 'crossplane' || (has(self.source) && has(self.source.url) && has(self.source.version))
+                  message: 'type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)'
+                - rule: self.type != 'compound' || (has(self.source) && has(self.source.url) && has(self.source.version)) || (has(self.recipe) && has(self.recipe.children))
+                  message: 'type compound : soit source.url+version (recette compound.yaml dans git), soit recipe inline (composer du portail)'
+                properties:
+                  type:
+                    type: string
+                    description: Moteur de la future promesse (helm, crossplane et compound implémentés ; terraform/operator = slots)
+                    enum:
+                    - helm
+                    - crossplane
+                    - terraform
+                    - operator
+                    - compound
+                    default: helm
+                  kind:
+                    type: string
+                    description: Kind de l'API de la future promesse (ex. Database)
+                    pattern: ^[A-Z][A-Za-z0-9]*$
+                  plural:
+                    type: string
+                    description: 'Pluriel du kind (défaut : kind minuscule + ''s'' — à poser si ce pluriel est faux, ex. sandboxes)'
+                    pattern: ^[a-z][a-z0-9]*$
+                  group:
+                    type: string
+                    default: platform.example.io
+                    description: Groupe API de la future promesse
+                  source:
+                    type: object
+                    description: La source d'implémentation (forme selon le type)
+                    properties:
+                      url:
+                        type: string
+                        description: 'helm : chart (oci:// ou repo https://) · crossplane/compound : repo git (https:// ou git@hôte:…) · terraform : module git::https://'
+                        pattern: ^((git::)?(oci|https?)://|git@[A-Za-z0-9.-]+:).+
+                      version:
+                        type: string
+                        description: 'Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane/compound : tag semver ou SHA git'
+                        pattern: ^(v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?|[0-9a-f]{7,40})$
+                      path:
+                        type: string
+                        description: 'crossplane : sous-dossier du repo contenant la XRD + Composition(s) · compound : sous-dossier contenant compound.yaml (défaut : racine)'
+                      chartName:
+                        type: string
+                        description: Nom du chart (requis seulement pour un repo Helm non-OCI)
+                  recipe:
+                    type: object
+                    description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
+                    properties:
+                      api:
+                        type: array
+                        description: Optionnel — s'ajoutent aux champs dérivés des enfants.
+                        items:
+                          type: object
+                          required:
+                          - name
+                          - type
+                          properties:
+                            name:
+                              type: string
+                              pattern: ^[a-zA-Z][a-zA-Z0-9]*$
+                              description: Nom du champ
+                            type:
+                              type: string
                               enum:
-                                type: array
-                                items: { type: string }
-                                description: Valeurs permises (type string)
-                              default:
+                              - string
+                              - boolean
+                              - integer
+                            title:
+                              type: string
+                              description: Libellé affiché dans le formulaire
+                            description:
+                              type: string
+                            required:
+                              type: boolean
+                              default: false
+                            enum:
+                              type: array
+                              items:
                                 type: string
-                                description: "Défaut (coercé selon type : true/false, entier, sinon texte)"
-                              pattern:
+                              description: Valeurs permises (type string)
+                            default:
+                              type: string
+                              description: 'Défaut (coercé selon type : true/false, entier, sinon texte)'
+                            pattern:
+                              type: string
+                              description: Regex de validation (type string)
+                        title: Champs parent additionnels (avancé)
+                      children:
+                        type: array
+                        description: '1 ligne = 1 promesse enfant. Tout le reste se dérive : ne remplis que ce que tu veux ajuster.'
+                        items:
+                          type: object
+                          required:
+                          - name
+                          - promise
+                          properties:
+                            name:
+                              type: string
+                              pattern: ^[a-z][a-z0-9-]*$
+                              description: Le claim enfant s'appellera <parent>-<nom>.
+                              title: Nom logique
+                            promise:
+                              type: string
+                              description: Choisir l'offre au catalogue.
+                              title: Promesse
+                            version:
+                              type: string
+                              description: Vide = version installée, pinnée à la génération.
+                              title: Version (avancé)
+                            apiVersion:
+                              type: string
+                              description: Vide = résolu depuis la promesse installée.
+                              title: apiVersion (avancé)
+                            kind:
+                              type: string
+                              description: Vide = résolu depuis la promesse installée.
+                              title: Kind (avancé)
+                            fix:
+                              type: object
+                              additionalProperties:
                                 type: string
-                                description: Regex de validation (type string)
-                        children:
-                          type: array
-                          description: "Les promesses composées — 1 ligne = 1 claim enfant"
-                          items:
-                            type: object
-                            required: [name, promise]
-                            properties:
-                              name:
+                              description: champ → valeur constante ; disparaît du formulaire parent.
+                              title: Figer des champs — curation
+                            hide:
+                              type: array
+                              items:
                                 type: string
-                                pattern: ^[a-z][a-z0-9-]*$
-                                description: "Nom logique → claim enfant <parent>-<nom>"
-                              promise:
+                              description: Champs OPTIONNELS à retirer du parent (un requis se fige).
+                              title: Masquer des champs — curation
+                            spec:
+                              type: object
+                              additionalProperties:
                                 type: string
-                                description: "La promesse enfant (choisir dans le catalogue)"
-                              version:
+                              description: 'Override d''un mapping auto : ${spec.x}, ${children.<nom>.<export>}, littéral.'
+                              title: Mappings avancés
+                            when:
+                              type: object
+                              description: L'enfant n'est créé que si la condition passe.
+                              properties:
+                                field:
+                                  type: string
+                                  description: Chemin du parent (ex. spec.message)
+                                equals:
+                                  type: string
+                                  description: Émis si égal (true/false/entiers coercés)
+                                exists:
+                                  type: boolean
+                                  description: Émis si présent (true) ou absent (false)
+                              title: Condition d'émission (T2)
+                            needs:
+                              type: array
+                              items:
                                 type: string
-                                description: "Pin exact — VIDE = version installée, résolue et pinnée à la génération"
-                              apiVersion:
+                              description: Noms d'enfants à attendre (readiness) avant d'émettre celui-ci.
+                              title: Attendre d'abord (T3)
+                            exports:
+                              type: object
+                              additionalProperties:
                                 type: string
-                                description: "VIDE = résolu depuis la promesse installée"
-                              kind:
-                                type: string
-                                description: "VIDE = résolu depuis la promesse installée"
-                              fix:
-                                type: object
-                                additionalProperties: { type: string }
-                                description: "Curation : FIGER un champ de l'enfant (valeur constante, coercée) — il disparaît du formulaire parent"
-                              hide:
-                                type: array
-                                items: { type: string }
-                                description: "Curation : MASQUER un champ OPTIONNEL de l'enfant (un requis se fige avec fix)"
-                              spec:
-                                type: object
-                                additionalProperties: { type: string }
-                                description: "Override AVANCÉ (sinon mapping auto ${spec.<champ>} pour chaque champ dérivé) : ${spec.x} (parent), ${children.<nom>.<export>} (T3), littéral coercé ; clé pointée a.b = imbrication"
-                              when:
-                                type: object
-                                description: "T2 : condition d'émission (déclaratif)"
-                                properties:
-                                  field:
-                                    type: string
-                                    description: "Chemin du parent (ex. spec.message)"
-                                  equals:
-                                    type: string
-                                    description: "Émis si égal (true/false/entiers coercés)"
-                                  exists:
-                                    type: boolean
-                                    description: "Émis si présent (true) ou absent (false)"
-                              needs:
-                                type: array
-                                items: { type: string }
-                                description: "T3 : attendre ces enfants (readiness Kratix) avant d'émettre celui-ci"
-                              exports:
-                                type: object
-                                additionalProperties: { type: string }
-                                description: "T3 : valeurs publiées depuis le STATUS de cet enfant (clé → chemin .status.…)"
+                              description: clé → chemin .status.… publié pour les autres enfants.
+                              title: Exports (T3)
+                        title: Promesses composées
+                    title: Recette — le composer
   destinationSelectors:
-    - matchLabels:
-        environment: platform
+  - matchLabels:
+      environment: platform
   workflows:
     config: {}
     promise:
       configure:
-        # Template « PromiseRequest » poussé au portail : créer une promesse = un formulaire.
-        - apiVersion: platform.kratix.io/v1alpha1
-          kind: Pipeline
-          metadata:
-            name: promise-configure
-          spec:
-            containers:
-              - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:79211e4d3d79b530eedf1d60e493720b1be7501e22ed944031659cdc8fc56e40
+      # Template « PromiseRequest » + fiche kratix-promise poussés au portail.
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: promise-configure
+        spec:
+          containers:
+          - name: backstage
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:79211e4d3d79b530eedf1d60e493720b1be7501e22ed944031659cdc8fc56e40
     resource:
       configure:
-        - apiVersion: platform.kratix.io/v1alpha1
-          kind: Pipeline
-          metadata:
-            name: factory
-          spec:
-            # composer inline : la factory résout version/apiVersion/kind des enfants
-            # depuis les promesses INSTALLÉES (GET) et les pinne à la génération.
-            rbac:
-              permissions:
-                - apiGroups: [platform.kratix.io]
-                  resources: [promises]
-                  verbs: [get, list]
-            volumes:
-              - name: git-creds
-                secret:
-                  secretName: promise-factory-git
-                  defaultMode: 0400
-            containers:
-              - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cdcbd3cec67cefc33c30ad6e744f86466bd7dbf417237ca7ae59a54a94160f65
-                volumeMounts:
-                  - name: git-creds
-                    mountPath: /kratix/secrets/git
-                    readOnly: true
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: factory
+        spec:
+          # composer inline : la factory résout version/apiVersion/kind + SCHÉMAS
+          # des enfants depuis les promesses INSTALLÉES (dérivation de l'API parent).
+          rbac:
+            permissions:
+            - apiGroups:
+              - platform.kratix.io
+              resources:
+              - promises
+              verbs:
+              - get
+              - list
+          volumes:
+          - name: git-creds
+            secret:
+              secretName: promise-factory-git
+              defaultMode: 256
+          containers:
+          - name: factory
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cdcbd3cec67cefc33c30ad6e744f86466bd7dbf417237ca7ae59a54a94160f65
+            volumeMounts:
+            - name: git-creds
+              mountPath: /kratix/secrets/git
+              readOnly: true
