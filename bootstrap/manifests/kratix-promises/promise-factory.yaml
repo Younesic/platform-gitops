@@ -13,7 +13,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.3.1
+    kratix.io/promise-version: v0.3.2
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -113,7 +113,7 @@ spec:
                   defaultMode: 0400
             containers:
               - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:fc7f6f52fe2d14217a707d05daa13b8e9bfadf3a3fe2d39b4afe45bc419d3155
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:4d832dea5b697054d198461093297d80594705f13635c6d214bb7abe7349aebe
                 volumeMounts:
                   - name: git-creds
                     mountPath: /kratix/secrets/git
