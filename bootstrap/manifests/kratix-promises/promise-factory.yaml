@@ -196,9 +196,9 @@ spec:
                               title: Mappings avancés
                             when:
                               type: array
-                              maxItems: 1
-                              title: Condition d'émission (optionnel)
-                              description: Cliquer + pour ne créer cet enfant que sous condition (T2).
+                              maxItems: 8
+                              title: Conditions d'émission (optionnel)
+                              description: 'T2 : l''enfant n''est créé que si TOUTES les conditions passent (ET).'
                               items:
                                 type: object
                                 properties:
@@ -266,7 +266,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:aaae6d44e6901c1011f0d1659c4b29f35bf89644bee6f447f0d4ca36039db876
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:556235b45b7dac9b92ea48f1dcdb14a641cd89e721a173e7dfe1af46d4f94db2
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
