@@ -25,7 +25,7 @@ metadata:
   labels:
     kratix.io/promise-version: v0.5.0
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"recipe":{"properties":{"children":{"items":{"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}'
+    backstage.example.io/ui-schema: '{"properties":{"recipe":{"properties":{"children":{"items":{"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}}}}}}}}}'
     backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe","source"]}}'
 spec:
   api:
