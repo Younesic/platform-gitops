@@ -27,7 +27,7 @@ spec:
                 properties:
                   message:
                     default: hello from the promise-factory
-                    description: Message écrit dans le ConfigMap composé.
+                    description: "Message \xE9crit dans le ConfigMap compos\xE9."
                     maxLength: 200
                     type: string
                 type: object
@@ -36,8 +36,8 @@ spec:
         storage: true
     status:
       acceptedNames:
-        kind: ""
-        plural: ""
+        kind: ''
+        plural: ''
       conditions: null
       storedVersions: null
   dependencies:
@@ -98,7 +98,7 @@ spec:
                 properties:
                   message:
                     default: hello from the promise-factory
-                    description: Message écrit dans le ConfigMap composé.
+                    description: "Message \xE9crit dans le ConfigMap compos\xE9."
                     maxLength: 200
                     type: string
                 type: object
