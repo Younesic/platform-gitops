@@ -1,8 +1,11 @@
-# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm implémenté ; crossplane/terraform/operator = slots) (donc un formulaire
-# Backstage, via le Template poussé par promise-configure). Le pipeline rejoue le
-# MÊME outillage que le poste du platform engineer (plugin kratix new-helm-promise
-# + schema-to-crd) et pousse une BRANCHE DE REVUE sur platform-gitops — jamais
-# d'auto-apply : le merge humain reste le garde-fou de gouvernance.
+# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm ET crossplane
+# implémentés ; terraform/operator = slots) (donc un formulaire Backstage, via le
+# Template poussé par promise-configure). Le pipeline rejoue le MÊME outillage que
+# le poste du platform engineer (plugins kratix new-helm-promise /
+# new-crossplane-promise + schema-to-crd) et pousse une BRANCHE DE REVUE sur
+# platform-gitops — jamais d'auto-apply : le merge humain reste le garde-fou de
+# gouvernance. crossplane : source = repo git à une ref PINNÉE (tag|SHA) contenant
+# 1 XRD + Composition(s) — la XRD est le contrat, copiée telle quelle dans l'API.
 # Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
 # (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
 apiVersion: platform.kratix.io/v1alpha1
@@ -10,7 +13,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.2.0
+    kratix.io/promise-version: v0.3.0
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -38,20 +41,26 @@ spec:
                     - kind
                     - type
                     - source
-                  # validation par type (CEL) : helm exige source.url + source.version.
+                  # validation par type (CEL) : helm et crossplane exigent source.url + source.version.
                   x-kubernetes-validations:
                     - rule: "self.type != 'helm' || (has(self.source.url) && has(self.source.version))"
                       message: "type helm : source.url et source.version sont requis (pin de gouvernance)"
+                    - rule: "self.type != 'crossplane' || (has(self.source.url) && has(self.source.version))"
+                      message: "type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)"
                   properties:
                     type:
                       type: string
-                      description: Moteur de la future promesse (seul helm est implémenté ; les autres sont des slots)
+                      description: Moteur de la future promesse (helm et crossplane implémentés ; terraform/operator = slots)
                       enum: [helm, crossplane, terraform, operator]
                       default: helm
                     kind:
                       type: string
                       description: Kind de l'API de la future promesse (ex. Database)
                       pattern: ^[A-Z][A-Za-z0-9]*$
+                    plural:
+                      type: string
+                      description: "Pluriel du kind (défaut : kind minuscule + 's' — à poser si ce pluriel est faux, ex. sandboxes)"
+                      pattern: ^[a-z][a-z0-9]*$
                     group:
                       type: string
                       default: platform.example.io
@@ -62,12 +71,15 @@ spec:
                       properties:
                         url:
                           type: string
-                          description: "helm : chart (oci:// ou repo https://) · terraform : module git::https://"
-                          pattern: ^(git::)?(oci|https?)://.+
+                          description: "helm : chart (oci:// ou repo https://) · crossplane : repo git (https:// ou git@hôte:…) · terraform : module git::https://"
+                          pattern: ^((git::)?(oci|https?)://|git@[A-Za-z0-9.-]+:).+
                         version:
                           type: string
-                          description: Version EXACTE, semver (pin de gouvernance — jamais latest)
-                          pattern: ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?$
+                          description: "Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane : tag semver ou SHA git"
+                          pattern: ^(v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?|[0-9a-f]{7,40})$
+                        path:
+                          type: string
+                          description: "crossplane : sous-dossier du repo contenant la XRD + Composition(s) (défaut : racine)"
                         chartName:
                           type: string
                           description: Nom du chart (requis seulement pour un repo Helm non-OCI)
@@ -101,7 +113,7 @@ spec:
                   defaultMode: 0400
             containers:
               - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:55fd7e064f9d32a7f2c8bbeed3635471ba35f0963c9ebdabe89635e8efffb514
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:28df615e4bb2a832acb49417dfcfddcf2579f3711c6d3c0b64ac94ffab1a8bc8
                 volumeMounts:
                   - name: git-creds
                     mountPath: /kratix/secrets/git
