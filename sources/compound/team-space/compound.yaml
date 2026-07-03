@@ -35,7 +35,7 @@ api:
 children:
   - name: workspace              # → claim enfant `<parent>-workspace`
     promise: workspace           # → requiredPromises
-    version: v0.0.1              # pin explicite (vide = any)
+    version: v0.0.1              # pin EXACT requis (égalité stricte côté Kratix, vérifié source)
     apiVersion: platform.example.io/v1alpha1
     kind: Workspace
     spec:
@@ -43,7 +43,8 @@ children:
       environment: ${spec.environment}
       tier: ${spec.tier}
   - name: sandbox
-    promise: sandbox             # sans version → démontre « any »
+    promise: sandbox
+    version: v0.0.1              # idem — jamais de version vide (ne matcherait jamais)
     apiVersion: platform.example.io/v1alpha1
     kind: Sandbox
     when: {field: spec.message, exists: true}    # T2 : enfant conditionnel
