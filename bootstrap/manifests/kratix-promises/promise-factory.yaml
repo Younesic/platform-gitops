@@ -211,6 +211,12 @@ spec:
                                   exists:
                                     type: boolean
                                     description: Émis si présent (true) ou absent (false)
+                            whenMode:
+                              type: string
+                              enum:
+                              - all
+                              - any
+                              description: "Entre plusieurs conditions : all = ET (défaut), any = OU"
                             needs:
                               type: array
                               items:
@@ -266,7 +272,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:556235b45b7dac9b92ea48f1dcdb14a641cd89e721a173e7dfe1af46d4f94db2
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7639c47c75d3eceb85a924710ae5d5cdd8e03ac2d393606f71933e555d16a987
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
