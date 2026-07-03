@@ -246,7 +246,7 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:4cf04400735cb6662b6574cc70add6d2a3765cda6e95f6809355315cd849a30c
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:482203d04ba6663933da59bce15a7d6f1b48fc03b1eb64367a55ab6f5f8328e4
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -275,7 +275,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:aab54baa3a310a2be9e33b017429b1076e1932f9166e7d0c96214a364b2885ff
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:b2f59ac61e55105d227c946452b2ee56b1ea4f79322beb9dd18cc6f9570ea6d3
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
