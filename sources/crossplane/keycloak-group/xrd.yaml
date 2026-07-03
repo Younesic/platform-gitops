@@ -1,0 +1,45 @@
+# Promesse `keycloak-group` — crée un groupe Keycloak (realm platform).
+# XRD v2 NAMESPACÉE (contrainte du renderer officiel from-api-to-crossplane-claim) ;
+# compose la MR NAMESPACÉE Group (group.keycloak.m.crossplane.io) — les variantes
+# `.m.` sont requises car une XR namespacée ne compose que du namespacé.
+# ⚠️ Les schémas des champs `group` et `realm` sont BYTE-IDENTIQUES à ceux de
+# keycloak-member : le composer FUSIONNE les homonymes de schéma identique
+# (un champ parent routé vers les deux enfants) — ne pas les faire diverger.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xkeycloakgroups.crossplane.platform.example.io
+spec:
+  scope: Namespaced
+  group: crossplane.platform.example.io
+  names:
+    kind: XKeycloakGroup
+    plural: xkeycloakgroups
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - group
+              properties:
+                group:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]*$
+                  maxLength: 63
+                  description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
+                realm:
+                  type: string
+                  default: platform
+                  description: Realm Keycloak.
+            status:
+              type: object
+              properties:
+                groupId:
+                  type: string
+                  description: UUID Keycloak du groupe créé (status.atProvider.id).

@@ -1,0 +1,47 @@
+# Compose la MR Memberships NAMESPACÉE. Le groupe est référencé par le NOM
+# DÉTERMINISTE de sa MR (`kc-group-<groupe>`, contrat posé par la composition
+# keycloak-group) : Crossplane résout le ref → UUID et RETRIE tant que le groupe
+# n'existe pas — aucun UUID ni export à transporter entre promesses.
+# `members` = usernames, copiés tels quels depuis spec.users (array entier).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkeycloakmember-keycloak
+spec:
+  compositeTypeRef:
+    apiVersion: crossplane.platform.example.io/v1alpha1
+    kind: XKeycloakMember
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: membership
+            base:
+              apiVersion: group.keycloak.m.crossplane.io/v1alpha1
+              kind: Memberships
+              spec:
+                forProvider:
+                  realmId: platform
+                providerConfigRef:
+                  kind: ClusterProviderConfig
+                  name: default
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.group
+                toFieldPath: spec.forProvider.groupIdRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format   # requis par la function p-and-t (≠ patches v1)
+                      fmt: kc-group-%s
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.users
+                toFieldPath: spec.forProvider.members
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.realm
+                toFieldPath: spec.forProvider.realmId

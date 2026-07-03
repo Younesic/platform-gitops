@@ -1,0 +1,51 @@
+# Compose la MR Group NAMESPACÉE (auth : ClusterProviderConfig `default`,
+# manifests/crossplane-providers/ — le kind est REQUIS sur les refs des MRs .m.).
+# CONTRAT DE NOMMAGE : la MR s'appelle `kc-group-<groupe>` (déterministe) —
+# keycloak-member reconstruit ce nom pour son groupIdRef : c'est le câblage
+# cross-promesse SANS UUID (résolution/attente par les retries de refs Crossplane).
+# Bonus : 2 claims sur le même groupe = conflit d'ownership sur la MR (unicité).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkeycloakgroup-keycloak
+spec:
+  compositeTypeRef:
+    apiVersion: crossplane.platform.example.io/v1alpha1
+    kind: XKeycloakGroup
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: group
+            base:
+              apiVersion: group.keycloak.m.crossplane.io/v1alpha1
+              kind: Group
+              spec:
+                forProvider:
+                  realmId: platform
+                providerConfigRef:
+                  kind: ClusterProviderConfig
+                  name: default
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.group
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format   # requis par la function p-and-t (≠ patches v1)
+                      fmt: kc-group-%s
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.group
+                toFieldPath: spec.forProvider.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.realm
+                toFieldPath: spec.forProvider.realmId
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.groupId

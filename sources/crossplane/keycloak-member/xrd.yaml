@@ -1,0 +1,48 @@
+# Promesse `keycloak-member` — rend des users (usernames) membres d'un groupe.
+# Sous-jacent : MR Memberships (= keycloak_group_memberships), qui accepte des
+# USERNAMES (aucun UUID à fournir — marche aussi pour les users fédérés LDAP)
+# mais est AUTORITAIRE sur LA liste des membres du groupe → règle plateforme :
+# UN SEUL claim KeycloakMember par groupe (l'API en liste dit exactement ça).
+# ⚠️ `group`/`realm` : schémas BYTE-IDENTIQUES à keycloak-group (fusion des
+# homonymes par le composer) — ne pas les faire diverger.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xkeycloakmembers.crossplane.platform.example.io
+spec:
+  scope: Namespaced
+  group: crossplane.platform.example.io
+  names:
+    kind: XKeycloakMember
+    plural: xkeycloakmembers
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - group
+                - users
+              properties:
+                group:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]*$
+                  maxLength: 63
+                  description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
+                users:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    minLength: 1
+                    maxLength: 63
+                  description: Usernames Keycloak membres du groupe — ce claim gère LA liste complète (1 claim par groupe).
+                realm:
+                  type: string
+                  default: platform
+                  description: Realm Keycloak.
