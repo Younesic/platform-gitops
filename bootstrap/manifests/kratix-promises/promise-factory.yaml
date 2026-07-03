@@ -25,8 +25,8 @@ metadata:
   labels:
     kratix.io/promise-version: v0.6.0
   annotations:
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"recipe":{"ui:order":["children","api"],"properties":{"api":{"ui:widget":"hidden"},"children":{"items":{"ui:order":["name","promise","when","*"],"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}},"when":{"ui:order":["field","exists","equals"]},"needs":{"ui:widget":"hidden"},"exports":{"ui:widget":"hidden"},"fix":{"ui:widget":"hidden"},"hide":{"ui:widget":"hidden"},"spec":{"ui:widget":"hidden"},"version":{"ui:widget":"hidden"},"apiVersion":{"ui:widget":"hidden"},"kind":{"ui:widget":"hidden"}}}}}}}}'
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe","source"]}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"recipe":{"ui:order":["children","api"],"properties":{"api":{"ui:widget":"hidden"},"children":{"items":{"ui:order":["name","promise","when","*"],"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}},"when":{"ui:order":["field","exists","equals"]},"needs":{"ui:widget":"hidden"},"exports":{"ui:widget":"hidden"},"fix":{"ui:widget":"hidden"},"hide":{"ui:widget":"hidden"},"spec":{"ui:widget":"hidden"},"version":{"ui:widget":"hidden"},"apiVersion":{"ui:widget":"hidden"},"kind":{"ui:widget":"hidden"}}}}}},"source":{"ui:order":["url","version","chartName","path"]}}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
