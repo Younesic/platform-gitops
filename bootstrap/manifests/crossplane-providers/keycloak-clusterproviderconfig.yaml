@@ -1,0 +1,17 @@
+# Auth des MRs keycloak NAMESPACÉES (`*.keycloak.m.crossplane.io`) — utilisées par
+# les promesses crossplane (XRD v2 Namespaced ne compose QUE du namespacé, or le
+# ProviderConfig legacy `keycloak.crossplane.io` ne sert que les MRs cluster-scoped).
+# Même secret que lui : creds du client service-account Keycloak `provisioner`
+# (SealedSecret géré par platform-identity). `providerConfigRef` des MRs .m. :
+# {kind: ClusterProviderConfig, name: default} — le kind est REQUIS.
+apiVersion: keycloak.m.crossplane.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      name: keycloak-credentials
+      namespace: crossplane-system
+      key: credentials
