@@ -71,6 +71,7 @@ spec:
               transforms:
               - string:
                   fmt: sandbox-%s
+                  type: Format
                 type: string
               type: FromCompositeFieldPath
             - fromFieldPath: spec.message
