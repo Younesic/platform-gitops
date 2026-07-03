@@ -1,0 +1,27 @@
+# Chaînon claims->cluster du flux portail : les Templates poussés (promise-factory,
+# workspace, ...) ouvrent des PR de claims sur Younesic/portal-templates (requests/) ;
+# une fois MERGÉES (gouvernance humaine), cette app applique les claims au cluster.
+# NB : le repo s'appelle portal-templates (historique) mais porte des DEMANDES ;
+# ne pas confondre avec la renommage pending platform-claims->portal-claims.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: portal-requests
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/portal-templates.git
+    targetRevision: main
+    path: requests
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
