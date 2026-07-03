@@ -13,7 +13,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.3.0
+    kratix.io/promise-version: v0.3.1
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -98,7 +98,7 @@ spec:
           spec:
             containers:
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3c03775f53bfaba0afb7f49accfa63c3f7d9e4a394b72d1582aca445fb8723c4
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:94f80073cbffd08e4457f03fecfec65a4d33cf31c3f2ace279fab34faf2e9ce7
     resource:
       configure:
         - apiVersion: platform.kratix.io/v1alpha1
@@ -113,7 +113,7 @@ spec:
                   defaultMode: 0400
             containers:
               - name: factory
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:28df615e4bb2a832acb49417dfcfddcf2579f3711c6d3c0b64ac94ffab1a8bc8
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:fc7f6f52fe2d14217a707d05daa13b8e9bfadf3a3fe2d39b4afe45bc419d3155
                 volumeMounts:
                   - name: git-creds
                     mountPath: /kratix/secrets/git
