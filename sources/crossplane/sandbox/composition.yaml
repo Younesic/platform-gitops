@@ -1,0 +1,40 @@
+# Compose un simple ConfigMap `sandbox-<nom>` dans le namespace du XR
+# (Crossplane v2 : une XR namespacée compose n'importe quelle ressource
+# namespacée — ici une ressource k8s brute, aucun provider requis).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xsandbox-configmap
+spec:
+  compositeTypeRef:
+    apiVersion: crossplane.platform.example.io/v1alpha1
+    kind: XSandbox
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: configmap
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              data:
+                owner: promise-factory-e2e
+            # un ConfigMap n'a pas de conditions : readiness immédiate
+            readinessChecks:
+              - type: None
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      fmt: sandbox-%s
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.message
+                toFieldPath: data.message

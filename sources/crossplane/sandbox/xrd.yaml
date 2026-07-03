@@ -1,0 +1,30 @@
+# Fixture E2E du slot crossplane de la promise-factory — SANS effet de bord.
+# XRD v2 NAMESPACÉE (contrainte du renderer officiel from-api-to-crossplane-claim :
+# l'objet rendu est créé dans le namespace `default` ; pas de claimNames en v2 →
+# le XR est rendu directement). Une XR namespacée ne compose que du namespacé.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xsandboxes.crossplane.platform.example.io
+spec:
+  scope: Namespaced
+  group: crossplane.platform.example.io
+  names:
+    kind: XSandbox
+    plural: xsandboxes
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                message:
+                  type: string
+                  default: hello from the promise-factory
+                  maxLength: 200
+                  description: Message écrit dans le ConfigMap composé.
