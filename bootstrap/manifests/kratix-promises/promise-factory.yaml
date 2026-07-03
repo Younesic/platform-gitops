@@ -258,7 +258,10 @@ spec:
           # des enfants depuis les promesses INSTALLÉES (dérivation de l'API parent).
           rbac:
             permissions:
-            - apiGroups:
+            # promises = CLUSTER-scoped -> resourceNamespace "*" force un ClusterRole
+            # (sans lui, Kratix génère un Role namespacé qui ne donne AUCUN accès — vécu)
+            - resourceNamespace: "*"
+              apiGroups:
               - platform.kratix.io
               resources:
               - promises
