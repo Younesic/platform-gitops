@@ -18,7 +18,7 @@ spec:
       priorityClassName: platform-high
       containers:
         - name: backstage
-          image: harbor.212-47-226-56.nip.io/platform/backstage:20260703-1200
+          image: harbor.212-47-226-56.nip.io/platform/backstage:20260703-1745
           imagePullPolicy: IfNotPresent
           command: ["node", "packages/backend"]
           args: ["--config", "/app/config/app-config.yaml"]
