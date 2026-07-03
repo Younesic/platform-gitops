@@ -1,0 +1,51 @@
+# Fixture E2E du slot compound de la promise-factory — SANS effet de bord.
+# La recette EST le contrat : `api` = schéma openAPI du spec parent (hygiène
+# schema-to-crd appliquée à la génération), `children` = claims enfants émis par le
+# pipeline resource (image partagée compound-renderer, recette embarquée en ENV
+# COMPOUND_RECIPE). Les `children[].{promise,version}` deviennent requiredPromises
+# (gate : promesse Available seulement si les sous-promesses sont installées).
+# Topologies couvertes : T1 (bundle statique : workspace) + T2 (fan-out conditionnel :
+# sandbox seulement si spec.message est posé). Interpolation minimale ${chemin} :
+# valeur native du parent si le template est pur, string sinon — pas de moteur de
+# templates, pas d'eval. v2 (RÉSERVÉ, non implémenté) : needs/exports → waits/DAG.
+# Contraintes alignées sur les APIs RÉELLES des sous-promesses (tier = enum de
+# Workspace ; maxLength 200 = contrainte de Sandbox) : un claim parent valide ne
+# peut pas produire un claim enfant rejeté.
+api:
+  type: object
+  required: [team, environment]
+  properties:
+    team:
+      type: string
+      pattern: ^[a-z][a-z0-9-]*$
+      description: Équipe propriétaire (propagée au Workspace)
+    environment:
+      type: string
+      enum: [dev, staging, prod]
+      description: Environnement cible (propagé au Workspace)
+    tier:
+      type: string
+      enum: [small, standard, large, restricted]
+      default: standard
+      description: Gabarit de quotas du Workspace
+    message:
+      type: string
+      maxLength: 200
+      description: "Optionnel — s'il est posé, un Sandbox est créé avec ce message (démo T2)"
+children:
+  - name: workspace              # → claim enfant `<parent>-workspace`
+    promise: workspace           # → requiredPromises
+    version: v0.0.1              # pin explicite (vide = any)
+    apiVersion: platform.example.io/v1alpha1
+    kind: Workspace
+    spec:
+      team: ${spec.team}
+      environment: ${spec.environment}
+      tier: ${spec.tier}
+  - name: sandbox
+    promise: sandbox             # sans version → démontre « any »
+    apiVersion: platform.example.io/v1alpha1
+    kind: Sandbox
+    when: {field: spec.message, exists: true}    # T2 : enfant conditionnel
+    spec:
+      message: ${spec.message}
