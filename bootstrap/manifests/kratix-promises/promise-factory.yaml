@@ -25,8 +25,8 @@ metadata:
   labels:
     kratix.io/promise-version: v0.6.0
   annotations:
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"recipe":{"ui:order":["children","api"],"properties":{"api":{"ui:widget":"hidden"},"children":{"items":{"ui:order":["name","promise","when","*"],"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}},"when":{"ui:order":["field","exists","equals"]},"needs":{"ui:widget":"hidden"},"exports":{"ui:widget":"hidden"},"fix":{"ui:widget":"hidden"},"hide":{"ui:widget":"hidden"},"spec":{"ui:widget":"hidden"},"version":{"ui:widget":"hidden"},"apiVersion":{"ui:widget":"hidden"},"kind":{"ui:widget":"hidden"}}}}}},"source":{"ui:order":["url","version","chartName","path"]}}}'
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:order":["children","api"],"properties":{"api":{"ui:widget":"hidden"},"children":{"items":{"ui:order":["name","promise","when","*"],"properties":{"promise":{"ui:field":"EntityPicker","ui:options":{"catalogFilter":{"kind":"Component","spec.type":"kratix-promise"}}},"when":{"items":{"ui:order":["field","exists","equals"]}},"needs":{"ui:widget":"hidden"},"exports":{"ui:widget":"hidden"},"fix":{"ui:widget":"hidden"},"hide":{"ui:widget":"hidden"},"spec":{"ui:widget":"hidden"},"version":{"ui:widget":"hidden"},"apiVersion":{"ui:widget":"hidden"},"kind":{"ui:widget":"hidden"}}}}}}}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path"]}],"crossplane":[{"field":"source","hide":["chartName"]}],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -195,19 +195,22 @@ spec:
                               description: 'Override d''un mapping auto : ${spec.x}, ${children.<nom>.<export>}, littéral.'
                               title: Mappings avancés
                             when:
-                              type: object
-                              description: L'enfant n'est créé que si la condition passe.
-                              properties:
-                                field:
-                                  type: string
-                                  description: Chemin du parent (ex. spec.message)
-                                equals:
-                                  type: string
-                                  description: Émis si égal (true/false/entiers coercés)
-                                exists:
-                                  type: boolean
-                                  description: Émis si présent (true) ou absent (false)
-                              title: Condition d'émission (T2)
+                              type: array
+                              maxItems: 1
+                              title: Condition d'émission (optionnel)
+                              description: Cliquer + pour ne créer cet enfant que sous condition (T2).
+                              items:
+                                type: object
+                                properties:
+                                  field:
+                                    type: string
+                                    description: Chemin du parent (ex. spec.message)
+                                  equals:
+                                    type: string
+                                    description: Émis si égal (true/false/entiers coercés)
+                                  exists:
+                                    type: boolean
+                                    description: Émis si présent (true) ou absent (false)
                             needs:
                               type: array
                               items:
@@ -263,7 +266,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:47cc5afd81b5195475b35c27ebbd6986dc045e57f0a25be04f9e2ab9c134a469
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:88eed8793c69effa743c5c73bc120e405195e7417d1adc1cead83c9d6f00eccd
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
