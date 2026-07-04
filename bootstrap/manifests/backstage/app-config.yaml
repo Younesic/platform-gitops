@@ -124,21 +124,14 @@ data:
         - jobs
         - cronjobs
         - ingresses
-      # Option B : types provisionnés à afficher (le plugin standard montre les workloads
-      # par défaut ; ces types-là s'ajoutent par config, bornés, pas par promesse).
-      # NB : le plugin EXIGE un group non-vide -> les ressources CORE (group "" : namespaces,
-      # resourcequotas) ne peuvent PAS y figurer. Seuls les types à group non-vide sont listables.
-      customResources:
-        - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }
-        - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }
-        # XRs des promesses crossplane (le rendu labellisé kubernetes-id = le XR)
-        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xsandboxes }
-        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakgroups }
-        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakmembers }
-        # MRs keycloak namespacées (visibles ssi labellisées — cf. propagation du label
-        # dans les Compositions ; sans elle seul le XR porte kubernetes-id)
-        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: groups }
-        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: memberships }
+      # customResources : GÉNÉRÉS automatiquement — voir la ConfigMap
+      # backstage-config-dynamic (2e fichier --config du backend), régénérée par
+      # le CronJob backstage-customresources-sync depuis les CRDs des familles
+      # plateforme (nouvelle promesse => kind détecté => restart auto ssi la liste
+      # change). NE PAS redéclarer customResources ici : les tableaux de config
+      # sont REMPLACÉS par le dernier fichier, pas fusionnés.
+      # NB : le plugin EXIGE un group non-vide -> les ressources CORE (group "" :
+      # namespaces, resourcequotas) ne peuvent PAS y figurer.
 
     # === INGESTOR : Templates depuis les CRD (Brique A) + claims en entités (Brique B) ===
     kubernetesIngestor:

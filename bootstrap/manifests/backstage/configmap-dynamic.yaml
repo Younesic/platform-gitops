@@ -1,0 +1,32 @@
+# ConfigMap DYNAMIQUE : kubernetes.customResources dérivés des CRDs des familles
+# plateforme. SEED committée (le pod exige le fichier au boot) ; ensuite RÉGÉNÉRÉE
+# en cluster par le CronJob backstage-customresources-sync (customresources-sync.yaml)
+# à chaque nouvelle promesse/CRD — l'app ArgoCD backstage IGNORE le drift de /data.
+# 2e fichier --config du backend : les tableaux étant REMPLACÉS par le dernier
+# fichier, customResources vit ICI en entier (jamais dans app-config.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backstage-config-dynamic
+  namespace: backstage
+data:
+  app-config.dynamic.yaml: |
+    # GÉNÉRÉ par le CronJob backstage-customresources-sync — ne pas éditer.
+    kubernetes:
+      customResources:
+        - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }
+        - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakgroups }
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakmembers }
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xsandboxes }
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: groups }
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: memberships }
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: permissions }
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: roles }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: keycloakgroups }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: keycloakmembers }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: promiserequests }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: sandboxes }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: teamaccesses }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: teamspaces }
+        - { group: platform.example.io, apiVersion: v1alpha1, plural: workspaces }

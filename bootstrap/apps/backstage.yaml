@@ -12,4 +12,17 @@ spec:
   destination: { server: https://kubernetes.default.svc, namespace: backstage }
   syncPolicy:
     automated: { selfHeal: true, prune: false }
-    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]
+  # Le CronJob backstage-customresources-sync met à jour la ConfigMap dynamique
+  # et annote le pod template (hash) — drifts VOULUS, à ne pas selfHeal.
+  ignoreDifferences:
+    - kind: ConfigMap
+      name: backstage-config-dynamic
+      namespace: backstage
+      jsonPointers: [/data]
+    - group: apps
+      kind: Deployment
+      name: backstage
+      namespace: backstage
+      jqPathExpressions:
+        - .spec.template.metadata.annotations."dynamic-config-hash"

@@ -1,0 +1,124 @@
+# AUTOMATISATION customResources (demande user : « automatique et générique ») :
+# le plugin kubernetes de Backstage ne fetch que les types LISTÉS en config, lue
+# AU BOOT — chaque nouvelle promesse exigeait une édition manuelle + restart.
+# Ce CronJob dérive la liste des CRDs des FAMILLES plateforme (une famille par
+# moteur/provider, jamais une entrée par promesse), met à jour la ConfigMap
+# dynamique et NE redémarre backstage QUE si la liste a changé (hash annoté sur
+# le pod template ; drift ignoré par l'app ArgoCD — pattern Harbor).
+# RBAC : côté fetch, backstage-readonly couvre déjà les familles par wildcard
+# (platform.example.io/*, crossplane.platform.example.io/*) — une seule ligne à
+# ajouter PAR NOUVELLE FAMILLE de provider, jamais par promesse.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backstage-config-sync
+  namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-config-sync
+rules:
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-config-sync
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-config-sync
+subjects:
+  - kind: ServiceAccount
+    name: backstage-config-sync
+    namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-config-sync
+  namespace: backstage
+rules:
+  - apiGroups: ['']
+    resources: [configmaps]
+    resourceNames: [backstage-config-dynamic]
+    verbs: [get, update, patch]
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [backstage]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-config-sync
+  namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-config-sync
+subjects:
+  - kind: ServiceAccount
+    name: backstage-config-sync
+    namespace: backstage
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backstage-customresources-sync
+  namespace: backstage
+spec:
+  schedule: '*/5 * * * *'
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: backstage-config-sync
+          restartPolicy: Never
+          containers:
+            - name: sync
+              image: bitnami/kubectl:1.35
+              resources:
+                requests: { cpu: 20m, memory: 32Mi }
+                limits: { cpu: 100m, memory: 64Mi }
+              command: [/bin/bash, -c]
+              args:
+                - |
+                  set -eu
+                  FAMILIES="platform.example.io crossplane.platform.example.io group.keycloak.m.crossplane.io"
+                  out=/tmp/app-config.dynamic.yaml
+                  {
+                    echo "# GÉNÉRÉ par le CronJob backstage-customresources-sync — ne pas éditer."
+                    echo "kubernetes:"
+                    echo "  customResources:"
+                    echo "    - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }"
+                    echo "    - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }"
+                    kubectl get crds -o jsonpath='{range .items[*]}{.spec.group}{" "}{.spec.names.plural}{" "}{.spec.versions[?(@.storage==true)].name}{"\n"}{end}' \
+                    | while read -r g p v; do
+                        for fam in $FAMILIES; do
+                          if [ "$g" = "$fam" ]; then
+                            echo "    - { group: $g, apiVersion: $v, plural: $p }"
+                          fi
+                        done
+                      done | sort
+                  } > "$out"
+                  current=$(kubectl -n backstage get configmap backstage-config-dynamic -o jsonpath='{.data.app-config\.dynamic\.yaml}' 2>/dev/null || true)
+                  desired=$(cat "$out")
+                  if [ "$current" = "$desired" ]; then
+                    echo "customResources à jour ($(grep -c 'plural:' "$out") entrées) — rien à faire."
+                    exit 0
+                  fi
+                  kubectl -n backstage create configmap backstage-config-dynamic \
+                    --from-file=app-config.dynamic.yaml="$out" --dry-run=client -o yaml \
+                    | kubectl -n backstage apply -f -
+                  hash=$(sha1sum "$out" | cut -c1-12)
+                  kubectl -n backstage patch deployment backstage --type merge \
+                    -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"dynamic-config-hash\":\"$hash\"}}}}}"
+                  echo "customResources mis à jour (hash $hash) — rollout backstage déclenché."

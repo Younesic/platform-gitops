@@ -21,7 +21,9 @@ spec:
           image: harbor.212-47-226-56.nip.io/platform/backstage:20260703-1930
           imagePullPolicy: IfNotPresent
           command: ["node", "packages/backend"]
-          args: ["--config", "/app/config/app-config.yaml"]
+          # 2e fichier = config DYNAMIQUE (customResources générés par le CronJob
+          # backstage-customresources-sync ; les tableaux du dernier fichier GAGNENT)
+          args: ["--config", "/app/config/app-config.yaml", "--config", "/app/config-dynamic/app-config.dynamic.yaml"]
           ports:
             - { name: http, containerPort: 7007 }
           env:
@@ -50,6 +52,7 @@ spec:
             limits:   { cpu: "1", memory: 1Gi }
           volumeMounts:
             - { name: backstage-config, mountPath: /app/config, readOnly: true }
+            - { name: backstage-config-dynamic, mountPath: /app/config-dynamic, readOnly: true }
           readinessProbe:
             httpGet: { path: /healthcheck, port: 7007 }
             initialDelaySeconds: 30
@@ -66,6 +69,11 @@ spec:
             name: backstage-config
             items:
               - { key: app-config.yaml, path: app-config.yaml }
+        - name: backstage-config-dynamic
+          configMap:
+            name: backstage-config-dynamic
+            items:
+              - { key: app-config.dynamic.yaml, path: app-config.dynamic.yaml }
 ---
 apiVersion: v1
 kind: Service
