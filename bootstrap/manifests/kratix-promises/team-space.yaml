@@ -31,6 +31,12 @@ spec:
                     - staging
                     - prod
                     type: string
+                  group:
+                    description: "Nom du groupe Keycloak g\xE9r\xE9 par la plateforme\
+                      \ (ex. team-vente)."
+                    maxLength: 63
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
                   mesh:
                     description: Activer la mesh Istio sur le namespace
                     properties:
@@ -43,10 +49,9 @@ spec:
                         - PERMISSIVE
                         type: string
                     type: object
-                  message:
-                    default: hello from the promise-factory
-                    description: "Message \xE9crit dans le ConfigMap compos\xE9."
-                    maxLength: 200
+                  realm:
+                    default: platform
+                    description: Realm Keycloak.
                     type: string
                   team:
                     pattern: ^[a-z][a-z0-9-]*$
@@ -59,7 +64,18 @@ spec:
                     - large
                     - restricted
                     type: string
+                  users:
+                    description: "Usernames Keycloak membres du groupe \u2014 ce claim\
+                      \ g\xE8re LA liste compl\xE8te (1 claim par groupe)."
+                    items:
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    minItems: 1
+                    type: array
                 required:
+                - group
+                - users
                 - environment
                 - team
                 type: object
@@ -70,7 +86,7 @@ spec:
   - matchLabels:
       environment: platform
   requiredPromises:
-  - name: sandbox
+  - name: teamaccess
     version: v0.0.1
   - name: workspace
     version: v0.0.1
@@ -98,79 +114,38 @@ spec:
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
-              value: "api:\n  type: object\n  properties:\n    message:\n      default:\
-                \ hello from the promise-factory\n      description: Message \xE9\
-                crit dans le ConfigMap compos\xE9.\n      maxLength: 200\n      type:\
-                \ string\n    environment:\n      description: Environnement cible\n\
-                \      enum:\n      - dev\n      - staging\n      - prod\n      type:\
-                \ string\n    mesh:\n      description: Activer la mesh Istio sur\
-                \ le namespace\n      properties:\n        enabled:\n          type:\
-                \ boolean\n        mtls:\n          default: STRICT\n          enum:\n\
-                \          - STRICT\n          - PERMISSIVE\n          type: string\n\
-                \      type: object\n    team:\n      pattern: ^[a-z][a-z0-9-]*$\n\
-                \      type: string\n    tier:\n      default: standard\n      enum:\n\
-                \      - small\n      - standard\n      - large\n      - restricted\n\
-                \      type: string\n  required:\n  - environment\n  - team\nchildren:\n\
-                - name: sandbox\n  promise: sandbox\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: Sandbox\n  spec:\n    message:\
-                \ ${spec.message}\n  when:\n    field: spec.message\n    exists: true\n\
+              value: "api:\n  type: object\n  properties:\n    group:\n      description:\
+                \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
+                \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
+                \ string\n    realm:\n      default: platform\n      description:\
+                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
+                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
+                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
+                \        maxLength: 63\n        minLength: 1\n        type: string\n\
+                \      minItems: 1\n      type: array\n    environment:\n      description:\
+                \ Environnement cible\n      enum:\n      - dev\n      - staging\n\
+                \      - prod\n      type: string\n    mesh:\n      description: Activer\
+                \ la mesh Istio sur le namespace\n      properties:\n        enabled:\n\
+                \          type: boolean\n        mtls:\n          default: STRICT\n\
+                \          enum:\n          - STRICT\n          - PERMISSIVE\n   \
+                \       type: string\n      type: object\n    team:\n      pattern:\
+                \ ^[a-z][a-z0-9-]*$\n      type: string\n    tier:\n      default:\
+                \ standard\n      enum:\n      - small\n      - standard\n      -\
+                \ large\n      - restricted\n      type: string\n  required:\n  -\
+                \ group\n  - users\n  - environment\n  - team\nchildren:\n- name:\
+                \ teamaccess\n  promise: teamaccess\n  version: v0.0.1\n  apiVersion:\
+                \ platform.example.io/v1alpha1\n  kind: TeamAccess\n  spec:\n    group:\
+                \ ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
                 - name: workspace\n  promise: workspace\n  version: v0.0.1\n  apiVersion:\
                 \ platform.example.io/v1alpha1\n  kind: Workspace\n  spec:\n    environment:\
                 \ ${spec.environment}\n    mesh: ${spec.mesh}\n    team: ${spec.team}\n\
-                \    tier: ${spec.tier}\n  when:\n    field: spec.environment\n  \
-                \  equals: dev\n  needs:\n  - sandbox\n"
+                \    tier: ${spec.tier}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
             name: backstage
           jobOptions: {}
           rbac: {}
-      - apiVersion: platform.kratix.io/v1alpha1
-        kind: Pipeline
-        metadata:
-          name: gated-1
-        spec:
-          containers:
-          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
-            name: compound-renderer
-            env:
-            - name: COMPOUND_RECIPE
-              value: "api:\n  type: object\n  properties:\n    message:\n      default:\
-                \ hello from the promise-factory\n      description: Message \xE9\
-                crit dans le ConfigMap compos\xE9.\n      maxLength: 200\n      type:\
-                \ string\n    environment:\n      description: Environnement cible\n\
-                \      enum:\n      - dev\n      - staging\n      - prod\n      type:\
-                \ string\n    mesh:\n      description: Activer la mesh Istio sur\
-                \ le namespace\n      properties:\n        enabled:\n          type:\
-                \ boolean\n        mtls:\n          default: STRICT\n          enum:\n\
-                \          - STRICT\n          - PERMISSIVE\n          type: string\n\
-                \      type: object\n    team:\n      pattern: ^[a-z][a-z0-9-]*$\n\
-                \      type: string\n    tier:\n      default: standard\n      enum:\n\
-                \      - small\n      - standard\n      - large\n      - restricted\n\
-                \      type: string\n  required:\n  - environment\n  - team\nchildren:\n\
-                - name: sandbox\n  promise: sandbox\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: Sandbox\n  spec:\n    message:\
-                \ ${spec.message}\n  when:\n    field: spec.message\n    exists: true\n\
-                - name: workspace\n  promise: workspace\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: Workspace\n  spec:\n    environment:\
-                \ ${spec.environment}\n    mesh: ${spec.mesh}\n    team: ${spec.team}\n\
-                \    tier: ${spec.tier}\n  when:\n    field: spec.environment\n  \
-                \  equals: dev\n  needs:\n  - sandbox\n"
-            - name: COMPOUND_STAGE
-              value: gated
-            - name: COMPOUND_DEPTH
-              value: '1'
-          jobOptions: {}
-          rbac:
-            permissions:
-            - resourceNamespace: '*'
-              apiGroups:
-              - platform.example.io
-              resources:
-              - '*'
-              verbs:
-              - get
-              - list
 status:
   workflows: 0
   workflowsFailed: 0
