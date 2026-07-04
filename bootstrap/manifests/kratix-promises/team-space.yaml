@@ -31,12 +31,6 @@ spec:
                     - staging
                     - prod
                     type: string
-                  group:
-                    description: "Nom du groupe Keycloak g\xE9r\xE9 par la plateforme\
-                      \ (ex. team-vente)."
-                    maxLength: 63
-                    pattern: ^[a-z][a-z0-9-]*$
-                    type: string
                   mesh:
                     description: Activer la mesh Istio sur le namespace
                     properties:
@@ -49,10 +43,6 @@ spec:
                         - PERMISSIVE
                         type: string
                     type: object
-                  realm:
-                    default: platform
-                    description: Realm Keycloak.
-                    type: string
                   team:
                     pattern: ^[a-z][a-z0-9-]*$
                     type: string
@@ -74,10 +64,9 @@ spec:
                     minItems: 1
                     type: array
                 required:
-                - group
-                - users
                 - environment
                 - team
+                - users
                 type: object
             type: object
         served: true
@@ -86,9 +75,9 @@ spec:
   - matchLabels:
       environment: platform
   requiredPromises:
-  - name: teamaccess
-    version: v0.0.1
   - name: workspace
+    version: v0.0.1
+  - name: teamaccess
     version: v0.0.1
   workflows:
     config: {}
@@ -114,32 +103,28 @@ spec:
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
-              value: "api:\n  type: object\n  properties:\n    group:\n      description:\
-                \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
-                \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
-                \ string\n    realm:\n      default: platform\n      description:\
-                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
-                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
-                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
-                \        maxLength: 63\n        minLength: 1\n        type: string\n\
-                \      minItems: 1\n      type: array\n    environment:\n      description:\
-                \ Environnement cible\n      enum:\n      - dev\n      - staging\n\
-                \      - prod\n      type: string\n    mesh:\n      description: Activer\
-                \ la mesh Istio sur le namespace\n      properties:\n        enabled:\n\
-                \          type: boolean\n        mtls:\n          default: STRICT\n\
-                \          enum:\n          - STRICT\n          - PERMISSIVE\n   \
-                \       type: string\n      type: object\n    team:\n      pattern:\
-                \ ^[a-z][a-z0-9-]*$\n      type: string\n    tier:\n      default:\
-                \ standard\n      enum:\n      - small\n      - standard\n      -\
-                \ large\n      - restricted\n      type: string\n  required:\n  -\
-                \ group\n  - users\n  - environment\n  - team\nchildren:\n- name:\
-                \ teamaccess\n  promise: teamaccess\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: TeamAccess\n  spec:\n    group:\
-                \ ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
-                - name: workspace\n  promise: workspace\n  version: v0.0.1\n  apiVersion:\
+              value: "api:\n  type: object\n  properties:\n    environment:\n    \
+                \  description: Environnement cible\n      enum:\n      - dev\n  \
+                \    - staging\n      - prod\n      type: string\n    mesh:\n    \
+                \  description: Activer la mesh Istio sur le namespace\n      properties:\n\
+                \        enabled:\n          type: boolean\n        mtls:\n      \
+                \    default: STRICT\n          enum:\n          - STRICT\n      \
+                \    - PERMISSIVE\n          type: string\n      type: object\n  \
+                \  team:\n      pattern: ^[a-z][a-z0-9-]*$\n      type: string\n \
+                \   tier:\n      default: standard\n      enum:\n      - small\n \
+                \     - standard\n      - large\n      - restricted\n      type: string\n\
+                \    users:\n      description: Usernames Keycloak membres du groupe\
+                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
+                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
+                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
+                \  required:\n  - environment\n  - team\n  - users\nchildren:\n- name:\
+                \ workspace\n  promise: workspace\n  version: v0.0.1\n  apiVersion:\
                 \ platform.example.io/v1alpha1\n  kind: Workspace\n  spec:\n    environment:\
                 \ ${spec.environment}\n    mesh: ${spec.mesh}\n    team: ${spec.team}\n\
-                \    tier: ${spec.tier}\n"
+                \    tier: ${spec.tier}\n- name: teamaccess\n  promise: teamaccess\n\
+                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
+                \ kind: TeamAccess\n  spec:\n    group: 'team-${spec.team} '\n   \
+                \ users: ${spec.users}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
