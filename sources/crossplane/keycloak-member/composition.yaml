@@ -42,6 +42,10 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.users
                 toFieldPath: spec.forProvider.members
+              # propagation du label fiche→MR (cf. keycloak-group : même contrat)
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels['backstage.io/kubernetes-id']
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.realm
                 toFieldPath: spec.forProvider.realmId

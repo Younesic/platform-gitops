@@ -43,6 +43,11 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.group
                 toFieldPath: spec.forProvider.name
+              # propagation du label fiche→MR : le nom du XR EST le nom du claim,
+              # l'onglet Kubernetes de la fiche montre alors la MR (pas que le XR)
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels['backstage.io/kubernetes-id']
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.realm
                 toFieldPath: spec.forProvider.realmId
