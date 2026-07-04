@@ -53,6 +53,13 @@ rules:
   - apiGroups: ['security.istio.io']
     resources: ['peerauthentications']
     verbs: ['get', 'list', 'watch']
+  # XRs des promesses crossplane + MRs keycloak namespacées (onglet Kubernetes)
+  - apiGroups: ['crossplane.platform.example.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['group.keycloak.m.crossplane.io']
+    resources: ['groups', 'memberships']
+    verbs: ['get', 'list', 'watch']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

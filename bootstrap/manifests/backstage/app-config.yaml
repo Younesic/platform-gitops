@@ -131,6 +131,14 @@ data:
       customResources:
         - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }
         - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }
+        # XRs des promesses crossplane (le rendu labellisé kubernetes-id = le XR)
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xsandboxes }
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakgroups }
+        - { group: crossplane.platform.example.io, apiVersion: v1alpha1, plural: xkeycloakmembers }
+        # MRs keycloak namespacées (visibles ssi labellisées — cf. propagation du label
+        # dans les Compositions ; sans elle seul le XR porte kubernetes-id)
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: groups }
+        - { group: group.keycloak.m.crossplane.io, apiVersion: v1alpha1, plural: memberships }
 
     # === INGESTOR : Templates depuis les CRD (Brique A) + claims en entités (Brique B) ===
     kubernetesIngestor:
