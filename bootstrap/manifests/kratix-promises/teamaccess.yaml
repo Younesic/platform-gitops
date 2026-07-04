@@ -1,0 +1,151 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: teamaccess
+spec:
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: teamaccesses.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: TeamAccess
+        plural: teamaccesses
+        singular: teamaccess
+      scope: Namespaced
+      versions:
+      - name: v1alpha1
+        schema:
+          openAPIV3Schema:
+            properties:
+              spec:
+                properties:
+                  group:
+                    description: "Nom du groupe Keycloak g\xE9r\xE9 par la plateforme\
+                      \ (ex. team-vente)."
+                    maxLength: 63
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  realm:
+                    default: platform
+                    description: Realm Keycloak.
+                    type: string
+                  users:
+                    description: "Usernames Keycloak membres du groupe \u2014 ce claim\
+                      \ g\xE8re LA liste compl\xE8te (1 claim par groupe)."
+                    items:
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    minItems: 1
+                    type: array
+                required:
+                - group
+                - users
+                type: object
+            type: object
+        served: true
+        storage: true
+  destinationSelectors:
+  - matchLabels:
+      environment: platform
+  requiredPromises:
+  - name: keycloak-group
+    version: v0.0.1
+  - name: keycloak-member
+    version: v0.0.1
+  workflows:
+    config: {}
+    promise:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: promise-configure
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
+            name: backstage
+    resource:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: instance-configure
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
+            name: compound-renderer
+            env:
+            - name: COMPOUND_RECIPE
+              value: "api:\n  type: object\n  properties:\n    group:\n      description:\
+                \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
+                \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
+                \ string\n    realm:\n      default: platform\n      description:\
+                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
+                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
+                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
+                \        maxLength: 63\n        minLength: 1\n        type: string\n\
+                \      minItems: 1\n      type: array\n  required:\n  - group\n  -\
+                \ users\nchildren:\n- name: group\n  promise: keycloak-group\n  version:\
+                \ v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
+                \  spec:\n    group: ${spec.group}\n    realm: ${spec.realm}\n- name:\
+                \ member\n  promise: keycloak-member\n  version: v0.0.1\n  apiVersion:\
+                \ platform.example.io/v1alpha1\n  kind: KeycloakMember\n  spec:\n\
+                \    group: ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
+                \  needs:\n  - group\n"
+            - name: COMPOUND_STAGE
+              value: emit
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
+            name: backstage
+          jobOptions: {}
+          rbac: {}
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: gated-1
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
+            name: compound-renderer
+            env:
+            - name: COMPOUND_RECIPE
+              value: "api:\n  type: object\n  properties:\n    group:\n      description:\
+                \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
+                \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
+                \ string\n    realm:\n      default: platform\n      description:\
+                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
+                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
+                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
+                \        maxLength: 63\n        minLength: 1\n        type: string\n\
+                \      minItems: 1\n      type: array\n  required:\n  - group\n  -\
+                \ users\nchildren:\n- name: group\n  promise: keycloak-group\n  version:\
+                \ v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
+                \  spec:\n    group: ${spec.group}\n    realm: ${spec.realm}\n- name:\
+                \ member\n  promise: keycloak-member\n  version: v0.0.1\n  apiVersion:\
+                \ platform.example.io/v1alpha1\n  kind: KeycloakMember\n  spec:\n\
+                \    group: ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
+                \  needs:\n  - group\n"
+            - name: COMPOUND_STAGE
+              value: gated
+            - name: COMPOUND_DEPTH
+              value: '1'
+          jobOptions: {}
+          rbac:
+            permissions:
+            - resourceNamespace: '*'
+              apiGroups:
+              - platform.example.io
+              resources:
+              - '*'
+              verbs:
+              - get
+              - list
+status:
+  workflows: 0
+  workflowsFailed: 0
+  workflowsSucceeded: 0
