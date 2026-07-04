@@ -88,8 +88,8 @@ spec:
               # public gelé en 2025, tag 1.35 inexistant — pull impossible, vécu)
               image: alpine/k8s:1.35.3
               resources:
-                requests: { cpu: 20m, memory: 32Mi }
-                limits: { cpu: 100m, memory: 64Mi }
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 200m, memory: 192Mi }
               command: [/bin/sh, -c]
               args:
                 - |
@@ -102,14 +102,20 @@ spec:
                     echo "  customResources:"
                     echo "    - { group: rbac.authorization.k8s.io, apiVersion: v1, plural: rolebindings }"
                     echo "    - { group: security.istio.io, apiVersion: v1, plural: peerauthentications }"
-                    kubectl get crds -o jsonpath='{range .items[*]}{.spec.group}{" "}{.spec.names.plural}{" "}{.spec.versions[?(@.storage==true)].name}{"\n"}{end}' \
-                    | while read -r g p v; do
-                        for fam in $FAMILIES; do
-                          if [ "$g" = "$fam" ]; then
-                            echo "    - { group: $g, apiVersion: $v, plural: $p }"
-                          fi
-                        done
-                      done | sort
+                    # léger : -o name = protocole Table (le nom d'une CRD encode
+                    # <plural>.<group>) — surtout PAS -o json/jsonpath global :
+                    # charger toutes les CRDs avec leurs schémas = OOM (vécu à 64Mi)
+                    for crd in $(kubectl get crds -o name | sed 's|.*/||'); do
+                      for fam in $FAMILIES; do
+                        case "$crd" in *.$fam) ;; *) continue ;; esac
+                        p=${crd%.$fam}
+                        # suffixe d'un groupe PLUS LONG (ex. platform.example.io
+                        # matche aussi crossplane.platform.example.io) -> ignorer
+                        case "$p" in *.*) continue ;; esac
+                        v=$(kubectl get crd "$crd" -o jsonpath='{.spec.versions[?(@.storage==true)].name}')
+                        echo "    - { group: $fam, apiVersion: $v, plural: $p }"
+                      done
+                    done | sort
                   } > "$out"
                   current=$(kubectl -n backstage get configmap backstage-config-dynamic -o jsonpath='{.data.app-config\.dynamic\.yaml}' 2>/dev/null || true)
                   desired=$(cat "$out")

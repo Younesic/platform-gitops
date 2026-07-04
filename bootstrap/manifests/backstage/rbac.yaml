@@ -57,8 +57,10 @@ rules:
   - apiGroups: ['crossplane.platform.example.io']
     resources: ['*']
     verbs: ['get', 'list', 'watch']
+  # famille ENTIÈRE (le générateur de customResources liste TOUTES les CRDs du
+  # group — un sous-ensemble ici = 403 sur les types non listés, vécu)
   - apiGroups: ['group.keycloak.m.crossplane.io']
-    resources: ['groups', 'memberships']
+    resources: ['*']
     verbs: ['get', 'list', 'watch']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
