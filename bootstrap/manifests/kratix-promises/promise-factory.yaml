@@ -23,16 +23,14 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.6.0
+    kratix.io/promise-version: v0.7.0
   annotations:
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"}}}'
-    # NB : la forme {"field":"source","hide":[...]} est RETIRÉE — le hide par branche
-    # pose un ui:widget hidden DANS la branche oneOf, or l'extraction uiSchema
-    # Backstage/rjsf aplatit les ui:* par chemin de donnée → source.path (caché
-    # branche helm) devenait invisible AUSSI en crossplane (vécu). Le masquage
-    # par branche reviendra en retirant le sous-champ du SCHÉMA de la branche
-    # (backstage-component ≥0.4.9) ; d'ici là path+chartName visibles partout.
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":["source"],"crossplane":["source"],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:widget":"hidden"}}}'
+    # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
+    # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
+    # dans une branche était aplati globalement par rjsf — vécu, source.path
+    # invisible en crossplane avec 0.4.5→0.4.8).
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path"]}],"crossplane":[{"field":"source","hide":["chartName"]}],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -109,6 +107,10 @@ spec:
                       chartName:
                         type: string
                         description: Nom du chart (requis seulement pour un repo Helm non-OCI)
+                  uiSchema:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    description: 'Réglages ui:* du formulaire des demandeurs (objet rjsf par champ), recopiés en annotation sur la promesse générée. Compound : s''ajoutent aux réglages HÉRITÉS des enfants (l''explicite gagne). Curation en PR — masqué au formulaire.'
                   recipe:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
@@ -252,7 +254,7 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c0bdea8f177f8dd85b4b4cc3a32e8a8a7411d8f58b3d05ac38ef0346b7019295
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -281,7 +283,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:bfe80da193a330e6e7553c46696158ee387d7f74ed0ad76e6b0107f4192b0f08
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:c017c5bfec5b69a1b2d14432a112ab123d7be0e0056979f7d240a21237773e40
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
