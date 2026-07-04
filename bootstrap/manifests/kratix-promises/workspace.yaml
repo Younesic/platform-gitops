@@ -88,7 +88,7 @@ spec:
             - name: CHART_URL
               value: oci://harbor.212-47-226-56.nip.io/platform/workspace
             - name: CHART_VERSION
-              value: 0.2.1
+              value: 0.2.2
             image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
             name: instance-configure
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:e5049df55881ae6d59bd53bb89e40fd75360d99b96d0f33d5e593a6dd20cfc8f
