@@ -95,6 +95,9 @@ spec:
             - fromFieldPath: spec.users
               toFieldPath: spec.forProvider.members
               type: FromCompositeFieldPath
+            - fromFieldPath: metadata.name
+              toFieldPath: metadata.labels['backstage.io/kubernetes-id']
+              type: FromCompositeFieldPath
             - fromFieldPath: spec.realm
               toFieldPath: spec.forProvider.realmId
               type: FromCompositeFieldPath
