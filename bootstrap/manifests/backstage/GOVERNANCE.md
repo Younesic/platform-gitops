@@ -1,7 +1,9 @@
 # Backstage Governance & RBAC Foundation — Attijari Portal
 
-> Decoupled, role-based, Keycloak-anchored. Preliminary internal reference.
-> Status: **design approved**, enforcement not yet wired (portal still runs the `allow-all` policy).
+> Decoupled, role-based, Keycloak-anchored.
+> Status: **ENFORCED** (2026-07-05). `allow-all` replaced by the local
+> `permissionPolicy` module (backstage `20260705-1410`); group membership +
+> public-offering data wired. See "Implementation — delivered" below.
 
 ## Context
 
@@ -136,14 +138,42 @@ both code and the IdP. Ownership-by-group, identity-derived-from-Keycloak, roles
 RBAC-mirrors-ownership are all state-of-the-art; the one-identity contract and provider-first
 ownership already in place make the mapping direct.
 
-## Implementation roadmap
+## Implementation — delivered (2026-07-05)
 
-1. **Wire the hierarchy (config only).** Extend `httpEntities.keycloakGroups`/`keycloakUsers` in
-   `app-config.yaml` to emit `parent`/`children`/`memberOf`; confirm the `role` group attribute in
-   Keycloak. Backstage restart (config read at boot).
-2. **Roles layer.** Adopt `@backstage-community/plugin-rbac` (recommended) OR a local conditional
-   `PermissionPolicy` module; remove `plugin-permission-backend-module-allow-all-policy` from
-   `packages/backend/src/index.ts`; new image + rollout (⚠️ sessions invalidated).
-3. **Verify.** Sign in as a non-admin (`erin@team-vente`, `role=consumer`) — sees only owned+public,
-   can execute product templates, denied the promise-factory; a `provider` squad member can publish;
-   a `backstage-admins` member can edit role bindings.
+Staged in two backstage rollouts to avoid a catalog blackout (membership must resolve *before*
+enforcement, or ownership refs are empty):
+
+1. **Group membership (data).** The generic `http-entities` connector gained two source-agnostic
+   primitives — `expand` (per-item sub-fetch) and `specLists` (array-valued specs + `slugify`). The
+   `keycloakGroups` source now fetches `/groups/{id}/members` → `Group.spec.members` (slugified) →
+   Backstage derives `memberOf` on users → `ownershipEntityRefs` at sign-in. Verified live: `erin →
+   group:default/team-vente`, admins → `group:default/cluster-admins` (LDAP-federated users included).
+2. **Public offerings (data).** `backstage-component` 0.4.10 stamps `platform.kratix.io/public=true`
+   on product Templates + `kratix-promise` fiches (knob `BACKSTAGE_PUBLIC`, default true). The
+   promise-factory sets `BACKSTAGE_PUBLIC=false` → the meta-promise stays platform/provider-only.
+   Verified live: 12 public offerings (6 templates + 6 fiches), factory private.
+3. **Enforcement (policy).** Local `permissionPolicy` module (`packages/backend/src/modules/`)
+   replaces `allow-all`: admin bypass on `cluster-admins`/`backstage-admins`; `catalog.entity.read`
+   = conditional `isEntityOwner | hasAnnotation(public=true) | isEntityKind(User,Group)` (org
+   directory world-readable so owner refs resolve); portal-governance writes (create/delete/refresh,
+   locations) = admins only; everything else = allow. Proven by 6/6 unit tests + clean backend init.
+
+### Follow-ups (documented, not blocking)
+
+- **`backstage-admins` group** as identity-as-code (platform-identity) — today the infra plane
+  (`cluster-admins`) covers both admin planes (the ref is already honored by the policy).
+- **`role` attribute in Keycloak** (`provider`/`consumer`) surfaced as `platform.kratix.io/role` on
+  Group entities — currently offerings are public-to-all + factory-restricted, which covers the
+  provider/consumer *visibility* split; the attribute enables finer per-action gating.
+- **Scaffolder-execute hardening** — deny task-create on unreadable templates (today the factory is
+  hidden by read + the double-merge gate stops any consumer-opened PR from landing).
+- **Tribe→squad hierarchy** — requires Keycloak subgroups (flat groups today); `spec.parent` wiring
+  is a config-only add to `keycloakGroups` once subgroups exist.
+- **Community RBAC plugin** (`@backstage-community/plugin-rbac`) — swap-in for UI-managed, auditable
+  role bindings when non-engineers must administer roles.
+
+### Final human verification (needs a real OIDC login — the user's gesture)
+
+Sign in as `erin` (team-vente, non-admin): should see the 12 public offerings + her team-vente
+instances, the org directory, but **not** the promise-factory nor other squads' instances; an
+admin (`alice`) sees everything. Guest sign-in is disabled in production.
