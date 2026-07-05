@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.7
+    kratix.io/promise-version: v0.7.8
   annotations:
     backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
@@ -127,7 +127,14 @@ spec:
                         template:
                           type: string
                           description: 'Gabarit — ${} = emplacement de la valeur du champ parent (ex. team-${} donne team-vente ; ${} seul = valeur brute).'
-                    description: 'Suggestions de SOURCE par champ (« déduire, pas deviner ») publiées pour les compositeurs (formulaire + Kratix Studio). Clé = nom d''un champ de CETTE promesse ; valeur = {from, template}. Ex. group → {from: team, template: "team-${}"}. Posées en annotation platform.kratix.io/usage-hints, HÉRITÉES à la dérivation, LUES et PRÉ-SÉLECTIONNÉES par le composer (évite le câblage manuel qui devine faux).'
+                        level:
+                          type: string
+                          enum:
+                          - suggest
+                          - warn
+                          - enforce
+                          description: 'Niveau d''application : suggest (pré-remplit, déviable) | warn (avertit si dévié) | enforce (câblage IMPOSÉ — dévier = recette REFUSÉE à la génération par le garde-fou générique backend). Défaut = suggest.'
+                    description: 'Suggestions/RÈGLES de SOURCE par champ (« déduire, pas deviner ») publiées pour les compositeurs (formulaire + Kratix Studio) ET le garde-fou. Clé = nom d''un champ de CETTE promesse ; valeur = {from, template, level}. Ex. group → {from: team, template: "team-${}", level: enforce}. Posées en annotation platform.kratix.io/usage-hints, HÉRITÉES à la dérivation, LUES/pré-sélectionnées par le composer, et IMPOSÉES (level: enforce) à la génération quel que soit l''éditeur.'
                   recipe:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
@@ -309,7 +316,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:03106cfa195f69200d553ea0f1f90fe6e80805039efb48cab9b825490fb44188
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:a9f532afe96b9e353d35c43e0d05e01d56f94080c378b7a0f6055b78257057e1
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
