@@ -258,7 +258,12 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c0bdea8f177f8dd85b4b4cc3a32e8a8a7411d8f58b3d05ac38ef0346b7019295
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:3b26c490c30d2bc80ef063d92e142ddcd11387d2da9657c1dadbf483e32bc777
+            # La MÉTA-promesse n'est PAS une offre publique : son Template + sa fiche
+            # restent réservés au plan plateforme/provider (pas les consommateurs).
+            env:
+            - name: BACKSTAGE_PUBLIC
+              value: "false"
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
