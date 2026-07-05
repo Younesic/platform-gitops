@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.3
+    kratix.io/promise-version: v0.7.4
   annotations:
     backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
@@ -287,7 +287,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:c98b8caa3106e11c13b6d842f1fede00a59cbd4f2c4ba48e23af48f928a4bea4
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0289b5d434a6990add267f4d0448d7683882684007ce1cddaea7bb59c57260e5
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
