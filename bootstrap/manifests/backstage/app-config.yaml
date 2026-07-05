@@ -126,9 +126,21 @@ data:
               tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
               clientId: ${HTTP_ENTITIES_KC_CLIENT_ID}
               clientSecret: ${HTTP_ENTITIES_KC_CLIENT_SECRET}
+            # Sous-ressource Keycloak : les MEMBRES du groupe. Rangés sous
+            # _expand.members, projetés en Group.spec.members (slugifiés pour matcher
+            # les User.name émis par la source keycloakUsers) → Backstage dérive les
+            # relations memberOf sur les users → ownershipEntityRefs (base du RBAC).
+            expand:
+              members:
+                url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/groups/{id}/members?max=500
             entity:
               kind: Group
               name: '{name}'
+              specLists:
+                members:
+                  path: _expand.members
+                  template: '{username}'
+                  slugify: true
             schedule:
               frequency: { minutes: 10 }
               timeout: { minutes: 2 }
