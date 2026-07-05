@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.6
+    kratix.io/promise-version: v0.7.7
   annotations:
     backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
@@ -118,8 +118,16 @@ spec:
                     description: 'Curation marketplace (clé → valeur string) déclarée par le provider → posée en annotations platform.kratix.io/<clé> sur la promesse générée, propagée par le conteneur backstage sur l''offre (Template + fiche). « provider » y pilote l''owner provider-first (RBAC) et la lignée estampillée sur les instances. Ex.: provider, tier, sla, logo-url.'
                   usageHints:
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                    description: 'Suggestions de SOURCE par champ (« déduire, pas deviner ») publiées pour les compositeurs (formulaire + Kratix Studio) : ex. {group: {from: team, template: "team-${}"}}. Posées en annotation platform.kratix.io/usage-hints sur la promesse, HÉRITÉES à la dérivation, LUES et pré-sélectionnées par le composer (évite le câblage manuel qui devine faux).'
+                    additionalProperties:
+                      type: object
+                      properties:
+                        from:
+                          type: string
+                          description: 'Champ PARENT dont ce champ se déduit (ex. team).'
+                        template:
+                          type: string
+                          description: 'Gabarit — ${} = emplacement de la valeur du champ parent (ex. team-${} donne team-vente ; ${} seul = valeur brute).'
+                    description: 'Suggestions de SOURCE par champ (« déduire, pas deviner ») publiées pour les compositeurs (formulaire + Kratix Studio). Clé = nom d''un champ de CETTE promesse ; valeur = {from, template}. Ex. group → {from: team, template: "team-${}"}. Posées en annotation platform.kratix.io/usage-hints, HÉRITÉES à la dérivation, LUES et PRÉ-SÉLECTIONNÉES par le composer (évite le câblage manuel qui devine faux).'
                   recipe:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
