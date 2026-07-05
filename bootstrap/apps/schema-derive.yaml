@@ -1,0 +1,14 @@
+# App-of-apps : service d'aperçu de schéma (dérivation à la création de promesse).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: schema-derive, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/schema-derive
+  destination: { server: https://kubernetes.default.svc, namespace: default }
+  syncPolicy:
+    automated: { selfHeal: true, prune: true }
+    syncOptions: [ ServerSideApply=true ]

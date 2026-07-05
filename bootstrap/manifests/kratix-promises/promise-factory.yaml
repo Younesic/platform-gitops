@@ -23,9 +23,9 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.1
+    kratix.io/promise-version: v0.7.2
   annotations:
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:widget":"hidden"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
@@ -110,7 +110,7 @@ spec:
                   uiSchema:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                    description: 'Réglages ui:* du formulaire des demandeurs (objet rjsf par champ), recopiés en annotation sur la promesse générée. Compound : s''ajoutent aux réglages HÉRITÉS des enfants (l''explicite gagne). Curation en PR — masqué au formulaire.'
+                    description: 'Présentation du formulaire des demandeurs (pickers dynamiques par champ) — réglée À LA CRÉATION par le composer LeafPresentationComposer (champs dérivés de la source). Recopiée en annotation ui-schema sur la promesse générée. Compound : la présentation vit dans recipe.uiSchema (composer inline).'
                   recipe:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.

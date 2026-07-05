@@ -1,0 +1,54 @@
+# schema-derive — service d'APERÇU du schéma d'une source pour le formulaire de
+# création de promesse (le composer de présentation doit connaître les champs
+# AVANT génération). Réutilise l'image de la factory (helm + git + scaffold) avec
+# un entrypoint alternatif ; lecture seule, aucun effet de bord.
+# ns `default` : y monter le secret promise-factory-git (clone SSH des sources
+# crossplane privées, comme le pipeline factory). helm pull Harbor = anonyme.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-derive
+  namespace: default
+  labels: { app: schema-derive }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: schema-derive }
+  template:
+    metadata:
+      labels: { app: schema-derive }
+    spec:
+      containers:
+        - name: schema-derive
+          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:5bea385ac4419e80362a3224fc2e63fe12f3d9cf2a484b6d78aae152f315e38a
+          command: ["python", "/app/derive_server.py"]
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: PORT, value: "8080" }
+            - { name: HOME, value: /tmp }        # helm/git écrivent dans $HOME
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - { name: git-creds, mountPath: /kratix/secrets/git, readOnly: true }
+      volumes:
+        - name: git-creds
+          secret:
+            secretName: promise-factory-git
+            defaultMode: 256
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-derive
+  namespace: default
+  labels: { app: schema-derive }
+spec:
+  selector: { app: schema-derive }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
