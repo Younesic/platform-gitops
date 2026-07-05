@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.0
+    kratix.io/promise-version: v0.7.1
   annotations:
     backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:widget":"hidden"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
@@ -115,6 +115,10 @@ spec:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
                     properties:
+                      uiSchema:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                        description: 'Présentation des champs parent (ui:* par champ) — écrite par le volet « Présentation » du composer (sources découvertes au catalogue). Précédence : hérité des enfants < recipe.uiSchema < spec.uiSchema.'
                       api:
                         type: array
                         description: Optionnel — s'ajoutent aux champs dérivés des enfants.
@@ -283,7 +287,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:c017c5bfec5b69a1b2d14432a112ab123d7be0e0056979f7d240a21237773e40
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:963eaa97c8d84ced7f8aab2964fe760a6b7f1c25f1afff1b264075827412c23f
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
