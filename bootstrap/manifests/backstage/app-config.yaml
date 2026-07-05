@@ -88,6 +88,41 @@ data:
             schedule:
               frequency: { minutes: 1 }
               timeout: { minutes: 2 }
+        # Connecteur UNIVERSEL http-entities (module local du backend) : chaque
+        # source de données = UN BLOC DE CONFIG (url + auth + mapping gabarits),
+        # JAMAIS du code — Keycloak n'est que la première source ; AD/Harbor/API
+        # client = un bloc de plus ici. Creds via env (SealedSecret
+        # backstage-http-entities). NB : config lue au boot → rollout au changement.
+        httpEntities:
+          keycloakUsers:
+            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/users?max=500
+            itemsPath: ''
+            auth:
+              type: oauth2ClientCredentials
+              tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
+              clientId: ${HTTP_ENTITIES_KC_CLIENT_ID}
+              clientSecret: ${HTTP_ENTITIES_KC_CLIENT_SECRET}
+            entity:
+              kind: User
+              name: '{username}'
+              title: '{firstName} {lastName}'
+            schedule:
+              frequency: { minutes: 10 }
+              timeout: { minutes: 2 }
+          keycloakGroups:
+            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/groups?max=200
+            itemsPath: ''
+            auth:
+              type: oauth2ClientCredentials
+              tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
+              clientId: ${HTTP_ENTITIES_KC_CLIENT_ID}
+              clientSecret: ${HTTP_ENTITIES_KC_CLIENT_SECRET}
+            entity:
+              kind: Group
+              name: '{name}'
+            schedule:
+              frequency: { minutes: 10 }
+              timeout: { minutes: 2 }
       import:
         entityFilename: catalog-info.yaml
         pullRequestBranchName: backstage-integration

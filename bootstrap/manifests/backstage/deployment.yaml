@@ -18,7 +18,7 @@ spec:
       priorityClassName: platform-high
       containers:
         - name: backstage
-          image: harbor.212-47-226-56.nip.io/platform/backstage:20260703-1930
+          image: harbor.212-47-226-56.nip.io/platform/backstage:20260705-0700
           imagePullPolicy: IfNotPresent
           command: ["node", "packages/backend"]
           # 2e fichier = config DYNAMIQUE (customResources générés par le CronJob
@@ -46,6 +46,11 @@ spec:
             # --- GitHub ---
             - name: GITHUB_TOKEN
               valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_TOKEN } }
+            # --- connecteur http-entities (sources catalogue config-driven) ---
+            - name: HTTP_ENTITIES_KC_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientId } }
+            - name: HTTP_ENTITIES_KC_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientSecret } }
             - { name: NODE_OPTIONS, value: --no-node-snapshot }
           resources:
             requests: { cpu: 250m, memory: 512Mi }
