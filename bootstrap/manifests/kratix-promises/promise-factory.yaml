@@ -23,7 +23,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.5
+    kratix.io/promise-version: v0.7.6
   annotations:
     backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
@@ -116,6 +116,10 @@ spec:
                     additionalProperties:
                       type: string
                     description: 'Curation marketplace (clé → valeur string) déclarée par le provider → posée en annotations platform.kratix.io/<clé> sur la promesse générée, propagée par le conteneur backstage sur l''offre (Template + fiche). « provider » y pilote l''owner provider-first (RBAC) et la lignée estampillée sur les instances. Ex.: provider, tier, sla, logo-url.'
+                  usageHints:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    description: 'Suggestions de SOURCE par champ (« déduire, pas deviner ») publiées pour les compositeurs (formulaire + Kratix Studio) : ex. {group: {from: team, template: "team-${}"}}. Posées en annotation platform.kratix.io/usage-hints sur la promesse, HÉRITÉES à la dérivation, LUES et pré-sélectionnées par le composer (évite le câblage manuel qui devine faux).'
                   recipe:
                     type: object
                     description: L'API parent se DÉRIVE des promesses choisies ; la branche de revue montre le résultat complet.
@@ -297,7 +301,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:1a6d004f49c40700a9ad123e3c944bd2d7369667aad22946b15248b6f0fed6fc
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:03106cfa195f69200d553ea0f1f90fe6e80805039efb48cab9b825490fb44188
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
