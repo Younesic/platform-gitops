@@ -96,7 +96,6 @@ data:
         httpEntities:
           keycloakUsers:
             url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/users?max=500
-            itemsPath: ''
             auth:
               type: oauth2ClientCredentials
               tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
@@ -111,7 +110,6 @@ data:
               timeout: { minutes: 2 }
           keycloakGroups:
             url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/groups?max=200
-            itemsPath: ''
             auth:
               type: oauth2ClientCredentials
               tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
