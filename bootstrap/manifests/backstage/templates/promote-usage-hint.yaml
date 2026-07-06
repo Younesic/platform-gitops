@@ -1,0 +1,66 @@
+# Template utilitaire « en faire la règle » (Inc 3 option a). Cible du deep-link du
+# bouton du CompoundComposer : il pré-remplit les paramètres (capturés du câblage,
+# déterministes) → l'action kratix:promote-usage-hint ouvre une PR sur portal-templates
+# ajoutant spec.usageHints[<field>] au PromiseRequest de la promesse enfant.
+# Enregistré via une catalog Location (type url) dans app-config runtime.
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: promote-usage-hint
+  title: En faire la règle (câblage → usageHints)
+  description: >-
+    Promeut un câblage déduit en RÈGLE durable sur une promesse enfant (PR sur son
+    PromiseRequest). Après merge, tout futur compound pré-remplit ce champ.
+  tags: [kratix, governance, usage-hints]
+spec:
+  type: kratix-resource
+  owner: group:default/team-platform
+  parameters:
+    - title: Règle de câblage à publier
+      required: [promise, field, template, level]
+      properties:
+        promise:
+          title: Promesse enfant
+          type: string
+          description: La promesse qui recevra la règle (ex. keycloak-member).
+          ui:readonly: true
+        field:
+          title: Champ déduit
+          type: string
+          description: Le champ de cette promesse que la règle déduit (ex. group).
+          ui:readonly: true
+        from:
+          title: Déduit du champ
+          type: string
+          description: Le champ (du futur compound) dont la valeur est déduite (ex. team).
+          ui:readonly: true
+        level:
+          title: Niveau
+          type: string
+          enum: [suggest, warn, enforce]
+          enumNames: ['Suggérer (pré-remplit)', 'Avertir (si dévié)', 'Imposer (verrouille + refuse)']
+          default: suggest
+          description: >-
+            Suggérer pré-remplit chez les compositeurs ; Imposer verrouille et REFUSE à
+            la génération quel que soit l'éditeur (garde-fou backend).
+        template:
+          type: string
+          ui:widget: hidden
+  steps:
+    - id: promote
+      name: Ouvrir la pull request
+      action: kratix:promote-usage-hint
+      input:
+        promise: ${{ parameters.promise }}
+        field: ${{ parameters.field }}
+        from: ${{ parameters.from }}
+        template: ${{ parameters.template }}
+        level: ${{ parameters.level }}
+  output:
+    links:
+      - title: Pull request de la règle
+        url: ${{ steps.promote.output.pullRequestUrl }}
+    text:
+      - title: Prochaine étape
+        content: >-
+          Après merge de la PR, la factory régénère la promesse enfant avec la règle.

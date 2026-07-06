@@ -151,6 +151,13 @@ data:
         - allow: [Component, System, API, Resource, Location, Template, Domain, Group, User]
       # (les locations examples/* du scaffold ont été retirées : absentes de l'image,
       # elles échouaient en NotFoundError à chaque cycle de processing)
+      locations:
+        # Template utilitaire « en faire la règle » (Inc 3 option a) — cible du deep-link
+        # du bouton CompoundComposer ; action kratix:promote-usage-hint (PR sur portal-templates).
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/promote-usage-hint.yaml
+          rules:
+            - allow: [Template]
 
     kubernetes:
       serviceLocatorMethod: { type: multiTenant }
