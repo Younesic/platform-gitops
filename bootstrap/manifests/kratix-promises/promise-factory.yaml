@@ -25,7 +25,7 @@ metadata:
   labels:
     kratix.io/promise-version: v0.7.8
   annotations:
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
