@@ -52,9 +52,11 @@ data:
           # le frontend attache l'identité via fetchApi.
         '/harbor':
           # Registry Helm : le Studio liste les charts/versions (picker OCI de Settings).
-          # Lecture anonyme (projet platform public) ; GET seul.
+          # Lecture anonyme (projet platform PUBLIC) ; GET seul ; pas de secret exposé
+          # → on lève l'exigence d'auth backstage du proxy (sinon 401 « Missing credentials »).
           target: https://harbor.212-47-226-56.nip.io
           allowedMethods: [GET]
+          credentials: dangerously-allow-unauthenticated
           changeOrigin: true
 
     # === Sign-in : Guest + Keycloak (les 2 cartes, comme en local) ===
