@@ -58,6 +58,17 @@ data:
           allowedMethods: [GET]
           credentials: dangerously-allow-unauthenticated
           changeOrigin: true
+        '/github-api':
+          # API GitHub : le Studio liste les TAGS d'un repo (picker Crossplane de Settings).
+          # Injecte le token plateforme (repos privés) → DOIT rester AUTHENTIFIÉ (défaut) :
+          # sinon proxy ouvert qui prête le token. GET seul ; le frontend attache l'identité
+          # backstage via fetchApi.
+          target: https://api.github.com
+          allowedMethods: [GET]
+          changeOrigin: true
+          headers:
+            Authorization: token ${GITHUB_TOKEN}
+            Accept: application/vnd.github+json
 
     # === Sign-in : Guest + Keycloak (les 2 cartes, comme en local) ===
     auth:
