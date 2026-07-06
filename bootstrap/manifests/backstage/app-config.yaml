@@ -50,6 +50,12 @@ data:
           allowedMethods: [POST]
           # défaut = exige un utilisateur Backstage authentifié (anti-SSRF) ;
           # le frontend attache l'identité via fetchApi.
+        '/harbor':
+          # Registry Helm : le Studio liste les charts/versions (picker OCI de Settings).
+          # Lecture anonyme (projet platform public) ; GET seul.
+          target: https://harbor.212-47-226-56.nip.io
+          allowedMethods: [GET]
+          changeOrigin: true
 
     # === Sign-in : Guest + Keycloak (les 2 cartes, comme en local) ===
     auth:
