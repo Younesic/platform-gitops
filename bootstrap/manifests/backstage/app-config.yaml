@@ -139,7 +139,9 @@ data:
               frequency: { minutes: 10 }
               timeout: { minutes: 2 }
           keycloakGroups:
-            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/groups?max=200
+            # briefRepresentation=false : sinon Keycloak ne renvoie PAS les attributs
+            # du groupe (dont `role`, posé par la promesse keycloak-group — onboarding O1).
+            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/groups?max=200&briefRepresentation=false
             auth:
               type: oauth2ClientCredentials
               tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
@@ -155,6 +157,11 @@ data:
             entity:
               kind: Group
               name: '{name}'
+              # rôle de gouvernance PROJETÉ depuis l'attribut Keycloak (stocké en TABLEAU
+              # → index .0) vers l'annotation lue par la permission-policy (onboarding O3).
+              # Gabarit vide (groupe sans rôle) → annotation OMISE (module : skip si vide).
+              annotations:
+                platform.kratix.io/role: '{attributes.role.0}'
               specLists:
                 members:
                   path: _expand.members
