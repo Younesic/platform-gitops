@@ -1,0 +1,29 @@
+# provider-terraform (crossplane-contrib) — exécute des modules Terraform via une MR `Workspace`.
+# On l'utilise pour piloter le terraform-provider-harbor OFFICIEL (goharbor) : harbor_project +
+# harbor_robot_account + harbor_project_member_group (type oidc) — la surface COMPLÈTE du fournisseur,
+# que les providers crossplane-harbor communautaires ne couvrent pas entièrement (le namespacé n'a pas
+# de binding de groupe, celui qui l'a est cluster-scoped → bloqué par le renderer).
+# v1.1.1 = build crossplane v2 → variantes NAMESPACÉES `tf.m.upbound.io` (kind Workspace), requises par
+# le renderer officiel from-api-to-crossplane-claim (force namespace:default → XR namespacée).
+#
+# La SA du pod est ÉPINGLÉE (DeploymentRuntimeConfig) pour pouvoir lui donner le RBAC du backend d'état
+# Terraform (kubernetes backend → secrets/leases dans crossplane-system) — voir harbor-clusterproviderconfig.yaml.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-terraform
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-terraform
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-terraform
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  package: xpkg.upbound.io/upbound/provider-terraform:v1.1.1
+  runtimeConfigRef:
+    name: provider-terraform

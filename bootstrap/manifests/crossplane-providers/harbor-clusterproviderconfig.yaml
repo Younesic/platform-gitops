@@ -1,0 +1,73 @@
+# Auth + configuration Terraform injectée dans CHAQUE Workspace qui référence ce ClusterProviderConfig.
+# - credentials: le mot de passe admin Harbor (secret harbor-admin, ns harbor) écrit dans un fichier
+#   `harbor-admin-password` du répertoire de travail terraform → lu par le provider block.
+# - configuration: le provider `harbor` (url interne du service, admin) + le backend d'ÉTAT (kubernetes,
+#   REQUIS car provider-terraform NE PERSISTE PAS l'état) + required_providers (goharbor/harbor).
+#   L'ISOLATION d'état par claim se fait via `env TF_WORKSPACE=<projet>` posé par la Composition
+#   → secret d'état `tfstate-<projet>-harbor` distinct par projet (le secret_suffix est fixe ici).
+# ClusterProviderConfig (cluster-scoped) car les MRs namespacées `.m.` l'exigent avec kind explicite,
+# exactement comme keycloak (`providerConfigRef: {kind: ClusterProviderConfig, name: harbor}`).
+apiVersion: tf.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: harbor
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  credentials:
+    - filename: harbor-admin-password
+      source: Secret
+      secretRef:
+        namespace: harbor
+        name: harbor-admin
+        key: HARBOR_ADMIN_PASSWORD
+  configuration: |
+    provider "harbor" {
+      url      = "http://harbor-core.harbor.svc:80"
+      username = "admin"
+      password = trimspace(file("harbor-admin-password"))
+      insecure = true
+    }
+
+    terraform {
+      required_providers {
+        harbor = {
+          source  = "goharbor/harbor"
+          version = "~> 3.0"
+        }
+      }
+      backend "kubernetes" {
+        secret_suffix     = "harbor"
+        namespace         = "crossplane-system"
+        in_cluster_config = true
+      }
+    }
+---
+# RBAC du backend d'état Terraform : le pod provider-terraform (SA épinglée) lit/écrit les secrets
+# d'état `tfstate-*` et prend des leases de verrouillage dans crossplane-system (in_cluster_config).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: provider-terraform-tfstate
+  namespace: crossplane-system
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: provider-terraform-tfstate
+  namespace: crossplane-system
+subjects:
+  - kind: ServiceAccount
+    name: provider-terraform
+    namespace: crossplane-system
+roleRef:
+  kind: Role
+  name: provider-terraform-tfstate
+  apiGroup: rbac.authorization.k8s.io
