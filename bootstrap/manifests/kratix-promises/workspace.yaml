@@ -4,6 +4,12 @@ metadata:
   labels:
     kratix.io/promise-version: v0.0.1
   name: workspace
+  annotations:
+    # V5 status-schema HELM (dérivé d'un outputs.schema.json du chart par la factory —
+    # kratix-new-helm-promise.outputs_to_status_schema, prouvé unit). Champs de status RÉELS
+    # des objets provisionnés (Namespace.status.phase, ResourceQuota.status.used). Propagé
+    # sur la fiche par bc → picker de sorties LABELLISÉ (parité crossplane, MÊME tuyauterie).
+    platform.kratix.io/status-schema: '{"namespacePhase": {"path": ".status.phase", "label": "État du namespace", "type": "string", "kind": "Namespace"}, "quotaUsed": {"path": ".status.used", "label": "Quota utilisé", "type": "object", "kind": "ResourceQuota"}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
