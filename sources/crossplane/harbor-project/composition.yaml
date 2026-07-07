@@ -1,0 +1,135 @@
+# Compose UNE MR Workspace NAMESPACÉE (provider-terraform, tf.m.upbound.io) qui exécute le
+# terraform-provider-harbor : harbor_project + harbor_robot_account (write) + harbor_project_member_group
+# (project-admin, type oidc) conditionnel au champ `group`. Auth + backend d'état = injectés par le
+# ClusterProviderConfig `harbor`. Nom de MR déterministe `harbor-project-<projet>` + label fiche→MR
+# (comme keycloak-group). Isolation d'état par claim via `env TF_WORKSPACE=<projet>`.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xharborproject-terraform
+spec:
+  compositeTypeRef:
+    apiVersion: crossplane.platform.example.io/v1alpha1
+    kind: XHarborProject
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: workspace
+            base:
+              apiVersion: tf.m.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  kind: ClusterProviderConfig
+                  name: harbor
+                forProvider:
+                  source: Inline
+                  inlineFormat: HCL
+                  # isolation d'état : provider-terraform crée un `terraform workspace` par MR
+                  # (nommé d'après la MR) → secret d'état tfstate-<nom-MR>-harbor distinct par claim.
+                  # NE PAS poser TF_WORKSPACE (ça empêche la création du workspace par le provider).
+                  # variables (défauts ; surchargées par les patches depuis le XR)
+                  varmap:
+                    project: ""
+                    group: ""
+                    storage_quota: -1
+                    public: false
+                  module: |
+                    variable "project" {
+                      type = string
+                    }
+                    variable "group" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "storage_quota" {
+                      type    = number
+                      default = -1
+                    }
+                    variable "public" {
+                      type    = bool
+                      default = false
+                    }
+
+                    resource "harbor_project" "this" {
+                      name                   = var.project
+                      public                 = var.public
+                      vulnerability_scanning = true
+                      storage_quota          = var.storage_quota
+                    }
+
+                    resource "harbor_robot_account" "publisher" {
+                      name        = "publisher"
+                      description = "Robot write plateforme pour le projet ${var.project}"
+                      level       = "project"
+                      permissions {
+                        access {
+                          action   = "push"
+                          resource = "repository"
+                        }
+                        access {
+                          action   = "pull"
+                          resource = "repository"
+                        }
+                        kind      = "project"
+                        namespace = harbor_project.this.name
+                      }
+                    }
+
+                    resource "harbor_project_member_group" "admins" {
+                      count      = var.group == "" ? 0 : 1
+                      project_id = harbor_project.this.id
+                      group_name = var.group
+                      role       = "projectadmin"
+                      type       = "oidc"
+                    }
+
+                    output "project_name"    { value = harbor_project.this.name }
+                    output "robot_full_name" { value = harbor_robot_account.publisher.full_name }
+                    output "robot_secret" {
+                      value     = harbor_robot_account.publisher.secret
+                      sensitive = true
+                    }
+            patches:
+              # nom déterministe de la MR + label fiche→MR
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.project
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: harbor-project-%s
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels['backstage.io/kubernetes-id']
+              # variables terraform
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.project
+                toFieldPath: spec.forProvider.varmap.project
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.group
+                toFieldPath: spec.forProvider.varmap.group
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.storageQuotaGb
+                toFieldPath: spec.forProvider.varmap.storage_quota
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.public
+                toFieldPath: spec.forProvider.varmap.public
+              # exports (non sensibles) → status du XR
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.project_name
+                toFieldPath: status.projectName
+                policy:
+                  fromFieldPath: Optional
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.robot_full_name
+                toFieldPath: status.robotName
+                policy:
+                  fromFieldPath: Optional

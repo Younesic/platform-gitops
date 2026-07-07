@@ -1,0 +1,58 @@
+# Brique `harbor-project` — la SURFACE DE PUBLICATION d'une squad fournisseuse :
+# un projet Harbor + un robot write (creds de push CI/factory) + (optionnel) le mapping
+# du groupe OIDC de la squad en project-admin (accès humain à l'UI Harbor du projet).
+# XRD v2 NAMESPACÉE (contrainte du renderer officiel) → compose la MR NAMESPACÉE Workspace
+# (tf.m.upbound.io) de provider-terraform, qui exécute le terraform-provider-harbor officiel.
+# Même famille de groupe que keycloak (`crossplane.platform.example.io`) → l'onglet Kubernetes
+# Backstage la découvre automatiquement (customresources-sync).
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xharborprojects.crossplane.platform.example.io
+spec:
+  scope: Namespaced
+  group: crossplane.platform.example.io
+  names:
+    kind: XHarborProject
+    plural: xharborprojects
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - project
+              properties:
+                project:
+                  type: string
+                  pattern: ^[a-z][a-z0-9-]*$
+                  maxLength: 255
+                  description: Nom du projet Harbor (le registre du fournisseur, ex. team-paiement).
+                group:
+                  type: string
+                  default: ""
+                  description: >-
+                    Groupe OIDC (ex. team-paiement) à qui accorder project-admin sur le projet.
+                    Vide = pas de mapping de groupe (le robot write suffit à publier).
+                storageQuotaGb:
+                  type: integer
+                  default: -1
+                  description: Quota de stockage du projet en Go (-1 = illimité).
+                public:
+                  type: boolean
+                  default: false
+                  description: Projet public (lecture anonyme des artefacts).
+            status:
+              type: object
+              properties:
+                projectName:
+                  type: string
+                  description: Nom du projet Harbor provisionné.
+                robotName:
+                  type: string
+                  description: Nom complet du robot write (robot$<projet>+publisher).
