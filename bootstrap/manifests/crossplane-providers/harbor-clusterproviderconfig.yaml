@@ -13,6 +13,10 @@ metadata:
   name: harbor
   annotations:
     argocd.argoproj.io/sync-wave: "2"
+    # la CRD tf.m.upbound.io est installée par le provider (wave 0) ; sans ça ArgoCD
+    # invalide TOUT le plan de sync ("synchronization tasks are not valid") car le kind
+    # est inconnu au dry-run → skip le dry-run, la wave 2 l'applique une fois la CRD là.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   credentials:
     - filename: harbor-admin-password
