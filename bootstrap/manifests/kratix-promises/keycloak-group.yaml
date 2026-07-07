@@ -39,6 +39,13 @@ spec:
                     default: platform
                     description: Realm Keycloak.
                     type: string
+                  role:
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
+                    enum:
+                    - consumer
+                    - provider
+                    type: string
                 required:
                 - group
                 type: object
@@ -102,6 +109,11 @@ spec:
             - fromFieldPath: spec.realm
               toFieldPath: spec.forProvider.realmId
               type: FromCompositeFieldPath
+            - fromFieldPath: spec.role
+              toFieldPath: spec.forProvider.attributes.role
+              policy:
+                fromFieldPath: Optional
+              type: FromCompositeFieldPath
             - fromFieldPath: status.atProvider.id
               toFieldPath: status.groupId
               type: ToCompositeFieldPath
@@ -133,6 +145,13 @@ spec:
                   realm:
                     default: platform
                     description: Realm Keycloak.
+                    type: string
+                  role:
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
+                    enum:
+                    - consumer
+                    - provider
                     type: string
                 required:
                 - group

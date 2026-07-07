@@ -51,6 +51,12 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.realm
                 toFieldPath: spec.forProvider.realmId
+              # rôle de gouvernance → attribut du groupe Keycloak (Optional : omis = pas d'attribut)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.role
+                toFieldPath: spec.forProvider.attributes.role
+                policy:
+                  fromFieldPath: Optional
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.id
                 toFieldPath: status.groupId

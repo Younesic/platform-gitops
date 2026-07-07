@@ -37,6 +37,14 @@ spec:
                   type: string
                   default: platform
                   description: Realm Keycloak.
+                role:
+                  type: string
+                  enum:
+                    - consumer
+                    - provider
+                  description: >-
+                    Rôle de gouvernance de la squad (posé en attribut du groupe
+                    Keycloak, lu par le RBAC portail). Omis = pas d'attribut.
             status:
               type: object
               properties:
