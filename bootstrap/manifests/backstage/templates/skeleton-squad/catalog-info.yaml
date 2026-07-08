@@ -12,6 +12,10 @@ metadata:
     platform.kratix.io/squad-slug: ${{ values.slug }}
     platform.kratix.io/squad-members: ${{ values.members | join(",") }}
     platform.kratix.io/declared-by: ${{ values.declaredBy }}
+    # gated-by tech-lead : une squad déclarée est un artefact de cycle de vie Portal → LISIBLE
+    # par les tech-leads (la permission-policy SL2 : hasAnnotation gated-by=tech-lead) — sinon
+    # le picker de « Onboarder une squad » (session tech-lead non-admin) ne la voit pas.
+    platform.kratix.io/gated-by: tech-lead
   tags: [portal, squad, declared]
 spec:
   # Component NON-Group (option iii) : la déclaration n'est pas une identité — pas de
