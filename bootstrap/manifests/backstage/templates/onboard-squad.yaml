@@ -35,11 +35,13 @@ spec:
           description: La squad à onboarder — son slug et ses membres sont HÉRITÉS de sa déclaration (non re-tapés).
           ui:field: EntityPicker
           ui:options:
-            # G2 — ne cible QUE les Groups de type=squad (les niveaux structurels org/dept/domain/
-            # tribe ne s'onboardent pas). La squad déclarée = Group NATIF squad-<slug> (Create Group).
+            # G2 — ne cible QUE les Groups de type=squad ENCORE déclarés (status=declared) : les
+            # niveaux structurels (org/dept/domain/tribe) ne s'onboardent pas, et une squad déjà
+            # onboardée (option A : Group org flippé declared→onboarded) SORT du picker.
             catalogFilter:
               kind: Group
               spec.type: squad
+              metadata.annotations.platform.kratix.io/squad-status: declared
         role:
           title: Rôle
           type: string
