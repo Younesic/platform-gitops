@@ -118,6 +118,18 @@ data:
             schedule:
               frequency: { minutes: 1 }
               timeout: { minutes: 2 }
+          # SL1 — squads DÉCLARÉES (Portal, produit declare-squad) : fiches légères
+          # poussées en PR sous portal-templates/squads/<slug>/catalog-info.yaml, ingérées
+          # ICI après merge (= décision d'admission). NON-Kratix (aucun claim/pipeline).
+          # Ref squad-<slug> ≠ team-<slug> → pas de collision avec la projection Keycloak.
+          portalSquads:
+            organization: Younesic
+            catalogPath: /squads/**/catalog-info.yaml
+            filters:
+              repository: portal-templates
+            schedule:
+              frequency: { minutes: 2 }
+              timeout: { minutes: 2 }
         # Connecteur UNIVERSEL http-entities (module local du backend) : chaque
         # source de données = UN BLOC DE CONFIG (url + auth + mapping gabarits),
         # JAMAIS du code — Keycloak n'est que la première source ; AD/Harbor/API
@@ -182,6 +194,15 @@ data:
         # du bouton CompoundComposer ; action kratix:promote-usage-hint (PR sur portal-templates).
         - type: url
           target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/promote-usage-hint.yaml
+          rules:
+            - allow: [Template]
+        # SL1 — provider Portal (Group natif) + produit « Déclarer une squad » (Template natif).
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/team-portal.yaml
+          rules:
+            - allow: [Group]
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/declare-squad.yaml
           rules:
             - allow: [Template]
 

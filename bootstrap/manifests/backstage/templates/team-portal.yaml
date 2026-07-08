@@ -1,0 +1,18 @@
+# SL1 — Provider « Portal » : l'équipe qui fournit les produits Backstage NON-Kratix
+# (ex. « Déclarer une squad »). Entité Group NATIVE (catalog Location), pas Keycloak :
+# la déclaration de squad ne passe pas par Kratix. Prérequis d'ownership du Template
+# declare-squad. Promouvable en groupe Keycloak/identity-as-code plus tard (one-identity).
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-portal
+  title: Portal
+  description: >-
+    Provider des produits Backstage non-Kratix (Portal). Owner du produit
+    « Déclarer une squad ». Équipe plateforme.
+  annotations:
+    platform.kratix.io/provider: portal
+  tags: [provider, portal]
+spec:
+  type: team
+  children: []

@@ -1,0 +1,85 @@
+# SL1 — Produit « Déclarer une squad » (Portal, NON-Kratix). Template scaffolder natif
+# (catalog Location) owned par team-portal. La soumission ouvre une PR sur portal-templates
+# (squads/<slug>/catalog-info.yaml) créant une FICHE LÉGÈRE de squad déclarée : aucun groupe
+# Keycloak, aucun rôle, aucun RBAC. Ref DISTINCTE de team-<slug> (réservé à la projection
+# Keycloak O2) → zéro doublon de Group. L'onboarding (SL3) matérialisera l'identité + le rôle.
+# Annotations du contrat d'exposition/visibilité (SL0/SL4) : product / audience portal /
+# exécution gated tech-lead (enforcé en SL2/SL4).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: declare-squad
+  title: Déclarer une squad
+  description: >-
+    Déclare une nouvelle squad (Portal) — fiche légère, SANS accès. Étape 1 du parcours :
+    l'onboarding (étape 2) lui donnera l'identité Keycloak + le rôle (consumer/provider).
+  annotations:
+    platform.kratix.io/exposure: product
+    platform.kratix.io/audience: portal
+    platform.kratix.io/gated-by: tech-lead
+  tags: [portal, squad, onboarding]
+spec:
+  type: portal-product
+  owner: group:default/team-portal
+  parameters:
+    - title: Squad
+      required: [slug]
+      properties:
+        slug:
+          title: Slug de la squad
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+          maxLength: 63
+          description: >-
+            Identifiant court (ex. « payment »). Deviendra team-<slug> (ex. team-payment)
+            à l'onboarding. Minuscules, chiffres et tirets.
+        displayName:
+          title: Nom affiché
+          type: string
+          description: Nom lisible de la squad (optionnel).
+        members:
+          title: Membres visés
+          type: array
+          default: []
+          items:
+            type: string
+          description: >-
+            Usernames Keycloak des membres visés — INDICATIFS : ils seront matérialisés
+            (dans Keycloak) à l'onboarding, pas maintenant.
+          ui:field: CatalogNamePicker
+          ui:options:
+            catalogFilter:
+              kind: User
+  steps:
+    - id: fetch
+      name: Générer la fiche de squad déclarée
+      action: fetch:template
+      input:
+        url: https://github.com/Younesic/platform-gitops/tree/main/bootstrap/manifests/backstage/templates/skeleton-squad
+        values:
+          slug: ${{ parameters.slug }}
+          displayName: ${{ parameters.displayName }}
+          members: ${{ parameters.members }}
+          declaredBy: ${{ user.entity.metadata.name if user.entity else '' }}
+    - id: pr
+      name: Ouvrir la PR de déclaration
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=Younesic&repo=portal-templates
+        branchName: declare-squad-${{ parameters.slug }}
+        targetBranchName: main
+        targetPath: squads/${{ parameters.slug }}
+        title: 'Déclarer la squad « ${{ parameters.slug }} »'
+        description: >-
+          Déclaration de la squad « ${{ parameters.slug }} » (Portal, non-Kratix). Après
+          merge (= décision d'admission), la fiche est ingérée au catalogue en statut
+          « declared » — sans accès. Onboarding ensuite pour le rôle.
+  output:
+    links:
+      - title: Pull request de la déclaration
+        url: ${{ steps.pr.output.remoteUrl }}
+    text:
+      - title: Prochaine étape
+        content: >-
+          Après merge, la squad apparaît au catalogue en statut « declared » (sans accès).
+          Lancez l'onboarding pour lui donner un rôle (consumer/provider).
