@@ -5,6 +5,9 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: keycloak-group
   annotations:
+    # KS6 — lignée provider EXPLICITE (véridique : brique team-platform) — ferme le verdict
+    # « legacy » du gate d'écriture Studio.
+    platform.kratix.io/provider: platform
     # V4-1 status-schema (dérivé du XRD par la factory — kratix-new-crossplane-promise.derive_status_schema,
     # prouvé unit contre le XRD réel). Propagé sur la fiche par backstage-component (passthrough
     # platform.kratix.io/*) → alimente le picker de sorties LABELLISÉ du Studio/composer (V4-2).
