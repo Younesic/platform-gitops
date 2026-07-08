@@ -9,7 +9,7 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: declare-squad
-  title: Déclarer une squad
+  title: Create Group
   description: >-
     Déclare une nouvelle squad (Portal) — fiche légère, SANS accès. Étape 1 du parcours :
     l'onboarding (étape 2) lui donnera l'identité Keycloak + le rôle (consumer/provider).

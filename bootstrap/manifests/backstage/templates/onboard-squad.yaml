@@ -9,7 +9,7 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: onboard-squad
-  title: Onboarder une squad
+  title: Onboard Squad
   description: >-
     Donne à une squad DÉCLARÉE son identité Keycloak + son rôle (consumer/provider) —
     étape 2 du parcours. Réservé aux tech-leads.
@@ -17,13 +17,14 @@ metadata:
     platform.kratix.io/exposure: product
     platform.kratix.io/audience: portal
     platform.kratix.io/gated-by: tech-lead
-    # Marketplace (surface produit curée) : opt-in explicite (produit Portal NON-Kratix) + provider portal.
+    # G1 — produit PLATFORM (obtenir le rôle = concern gouvernance/identité, PAS Portal) :
+    # opt-in marketplace + provider platform → carte sous le provider « Platform ».
     platform.kratix.io/marketplace: "true"
-    platform.kratix.io/provider: portal
-  tags: [portal, squad, onboarding]
+    platform.kratix.io/provider: platform
+  tags: [platform, squad, onboarding]
 spec:
   type: portal-product
-  owner: group:default/team-portal
+  owner: group:default/team-platform
   parameters:
     - title: Onboarding
       required: [squad, role]
