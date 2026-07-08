@@ -1,0 +1,28 @@
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: ${{ values.type }}-${{ values.slug }}
+  title: ${{ values.displayName if values.displayName else values.slug }}
+  description: >-
+    Groupe « ${{ values.type }} » nommé « ${{ values.slug }} », déclaré via Create Group (Portal).
+    Place dans la hiérarchie org : organization > department > domain > tribe > squad.
+  annotations:
+    platform.kratix.io/group-type: ${{ values.type }}
+    platform.kratix.io/declared-by: ${{ values.declaredBy }}
+{%- if values.type == "squad" %}
+    # SQUAD DÉCLARÉE : statut declared + membres VISÉS (annotation, PAS spec.members → aucun
+    # accès) + gated-by tech-lead (lisible par les tech-leads → picker Onboard Squad). L'identité
+    # réelle (team-<slug> Keycloak, membres, rôle) naît à l'onboarding, source unique = Keycloak.
+    platform.kratix.io/squad-status: declared
+    platform.kratix.io/squad-slug: ${{ values.slug }}
+    platform.kratix.io/squad-members: ${{ (values.members or []) | join(",") }}
+    platform.kratix.io/gated-by: tech-lead
+{%- endif %}
+spec:
+  # Group NATIF : spec.type = niveau ; spec.parent = groupe du niveau au-dessus → hiérarchie
+  # native (parentOf/childOf) au catalogue. Ref <type>-<slug> DISTINCTE de team-<slug> (Keycloak).
+  type: ${{ values.type }}
+  children: []
+{%- if values.parent %}
+  parent: ${{ values.parent }}
+{%- endif %}

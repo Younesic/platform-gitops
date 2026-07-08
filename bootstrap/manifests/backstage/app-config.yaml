@@ -118,13 +118,14 @@ data:
             schedule:
               frequency: { minutes: 1 }
               timeout: { minutes: 2 }
-          # SL1 — squads DÉCLARÉES (Portal, produit declare-squad) : fiches légères
-          # poussées en PR sous portal-templates/squads/<slug>/catalog-info.yaml, ingérées
-          # ICI après merge (= décision d'admission). NON-Kratix (aucun claim/pipeline).
-          # Ref squad-<slug> ≠ team-<slug> → pas de collision avec la projection Keycloak.
+          # G2 — GROUPES d'org déclarés (Portal, produit « Create Group ») : Groups NATIFS typés
+          # <type>-<slug> (organization|department|domain|tribe|squad) poussés en PR sous
+          # portal-templates/groups/<type>-<slug>/catalog-info.yaml, ingérés ICI après merge
+          # (= décision d'admission). NON-Kratix. spec.parent → hiérarchie native au catalogue.
+          # Ref <type>-<slug> ≠ team-<slug> → pas de collision avec la projection Keycloak (O2).
           portalSquads:
             organization: Younesic
-            catalogPath: /squads/**/catalog-info.yaml
+            catalogPath: /groups/**/catalog-info.yaml
             filters:
               repository: portal-templates
             schedule:

@@ -35,9 +35,11 @@ spec:
           description: La squad à onboarder — son slug et ses membres sont HÉRITÉS de sa déclaration (non re-tapés).
           ui:field: EntityPicker
           ui:options:
+            # G2 — ne cible QUE les Groups de type=squad (les niveaux structurels org/dept/domain/
+            # tribe ne s'onboardent pas). La squad déclarée = Group NATIF squad-<slug> (Create Group).
             catalogFilter:
-              kind: Component
-              spec.type: squad-declaration
+              kind: Group
+              spec.type: squad
         role:
           title: Rôle
           type: string
