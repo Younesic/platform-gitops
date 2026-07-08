@@ -137,7 +137,9 @@ data:
         # backstage-http-entities). NB : config lue au boot → rollout au changement.
         httpEntities:
           keycloakUsers:
-            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/users?max=500
+            # briefRepresentation=false : renvoie les ATTRIBUTS du user (dont `tech-lead`,
+            # projeté en annotation ci-dessous — gate SL2, même mécanisme que le rôle O2).
+            url: https://keycloak.212-47-226-56.nip.io/admin/realms/platform/users?max=500&briefRepresentation=false
             auth:
               type: oauth2ClientCredentials
               tokenUrl: https://keycloak.212-47-226-56.nip.io/realms/master/protocol/openid-connect/token
@@ -147,6 +149,11 @@ data:
               kind: User
               name: '{username}'
               title: '{firstName} {lastName}'
+              # SL2 — statut tech-lead PROJETÉ depuis l'attribut Keycloak (stocké en TABLEAU
+              # → index .0) vers l'annotation lue par la permission-policy. Attribut absent
+              # → gabarit '' → annotation OMISE (le module skip les vides : non-régression).
+              annotations:
+                platform.kratix.io/tech-lead: '{attributes.tech-lead.0}'
             schedule:
               frequency: { minutes: 10 }
               timeout: { minutes: 2 }
