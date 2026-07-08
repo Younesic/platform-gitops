@@ -27,6 +27,10 @@ metadata:
     platform.kratix.io/gated-by: tech-lead
     platform.kratix.io/marketplace: "true"
     platform.kratix.io/provider: portal
+    # G3 — logo produit (data-driven). Pour une promesse factory : spec.curation.logo-url →
+    # platform.kratix.io/logo-url (passthrough générique platform.kratix.io/*). Ici produit NATIF
+    # → annotation directe. Hôte self-hosted (Harbor) autorisé par la CSP img-src + l'allowlist plugin.
+    platform.kratix.io/logo-url: https://harbor.212-47-226-56.nip.io/favicon.ico
   tags: [portal, group, organization, hierarchy]
 spec:
   type: portal-product

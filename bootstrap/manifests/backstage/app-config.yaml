@@ -11,6 +11,16 @@ data:
     organization:
       name: Attijari
 
+    # G3 — politique de validation des logos (frontend, lue par le plugin kratix-marketplace
+    # via configApi ; déclarée @deepVisibility frontend dans son config.d.ts). Allowlist d'hôtes
+    # MIROIR de backend.csp.img-src : le plugin ne rend un <img> QUE pour un hôte autorisé (sinon
+    # placeholder propre, pas d'image cassée) → les 2 gates (plugin client + CSP navigateur) s'accordent.
+    kratixMarketplace:
+      logo:
+        requireHttps: true
+        allowedHosts:
+          - harbor.212-47-226-56.nip.io
+
     backend:
       baseUrl: https://backstage.212-47-226-56.nip.io
       listen:
@@ -18,6 +28,13 @@ data:
         host: 0.0.0.0
       csp:
         connect-src: ["'self'", 'http:', 'https:']
+        # G3 — logos produits/providers déclarés (spec.curation.logo-url → annotation
+        # platform.kratix.io/logo-url) : la CSP par défaut de Backstage est img-src 'self' data:
+        # → tout hôte EXTERNE est bloqué par le navigateur (le logo ne s'affiche pas). On ouvre
+        # une ALLOWLIST SERRÉE (jamais img-src * ni https: large) : self + data: + Harbor (registre
+        # self-hosted, hôte de confiance où les providers déposent leurs logos). Ajouter un hôte
+        # = une ligne ici (miroir de kratixMarketplace.logo.allowedHosts côté plugin).
+        img-src: ["'self'", 'data:', 'https://harbor.212-47-226-56.nip.io']
       cors:
         origin: https://backstage.212-47-226-56.nip.io
         methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
