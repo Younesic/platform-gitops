@@ -17,6 +17,10 @@ metadata:
     platform.kratix.io/exposure: product
     platform.kratix.io/audience: portal
     platform.kratix.io/gated-by: tech-lead
+    # Marketplace (surface produit curée) : opt-in explicite (produit Portal NON-Kratix, donc
+    # ni kratix.io/type ni spec.type=kratix-resource) + provider = portal (regroupement par provider).
+    platform.kratix.io/marketplace: "true"
+    platform.kratix.io/provider: portal
   tags: [portal, squad, onboarding]
 spec:
   type: portal-product
