@@ -1,0 +1,60 @@
+# SL3 — Produit « Onboarder une squad » (Portal, gated tech-lead). Étape 2 du parcours :
+# une squad DÉCLARÉE (SL1, sans accès) reçoit son IDENTITÉ Keycloak + son RÔLE. Template
+# scaffolder natif : picker de squad déclarée (slug+membres HÉRITÉS, jamais re-tapés) + rôle
+# → action kratix:onboard-squad → PR sur portal-templates {keycloak-group(+role O1) +
+# keycloak-member + retrait de la fiche déclarée}. Après merge → groupe Keycloak team-<slug>
+# + membres → projeté en Group (O2). Annotations : exposure product / audience portal /
+# gated-by tech-lead (le MÊME gate SL2 que declare-squad).
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: onboard-squad
+  title: Onboarder une squad
+  description: >-
+    Donne à une squad DÉCLARÉE son identité Keycloak + son rôle (consumer/provider) —
+    étape 2 du parcours. Réservé aux tech-leads.
+  annotations:
+    platform.kratix.io/exposure: product
+    platform.kratix.io/audience: portal
+    platform.kratix.io/gated-by: tech-lead
+  tags: [portal, squad, onboarding]
+spec:
+  type: portal-product
+  owner: group:default/team-portal
+  parameters:
+    - title: Onboarding
+      required: [squad, role]
+      properties:
+        squad:
+          title: Squad déclarée
+          type: string
+          description: La squad à onboarder — son slug et ses membres sont HÉRITÉS de sa déclaration (non re-tapés).
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: Component
+              spec.type: squad-declaration
+        role:
+          title: Rôle
+          type: string
+          enum: [consumer, provider]
+          enumNames: ['Consumer (consomme des produits)', 'Provider (fournit + conçoit des promesses)']
+          description: >-
+            consumer = consomme des produits publics ; provider = fournit + peut concevoir des promesses (authoring).
+  steps:
+    - id: onboard
+      name: Onboarder (identité Keycloak + rôle)
+      action: kratix:onboard-squad
+      input:
+        squadRef: ${{ parameters.squad }}
+        role: ${{ parameters.role }}
+  output:
+    links:
+      - title: Pull request d'onboarding
+        url: ${{ steps.onboard.output.pullRequestUrl }}
+    text:
+      - title: Prochaine étape
+        content: >-
+          Après merge : groupe Keycloak « team-${{ steps.onboard.output.slug }} » + membres +
+          rôle → projeté en Group (O2). Les membres pourront consommer les produits selon leur rôle.
+          La fiche déclarée est retirée (réconciliation : source unique = Keycloak).

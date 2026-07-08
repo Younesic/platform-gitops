@@ -212,6 +212,11 @@ data:
           target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/declare-squad.yaml
           rules:
             - allow: [Template]
+        # SL3 — produit « Onboarder une squad » (Portal, gated tech-lead).
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/onboard-squad.yaml
+          rules:
+            - allow: [Template]
 
     kubernetes:
       serviceLocatorMethod: { type: multiTenant }
