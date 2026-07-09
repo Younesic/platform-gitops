@@ -62,6 +62,10 @@ rules:
   - apiGroups: ['group.keycloak.m.crossplane.io']
     resources: ['*']
     verbs: ['get', 'list', 'watch']
+  # CRs de l'opérateur témoin du moteur operator (OP5) — onglet Kubernetes live
+  - apiGroups: ['rabbitmq.com']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

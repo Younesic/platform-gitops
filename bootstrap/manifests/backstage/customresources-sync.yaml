@@ -94,7 +94,9 @@ spec:
               args:
                 - |
                   set -eu
-                  FAMILIES="platform.example.io crossplane.platform.example.io group.keycloak.m.crossplane.io"
+                  # rabbitmq.com = famille du groupe de l'opérateur témoin OP5 (moteur
+                  # operator) — règle : une ligne par FAMILLE/provider, jamais par promesse.
+                  FAMILIES="platform.example.io crossplane.platform.example.io group.keycloak.m.crossplane.io rabbitmq.com"
                   out=/tmp/app-config.dynamic.yaml
                   {
                     echo "# GÉNÉRÉ par le CronJob backstage-customresources-sync — ne pas éditer."
