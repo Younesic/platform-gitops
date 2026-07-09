@@ -12910,7 +12910,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c0bdea8f177f8dd85b4b4cc3a32e8a8a7411d8f58b3d05ac38ef0346b7019295
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
             env:
             - name: CURATION_REV
@@ -12932,7 +12932,7 @@ spec:
               value: RabbitmqCluster
             image: ghcr.io/syntasso/kratix-cli/from-api-to-operator:v0.2.2
             name: from-api-to-operator
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c0bdea8f177f8dd85b4b4cc3a32e8a8a7411d8f58b3d05ac38ef0346b7019295
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
           jobOptions: {}
           rbac: {}
