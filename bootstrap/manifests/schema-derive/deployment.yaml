@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: schema-derive
-          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:e5d4acea5e571ef9e83fe0fd38a2d7f70094f4413dba5894819146bd96ba10a5
+          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:d59009bbeed1e194c88c7af88ff811fb1686328403513f065611bc70ab89080f
           command: ["python", "/app/derive_server.py"]
           ports:
             - { name: http, containerPort: 8080 }

@@ -1,12 +1,17 @@
-# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm, crossplane ET
-# compound implémentés ; terraform/operator = slots) (donc un formulaire Backstage,
+# MÉTA-PROMESSE : créer une promesse devient un claim typé (helm, crossplane,
+# operator ET compound implémentés ; terraform = slot) (donc un formulaire Backstage,
 # via le Template poussé par promise-configure). Le pipeline rejoue le MÊME outillage
 # que le poste du platform engineer (plugins kratix new-helm-promise /
-# new-crossplane-promise / new-compound-promise + schema-to-crd) et pousse une
+# new-crossplane-promise / new-operator-promise / new-compound-promise +
+# schema-to-crd) et pousse une
 # BRANCHE DE REVUE sur platform-gitops — jamais d'auto-apply : le merge humain reste
 # le garde-fou de gouvernance. crossplane : source = repo git à une ref PINNÉE
 # (tag|SHA) contenant 1 XRD + Composition(s) — la XRD est le contrat, copiée telle
-# quelle dans l'API. compound : DEUX chemins à parité — source = repo git pinné
+# quelle dans l'API. operator : source = repo git pinné contenant les manifestes de
+# l'opérateur — la CRD DÉSIGNÉE (source.apiSchemaFrom, ou l'unique) est le contrat
+# (spec+status, version storage) ; les manifestes ENTIERS deviennent les dependencies
+# de la promesse (opérateur installé 1×/Destination, N claims = N CRs rendus par
+# from-api-to-operator — CR dans le namespace default de la destination). compound : DEUX chemins à parité — source = repo git pinné
 # contenant compound.yaml (équipes) OU **spec.recipe INLINE** (le COMPOSER du
 # portail) : l'API parent se DÉRIVE des promesses enfants choisies (EntityPicker sur
 # les fiches kratix-promise ; version/apiVersion/kind vides = résolus et PINNÉS à la
@@ -23,17 +28,17 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.7.8
+    kratix.io/promise-version: v0.8.0
   annotations:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path"]}],"crossplane":[{"field":"source","hide":["chartName"]}],"terraform":["source"],"operator":["source"],"compound":["recipe"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -67,12 +72,14 @@ spec:
                   message: 'type helm : source.url et source.version sont requis (pin de gouvernance)'
                 - rule: self.type != 'crossplane' || (has(self.source) && has(self.source.url) && has(self.source.version))
                   message: 'type crossplane : source.url (repo git) et source.version (tag ou SHA) sont requis (pin de gouvernance)'
+                - rule: self.type != 'operator' || (has(self.source) && has(self.source.url) && has(self.source.version))
+                  message: 'type operator : source.url (repo git des manifestes de l''opérateur) et source.version (tag ou SHA) sont requis (pin de gouvernance)'
                 - rule: self.type != 'compound' || (has(self.source) && has(self.source.url) && has(self.source.version)) || (has(self.recipe) && has(self.recipe.children))
                   message: 'type compound : soit source.url+version (recette compound.yaml dans git), soit recipe inline (composer du portail)'
                 properties:
                   type:
                     type: string
-                    description: Moteur de la future promesse (helm, crossplane et compound implémentés ; terraform/operator = slots)
+                    description: Moteur de la future promesse (helm, crossplane, operator et compound implémentés ; terraform = slot)
                     enum:
                     - helm
                     - crossplane
@@ -98,18 +105,22 @@ spec:
                     properties:
                       url:
                         type: string
-                        description: 'helm : chart (oci:// ou repo https://) · crossplane/compound : repo git (https:// ou git@hôte:…) · terraform : module git::https://'
+                        description: 'helm : chart (oci:// ou repo https://) · crossplane/compound/operator : repo git (https:// ou git@hôte:…) · terraform : module git::https://'
                         pattern: ^((git::)?(oci|https?)://|git@[A-Za-z0-9.-]+:).+
                       version:
                         type: string
-                        description: 'Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane/compound : tag semver ou SHA git'
+                        description: 'Pin EXACT de gouvernance — jamais latest. helm : semver du chart · crossplane/compound/operator : tag semver ou SHA git'
                         pattern: ^(v?[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?|[0-9a-f]{7,40})$
                       path:
                         type: string
-                        description: 'crossplane : sous-dossier du repo contenant la XRD + Composition(s) · compound : sous-dossier contenant compound.yaml (défaut : racine)'
+                        description: 'crossplane : sous-dossier du repo contenant la XRD + Composition(s) · operator : sous-dossier contenant les manifestes de l''opérateur · compound : sous-dossier contenant compound.yaml (défaut : racine)'
                       chartName:
                         type: string
                         description: Nom du chart (requis seulement pour un repo Helm non-OCI)
+                      apiSchemaFrom:
+                        type: string
+                        pattern: ^[a-z0-9][a-z0-9.-]*$
+                        description: 'operator : nom de la CRD-contrat (plural.group) — requis seulement si le dossier en contient plusieurs (l''unique CRD est prise par défaut ; en cas d''ambiguïté la génération échoue en LISTANT les candidates)'
                   uiSchema:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
@@ -319,7 +330,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:a9f532afe96b9e353d35c43e0d05e01d56f94080c378b7a0f6055b78257057e1
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:d59009bbeed1e194c88c7af88ff811fb1686328403513f065611bc70ab89080f
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
