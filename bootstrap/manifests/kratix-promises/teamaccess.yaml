@@ -4,12 +4,6 @@ metadata:
   labels:
     kratix.io/promise-version: v0.0.1
   name: teamaccess
-  annotations:
-    # KS6 — lignée provider EXPLICITE (véridique : produit team-platform). Ferme le verdict
-    # « legacy » du gate d'écriture Studio (sans provider déclaré, la promesse restait
-    # régénérable par tout provider). Playbook KS2/G3 : annotation GitOps + manual-reconciliation.
-    # ⚠️ Manifeste GÉNÉRÉ par la factory : le fix DURABLE = spec.curation.provider au claim.
-    platform.kratix.io/provider: platform
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -39,6 +33,13 @@ spec:
                   realm:
                     default: platform
                     description: Realm Keycloak.
+                    type: string
+                  role:
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
+                    enum:
+                    - consumer
+                    - provider
                     type: string
                   users:
                     description: "Usernames Keycloak membres du groupe \u2014 ce claim\
@@ -74,7 +75,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:9a2e61a1b9fa754e50ffac55a59f3a3b987c6a5fdf73055f7d70ddecedf46b27
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
     resource:
       configure:
@@ -92,21 +93,24 @@ spec:
                 \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
                 \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
                 \ string\n    realm:\n      default: platform\n      description:\
-                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
-                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
-                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
-                \        maxLength: 63\n        minLength: 1\n        type: string\n\
-                \      minItems: 1\n      type: array\n  required:\n  - group\n  -\
-                \ users\nchildren:\n- name: group\n  promise: keycloak-group\n  version:\
-                \ v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
-                \  spec:\n    group: ${spec.group}\n    realm: ${spec.realm}\n- name:\
-                \ member\n  promise: keycloak-member\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: KeycloakMember\n  spec:\n\
-                \    group: ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
-                \  needs:\n  - group\n"
+                \ Realm Keycloak.\n      type: string\n    role:\n      description:\
+                \ R\xF4le de gouvernance de la squad (pos\xE9 en attribut du groupe\
+                \ Keycloak,\n        lu par le RBAC portail). Omis = pas d'attribut.\n\
+                \      enum:\n      - consumer\n      - provider\n      type: string\n\
+                \    users:\n      description: Usernames Keycloak membres du groupe\
+                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
+                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
+                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
+                \  required:\n  - group\n  - users\nchildren:\n- name: group\n  promise:\
+                \ keycloak-group\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n    realm:\
+                \ ${spec.realm}\n    role: ${spec.role}\n- name: member\n  promise:\
+                \ keycloak-member\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakMember\n  spec:\n    group: ${spec.group}\n    realm:\
+                \ ${spec.realm}\n    users: ${spec.users}\n  needs:\n  - group\n"
             - name: COMPOUND_STAGE
               value: emit
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:9a2e61a1b9fa754e50ffac55a59f3a3b987c6a5fdf73055f7d70ddecedf46b27
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
           jobOptions: {}
           rbac: {}
@@ -124,18 +128,21 @@ spec:
                 \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
                 \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
                 \ string\n    realm:\n      default: platform\n      description:\
-                \ Realm Keycloak.\n      type: string\n    users:\n      description:\
-                \ Usernames Keycloak membres du groupe \u2014 ce claim g\xE8re LA\
-                \ liste compl\xE8te\n        (1 claim par groupe).\n      items:\n\
-                \        maxLength: 63\n        minLength: 1\n        type: string\n\
-                \      minItems: 1\n      type: array\n  required:\n  - group\n  -\
-                \ users\nchildren:\n- name: group\n  promise: keycloak-group\n  version:\
-                \ v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
-                \  spec:\n    group: ${spec.group}\n    realm: ${spec.realm}\n- name:\
-                \ member\n  promise: keycloak-member\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: KeycloakMember\n  spec:\n\
-                \    group: ${spec.group}\n    realm: ${spec.realm}\n    users: ${spec.users}\n\
-                \  needs:\n  - group\n"
+                \ Realm Keycloak.\n      type: string\n    role:\n      description:\
+                \ R\xF4le de gouvernance de la squad (pos\xE9 en attribut du groupe\
+                \ Keycloak,\n        lu par le RBAC portail). Omis = pas d'attribut.\n\
+                \      enum:\n      - consumer\n      - provider\n      type: string\n\
+                \    users:\n      description: Usernames Keycloak membres du groupe\
+                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
+                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
+                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
+                \  required:\n  - group\n  - users\nchildren:\n- name: group\n  promise:\
+                \ keycloak-group\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n    realm:\
+                \ ${spec.realm}\n    role: ${spec.role}\n- name: member\n  promise:\
+                \ keycloak-member\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakMember\n  spec:\n    group: ${spec.group}\n    realm:\
+                \ ${spec.realm}\n    users: ${spec.users}\n  needs:\n  - group\n"
             - name: COMPOUND_STAGE
               value: gated
             - name: COMPOUND_DEPTH
@@ -146,6 +153,14 @@ spec:
             - resourceNamespace: '*'
               apiGroups:
               - platform.example.io
+              resources:
+              - '*'
+              verbs:
+              - get
+              - list
+            - resourceNamespace: '*'
+              apiGroups:
+              - '*'
               resources:
               - '*'
               verbs:
