@@ -28,7 +28,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.8.0
+    kratix.io/promise-version: v0.8.1
   annotations:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
@@ -38,7 +38,7 @@ metadata:
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom","omit"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -121,6 +121,12 @@ spec:
                         type: string
                         pattern: ^[a-z0-9][a-z0-9.-]*$
                         description: 'operator : nom de la CRD-contrat (plural.group) — requis seulement si le dossier en contient plusieurs (l''unique CRD est prise par défaut ; en cas d''ambiguïté la génération échoue en LISTANT les candidates)'
+                      omit:
+                        type: array
+                        items:
+                          type: string
+                          pattern: ^[a-zA-Z][a-zA-Z0-9]*$
+                        description: 'operator : champs TOP-LEVEL du spec à RETIRER de l''API portail (curation d''une CRD tierce obèse — ex. override, dont les required imbriqués rendent le formulaire soumis-bloquant). Un champ retiré n''est jamais posé sur le CR → les défauts de l''opérande s''appliquent.'
                   uiSchema:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
@@ -330,7 +336,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:8cd5fa6aa40af632ad5d6aceb554c163bce2ccb7a38698c101d2cabdd83e5eab
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:25a96f59290846254ba4aa894ed7493bca6a4ec47e13ff8accfb70ebaee6a06e
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
