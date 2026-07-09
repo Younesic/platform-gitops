@@ -4,21 +4,6 @@ metadata:
   labels:
     kratix.io/promise-version: v0.0.1
   name: workspace
-  annotations:
-    # V5 status-schema HELM (dérivé d'un outputs.schema.json du chart par la factory —
-    # kratix-new-helm-promise.outputs_to_status_schema, prouvé unit). Champs de status RÉELS
-    # des objets provisionnés (Namespace.status.phase, ResourceQuota.status.used). Propagé
-    # sur la fiche par bc → picker de sorties LABELLISÉ (parité crossplane, MÊME tuyauterie).
-    platform.kratix.io/status-schema: '{"namespacePhase": {"path": ".status.phase", "label": "État du namespace", "type": "string", "kind": "Namespace"}, "quotaUsed": {"path": ".status.used", "label": "Quota utilisé", "type": "object", "kind": "ResourceQuota"}}'
-    # KS2 — lignée provider EXPLICITE (véridique : workspace est un produit team-platform ;
-    # provider_owner('platform') = l'owner par défaut → ZÉRO changement d'ownership).
-    # Propagée sur fiche+Template par le passthrough bc platform.kratix.io/* → facette
-    # provider du Studio/marketplace. Même playbook que V4-1/SL0/G3 (annotation GitOps
-    # + manual-reconciliation, zéro rebuild).
-    platform.kratix.io/provider: platform
-    # KS3 — logo produit (même hôte que G3 : Harbor self-hosted, allowlisté CSP img-src
-    # + kratixMarketplace.logo.allowedHosts) → rendu palette/cartes Studio + marketplace.
-    platform.kratix.io/logo-url: https://harbor.212-47-226-56.nip.io/favicon.ico
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -89,7 +74,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:66c36af3978a719a4162a4f368da285e44de93f888fab6ea2315421cc84d18ac
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
     resource:
       configure:
@@ -106,7 +91,7 @@ spec:
               value: 0.2.2
             image: ghcr.io/syntasso/kratix-cli/helm-resource-configure:v0.2.0
             name: instance-configure
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:66c36af3978a719a4162a4f368da285e44de93f888fab6ea2315421cc84d18ac
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
             name: backstage
           jobOptions: {}
           rbac: {}
