@@ -5,9 +5,17 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: keycloak-group
   annotations:
-    platform.kratix.io/status-schema: "{\"groupId\": {\"path\": \".status.groupId\"\
-      , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
-      , \"type\": \"string\"}}"
+    # KS6 — lignée provider EXPLICITE (véridique : brique team-platform) — ferme le verdict
+    # « legacy » du gate d'écriture Studio.
+    platform.kratix.io/provider: platform
+    # V4-1 status-schema (dérivé du XRD par la factory — kratix-new-crossplane-promise.derive_status_schema,
+    # prouvé unit contre le XRD réel). Propagé sur la fiche par backstage-component (passthrough
+    # platform.kratix.io/*) → alimente le picker de sorties LABELLISÉ du Studio/composer (V4-2).
+    platform.kratix.io/status-schema: '{"groupId": {"path": ".status.groupId", "label": "UUID Keycloak du groupe créé (status.atProvider.id).", "type": "string"}}'
+    # SL0 — exposition : keycloak-group est une BRIQUE de compound (teaccess/onboarding),
+    # pas un produit standalone → bc ne pousse PAS de Template (pas requestable seule) ;
+    # sa fiche kratix-promise reste (palette du composer + graphe). Défaut = product.
+    platform.kratix.io/exposure: internal
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -37,6 +45,13 @@ spec:
                   realm:
                     default: platform
                     description: Realm Keycloak.
+                    type: string
+                  role:
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
+                    enum:
+                    - consumer
+                    - provider
                     type: string
                 required:
                 - group
@@ -101,6 +116,11 @@ spec:
             - fromFieldPath: spec.realm
               toFieldPath: spec.forProvider.realmId
               type: FromCompositeFieldPath
+            - fromFieldPath: spec.role
+              toFieldPath: spec.forProvider.attributes.role
+              policy:
+                fromFieldPath: Optional
+              type: FromCompositeFieldPath
             - fromFieldPath: status.atProvider.id
               toFieldPath: status.groupId
               type: ToCompositeFieldPath
@@ -132,6 +152,13 @@ spec:
                   realm:
                     default: platform
                     description: Realm Keycloak.
+                    type: string
+                  role:
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
+                    enum:
+                    - consumer
+                    - provider
                     type: string
                 required:
                 - group
