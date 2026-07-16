@@ -65,7 +65,7 @@ spec:
         storage: true
   destinationSelectors:
   - matchLabels:
-      environment: platform
+      fleet: apps
   workflows:
     config: {}
     promise:
