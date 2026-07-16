@@ -8804,7 +8804,7 @@ spec:
       sideEffects: None
   destinationSelectors:
   - matchLabels:
-      environment: platform
+      fleet: apps
   workflows:
     config: {}
     promise:
