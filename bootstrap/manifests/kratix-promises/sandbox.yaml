@@ -108,7 +108,7 @@ spec:
         served: true
   destinationSelectors:
   - matchLabels:
-      environment: platform
+      fleet: apps
   workflows:
     config: {}
     promise:
