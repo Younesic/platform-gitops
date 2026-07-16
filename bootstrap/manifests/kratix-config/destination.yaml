@@ -1,11 +1,17 @@
 # Destination unique (cluster plateforme = worker pour ce POC mono-cluster).
 # Kratix écrit les sorties sous <statestore.path>/worker-1/{dependencies,resources}.
+# RT1 (DESTINATION-ROUTING-ANALYSIS) : worker-1 porte les DEUX clés —
+#   environment=platform : control-plane/« shared » (identité, factory) ;
+#   fleet=apps           : flotte applicative (produits) — une future Destination
+#                          d'env (worker-<env>) portera fleet=apps + environment=<env>,
+#                          et le routage par claim (RT2) départagera par environment.
 apiVersion: platform.kratix.io/v1alpha1
 kind: Destination
 metadata:
   name: worker-1
   labels:
     environment: platform
+    fleet: apps
 spec:
   path: worker-1
   stateStoreRef:

@@ -28,12 +28,12 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.8.1
+    kratix.io/promise-version: v0.8.2
   annotations:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
@@ -127,6 +127,10 @@ spec:
                           type: string
                           pattern: ^[a-zA-Z][a-zA-Z0-9]*$
                         description: 'operator : champs TOP-LEVEL du spec à RETIRER de l''API portail (curation d''une CRD tierce obèse — ex. override, dont les required imbriqués rendent le formulaire soumis-bloquant). Un champ retiré n''est jamais posé sur le CR → les défauts de l''opérande s''appliquent.'
+                  placement:
+                    type: string
+                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                    description: 'RT1 — selector de Destination déclaré par le PRODUIT (UNE paire label=valeur). Omis = control-plane/« shared » (environment=platform). Produit applicatif : fleet=apps (routé vers la flotte applicative ; le routage par env DU CLAIM restera alors possible — un selector niveau Promise sur environment serait inoverridable). La revue de la branche promise/* = le garde-fou.'
                   uiSchema:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
@@ -336,7 +340,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:68e281f82f1d07398c1b8a6fba0e8b074b1a149d6b62e52b4653705ef09ccf1b
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0ac082e986f9132e7270deb350d143a2d01bd73914ad6c53790ca1a09a6245cf
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
