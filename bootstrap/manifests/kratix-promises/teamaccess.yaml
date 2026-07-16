@@ -90,7 +90,7 @@ spec:
           name: instance-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:1c02176ab0f52bed5758625fb09b80d683c10cec8706744872867f2848dd16d8
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
@@ -125,7 +125,7 @@ spec:
           name: gated-1
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:ba61685851365eb24db7967dbdeb9d500f7db16a0e57568ef1cbcff259f4baf3
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:1c02176ab0f52bed5758625fb09b80d683c10cec8706744872867f2848dd16d8
             name: compound-renderer
             env:
             - name: COMPOUND_RECIPE
