@@ -117,6 +117,15 @@ data:
     catalog:
       # Modèle Syntasso PUSH : Backstage lit les Components que les WORKFLOWS Kratix poussent
       # dans kratix-state/backstage/ (Resource Configure -> Component du provisionné).
+      # BR1 (2026-07-17) — ANTI-CHURN GitHub : chaque (re)processing d'une location github
+      # coûte des appels API (commits/main/status + lectures) sur le PAT plateforme, dont le
+      # bucket 5000/h est PARTAGÉ au niveau du compte. À 1-2 min de frequency le bucket
+      # s'épuisait les jours de forte activité (VÉCU : generate Studio en 500). Cadences
+      # portées à 30 min (providers ci-dessous + processingInterval global). TRADE-OFF
+      # assumé : fraîcheur d'ingestion ≤ ~30 min ; pour tester vite, nudge en base :
+      #   update catalog.backstage_backend_tasks__tasks set next_run_start_at=now()
+      #   where id like 'github-provider:%';
+      processingInterval: { minutes: 30 }
       providers:
         github:
           kratixCatalog:
@@ -133,7 +142,8 @@ data:
             filters:
               repository: kratix-state
             schedule:
-              frequency: { minutes: 1 }
+              # BR1 : 1 min -> 30 min (le scan par minute était le 1er brûleur du bucket)
+              frequency: { minutes: 30 }
               timeout: { minutes: 2 }
           # G2 — GROUPES d'org déclarés (Portal, produit « Create Group ») : Groups NATIFS typés
           # <type>-<slug> (organization|department|domain|tribe|squad) poussés en PR sous
@@ -146,7 +156,8 @@ data:
             filters:
               repository: portal-templates
             schedule:
-              frequency: { minutes: 2 }
+              # BR1 : 2 min -> 30 min (même trade-off fraîcheur/quota que kratixCatalog)
+              frequency: { minutes: 30 }
               timeout: { minutes: 2 }
         # Connecteur UNIVERSEL http-entities (module local du backend) : chaque
         # source de données = UN BLOC DE CONFIG (url + auth + mapping gabarits),
