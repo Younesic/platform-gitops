@@ -12,7 +12,7 @@ spec:
       labels: { app: backstage }
       annotations:
         # redéploie quand l'app-config change (hash injecté par ArgoCD via le ConfigMap)
-        configmap-revision: v5
+        configmap-revision: v6
     spec:
       serviceAccountName: backstage
       priorityClassName: platform-high
@@ -43,9 +43,10 @@ spec:
             # --- OIDC (Keycloak realm platform, client backstage) ---
             - name: KEYCLOAK_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: backstage-oidc-client, key: attribute.client_secret } }
-            # --- GitHub ---
-            - name: GITHUB_TOKEN
-              valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_TOKEN } }
+            # --- GitHub (BR16 : App = charge ; fine-grained RO = proxy + fallback ;
+            #     le PAT classic n'est PLUS référencé -> révocable) ---
+            - name: GITHUB_PROXY_TOKEN
+              valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_PROXY_TOKEN } }
             # --- connecteur http-entities (sources catalogue config-driven) ---
             - name: HTTP_ENTITIES_KC_CLIENT_ID
               valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientId } }
