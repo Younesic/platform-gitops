@@ -8815,7 +8815,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
             env:
             - name: CURATION_REV
@@ -8837,7 +8837,7 @@ spec:
               value: RabbitmqCluster
             image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
             name: from-api-to-operator
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
           jobOptions: {}
           rbac: {}

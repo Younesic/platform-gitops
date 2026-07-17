@@ -119,7 +119,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
             env:
             - name: CURATION_REV
@@ -141,7 +141,7 @@ spec:
               value: XSandbox
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:aaa8ac54ff0e2dcf75e69ce1ca0ed0ab73c1a345ed599255189bb632ef1cb379
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
           jobOptions: {}
           rbac: {}
