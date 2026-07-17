@@ -55,6 +55,15 @@ data:
     integrations:
       github:
         - host: github.com
+          # BR16 — GitHub App « attijari-portal » (appId 4324425, installée sur
+          # kratix-state/portal-templates/platform-gitops/backstage) : bucket
+          # rate-limit DÉDIÉ par installation, séparé du compte user (le PAT
+          # partagé s'épuisait — vécu). Backstage PRÉFÈRE l'App sur les repos
+          # où elle est installée ; le token reste le FALLBACK (autres repos)
+          # jusqu'à la révocation (étape 3 de BR16 — le proxy /github-api
+          # devra alors être re-crédentialisé aussi).
+          apps:
+            - $include: /app/github-app/github-app-credentials.yaml
           token: ${GITHUB_TOKEN}
 
     # aperçu de schéma pour le composer de présentation (dérive les champs d'une

@@ -12,7 +12,7 @@ spec:
       labels: { app: backstage }
       annotations:
         # redéploie quand l'app-config change (hash injecté par ArgoCD via le ConfigMap)
-        configmap-revision: v4
+        configmap-revision: v5
     spec:
       serviceAccountName: backstage
       priorityClassName: platform-high
@@ -58,6 +58,9 @@ spec:
           volumeMounts:
             - { name: backstage-config, mountPath: /app/config, readOnly: true }
             - { name: backstage-config-dynamic, mountPath: /app/config-dynamic, readOnly: true }
+            # BR16 — credentials de la GitHub App (secret MANUEL backstage-github-app,
+            # pattern des creds bootstrap) : consommé par $include de l'app-config.
+            - { name: github-app, mountPath: /app/github-app, readOnly: true }
           readinessProbe:
             httpGet: { path: /healthcheck, port: 7007 }
             initialDelaySeconds: 30
@@ -79,6 +82,9 @@ spec:
             name: backstage-config-dynamic
             items:
               - { key: app-config.dynamic.yaml, path: app-config.dynamic.yaml }
+        - name: github-app
+          secret:
+            secretName: backstage-github-app
 ---
 apiVersion: v1
 kind: Service
