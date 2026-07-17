@@ -64,7 +64,8 @@ data:
           # devra alors être re-crédentialisé aussi).
           apps:
             - $include: /app/github-app/github-app-credentials.yaml
-          token: ${GITHUB_TOKEN}
+          # fallback lecture pour les repos hors installation App (fine-grained RO)
+          token: ${GITHUB_PROXY_TOKEN}
 
     # aperçu de schéma pour le composer de présentation (dérive les champs d'une
     # source helm/crossplane À LA CRÉATION) — service in-cluster, reléguée derrière
@@ -93,7 +94,9 @@ data:
           allowedMethods: [GET]
           changeOrigin: true
           headers:
-            Authorization: token ${GITHUB_TOKEN}
+            # BR16 : PAT fine-grained DÉDIÉ (attijari-portal-proxy — lecture seule,
+            # 4 repos, exp. 90 j) ; le PAT classic n'est plus référencé nulle part.
+            Authorization: token ${GITHUB_PROXY_TOKEN}
             Accept: application/vnd.github+json
 
     # === Sign-in : Guest + Keycloak (les 2 cartes, comme en local) ===
