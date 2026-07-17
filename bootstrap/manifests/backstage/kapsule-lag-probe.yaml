@@ -1,0 +1,119 @@
+# Sonde CONTINUE du lag watch-cache/etcd du control plane Kapsule (recommandation n°1
+# du diagnostic indépendant du 2026-07-17 — proofs/DIAGNOSTIC-INDEPENDANT-KAPSULE.md).
+# CONTEXTE : incident intermittent côté fournisseur (etcd mutualisé) — le watch cache
+# de l'apiserver prend 19k-55k révisions de retard (1-4 min) → FailedMount kubelet,
+# scheduling retardé, watch-lists en ResourceVersionTooLarge, near-miss de 153
+# évictions. Les readyz du fournisseur (39/39 OK) NE VOIENT PAS ce mode → on mesure
+# nous-mêmes, en continu, pour dater les récidives et nourrir le ticket support.
+# MÉTHODE (celle du diagnostic) : une requête watch-list `sendInitialEvents` sur les
+# configmaps de default — saine → « lag=0 OK » ; malade → l'erreur porte
+# `Too large resource version: <demandé>, current: <cache>` → lag = demandé - cache.
+# Le résultat est APPENDU dans la ConfigMap kapsule-lag-history (fenêtre glissante
+# de 288 points = 24 h à 5 min) : `kubectl -n backstage get cm kapsule-lag-history
+# -o jsonpath='{.data.history}'` = l'historique ; le log du job = le point courant.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kapsule-lag-probe
+rules:
+  # la requête watch-list cible /api/v1/namespaces/default/configmaps (resource verbs)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["list", "watch"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kapsule-lag-probe
+  namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kapsule-lag-probe
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kapsule-lag-probe
+subjects:
+  - kind: ServiceAccount
+    name: kapsule-lag-probe
+    namespace: backstage
+---
+# RBAC dédié à l'HISTORIQUE (write sur UNE configmap, dans backstage seulement)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kapsule-lag-probe-history
+  namespace: backstage
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["kapsule-lag-history"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kapsule-lag-probe-history
+  namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kapsule-lag-probe-history
+subjects:
+  - kind: ServiceAccount
+    name: kapsule-lag-probe
+    namespace: backstage
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kapsule-lag-probe
+  namespace: backstage
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      # ⚠️ pendant un épisode, le POD LUI-MÊME peut être retardé (scheduling/mount) —
+      # c'est une INFO en soi : un trou dans l'historique = épisode sévère.
+      activeDeadlineSeconds: 240
+      template:
+        spec:
+          serviceAccountName: kapsule-lag-probe
+          restartPolicy: Never
+          containers:
+            - name: probe
+              image: alpine/k8s:1.35.3
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -u
+                  TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+                  OUT=$(kubectl get --raw '/api/v1/namespaces/default/configmaps?watch=true&sendInitialEvents=true&resourceVersionMatch=NotOlderThan&allowWatchBookmarks=true&timeoutSeconds=8' 2>&1 | head -c 600)
+                  case "$OUT" in
+                    *'"type":"ADDED"'*) LINE="$TS lag=0 OK" ;;
+                    *'Too large resource version'*)
+                      REQ=$(echo "$OUT" | sed -n 's/.*resource version: \([0-9]*\), current: .*/\1/p')
+                      CUR=$(echo "$OUT" | sed -n 's/.*current: \([0-9]*\).*/\1/p')
+                      LINE="$TS lag=$((REQ-CUR)) KO req=$REQ cache=$CUR" ;;
+                    *) LINE="$TS lag=? AUTRE ${OUT%%$'\n'*}" ;;
+                  esac
+                  echo "$LINE"
+                  kubectl -n backstage get cm kapsule-lag-history >/dev/null 2>&1 || \
+                    kubectl -n backstage create cm kapsule-lag-history --from-literal=history="" >/dev/null 2>&1 || true
+                  HIST=$(kubectl -n backstage get cm kapsule-lag-history -o jsonpath='{.data.history}' 2>/dev/null || echo "")
+                  NEW=$(printf '%s\n%s' "$HIST" "$LINE" | tail -288)
+                  kubectl -n backstage create cm kapsule-lag-history --from-literal=history="$NEW" \
+                    --dry-run=client -o yaml | kubectl -n backstage apply -f - >/dev/null 2>&1 || \
+                    echo "WARN: historique non persisté (apply KO) — le log du job reste la trace"
+              resources:
+                requests: { cpu: 20m, memory: 32Mi }
+                limits: { cpu: 100m, memory: 64Mi }
