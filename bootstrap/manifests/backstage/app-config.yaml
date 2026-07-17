@@ -62,10 +62,13 @@ data:
           # où elle est installée ; le token reste le FALLBACK (autres repos)
           # jusqu'à la révocation (étape 3 de BR16 — le proxy /github-api
           # devra alors être re-crédentialisé aussi).
+          # App SEULE — MESURÉ (16:27Z) : avec apps+token configurés, l'UrlReader
+          # prend le TOKEN (le bucket user encaissait la vague de processing).
+          # Retirer le fallback force l'App ; un repo non couvert = erreur VISIBLE
+          # au catalogue → le fix est d'installer l'App dessus (gouvernance).
+          # (Le proxy /github-api garde SON token fine-grained via env, hors integrations.)
           apps:
             - $include: /app/github-app/github-app-credentials.yaml
-          # fallback lecture pour les repos hors installation App (fine-grained RO)
-          token: ${GITHUB_PROXY_TOKEN}
 
     # aperçu de schéma pour le composer de présentation (dérive les champs d'une
     # source helm/crossplane À LA CRÉATION) — service in-cluster, reléguée derrière
