@@ -110,7 +110,9 @@ ENTIERS de l'opérateur deviennent **`spec.dependencies` INLINE** → l'opérate
   gotcha crossplane), labels+annotations du claim **propagés au CR**, **spec passthrough
   intégral**, aucun status writeback.
 - **Curation de l'API** : `spec.source.omit[]` (PromiseRequest ≥ v0.8.1) = le plugin exécute
-  l'officiel `kratix update api --property <champ>-`. ⚠️ vécu : les **défauts PROFONDS** d'une
+  l'officiel `kratix update api --property <champ>-`. **BR5 (≥ v0.8.3) : chemins POINTÉS admis**
+  (`override.statefulSet` = retrait NESTED ; le reste du parent reste, et le plugin nettoie le
+  `required` orphelin que le CLI v0.17.0 laisse — vérifié par test, sinon objet insatisfiable). ⚠️ vécu : les **défauts PROFONDS** d'une
   CRD tierce (ex. `override` de RabbitMQ) sont matérialisés par rjsf → des requireds imbriqués
   bloquent la Review d'un formulaire VIERGE → **omettre le champ est la correction**, pas des
   rustines de formulaire. Un champ omis n'est jamais posé → défauts de l'opérande.

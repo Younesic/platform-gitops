@@ -28,7 +28,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.8.2
+    kratix.io/promise-version: v0.8.3
   annotations:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
@@ -125,8 +125,8 @@ spec:
                         type: array
                         items:
                           type: string
-                          pattern: ^[a-zA-Z][a-zA-Z0-9]*$
-                        description: 'operator : champs TOP-LEVEL du spec à RETIRER de l''API portail (curation d''une CRD tierce obèse — ex. override, dont les required imbriqués rendent le formulaire soumis-bloquant). Un champ retiré n''est jamais posé sur le CR → les défauts de l''opérande s''appliquent.'
+                          pattern: ^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$
+                        description: 'operator : champs du spec à RETIRER de l''API portail (curation d''une CRD tierce obèse — ex. override, dont les required imbriqués rendent le formulaire soumis-bloquant). BR5 : chemins POINTÉS admis (override.statefulSet = retrait NESTED via l''officiel update api --property a.b- ; le reste du parent et son required restent cohérents). Un champ retiré n''est jamais posé sur le CR → les défauts de l''opérande s''appliquent.'
                   placement:
                     type: string
                     pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
@@ -340,7 +340,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:5c8ef1db912c74dade96abf73db2aa3b70f206c588175ca80a4ae47af0f2cb2f
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7bc04873337f5261d47ad376d93bd2eec7dca6fc99408d39d17c5ff483b73795
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git

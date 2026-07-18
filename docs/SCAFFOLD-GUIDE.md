@@ -244,7 +244,8 @@ picker repo/tag/dossier + Select « CRD contrat » alimenté par l'aperçu deriv
   source n'a qu'UNE CRD** ; plusieurs CRDs sans désignation = **erreur guidée listant**
   (le wizard en fait un Select). Les manifestes `kind: List` sont dépliés à la découverte.
 - **Curation `--omit <champ>`** (répétable) = `kratix update api --property <champ>-`
-  officiel. ⚠️ Cas d'école vécu : les défauts PROFONDS de `override` (RabbitMQ) rendent le
+  officiel. **BR5 : chemins POINTÉS admis** (`--omit override.statefulSet` = retrait NESTED,
+  reste du parent intact + `required` orphelin nettoyé par le plugin — le CLI le laisse, vérifié). ⚠️ Cas d'école vécu : les défauts PROFONDS de `override` (RabbitMQ) rendent le
   formulaire insoumettable (requireds imbriqués matérialisés par rjsf) → l'omission est LA
   correction ; le champ jamais posé = défauts de l'opérande.
 - **Garde de taille** : deps inline vs etcd → `OPERATOR_DEPS_MAX_KB=800` (defaults.env) /
