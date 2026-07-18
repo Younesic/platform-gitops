@@ -20,6 +20,11 @@ spec:
       name: backstage-config-dynamic
       namespace: backstage
       jsonPointers: [/data]
+    # BR4 : périmètre Kyverno, réécrit par le CronJob (pattern config-dynamic)
+    - kind: ConfigMap
+      name: operator-families
+      namespace: backstage
+      jsonPointers: [/data]
     - group: apps
       kind: Deployment
       name: backstage

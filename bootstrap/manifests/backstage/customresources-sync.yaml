@@ -29,10 +29,10 @@ rules:
     resources: [promises]
     verbs: [get, list]
   # …et vérifie que chaque famille dérivée a son bloc RBAC de fetch (alerte guidée
-  # sinon) en lisant LE ClusterRole du lecteur backstage.
+  # sinon) en lisant LE ClusterRole du lecteur backstage — et celui de Kyverno (BR4).
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
-    resourceNames: [backstage-readonly]
+    resourceNames: [backstage-readonly, kyverno-operator-cr-read]
     verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -56,7 +56,9 @@ metadata:
 rules:
   - apiGroups: ['']
     resources: [configmaps]
-    resourceNames: [backstage-config-dynamic]
+    # operator-families (BR4) : périmètre de la ClusterPolicy Kyverno — SEED
+    # committée (create interdit avec resourceNames), réécrite ici à chaque tick.
+    resourceNames: [backstage-config-dynamic, operator-families]
     verbs: [get, update, patch]
   - apiGroups: [apps]
     resources: [deployments]
@@ -123,6 +125,33 @@ spec:
                   for fam in $FAMILIES; do
                     case " $RBAC_GROUPS " in *" $fam "*) ;; *)
                       echo "⚠️  RBAC MANQUANT pour la famille '$fam' : ajouter un bloc apiGroups=[$fam] resources=['*'] verbs=[get,list,watch] à backstage-readonly (bootstrap/manifests/backstage/rbac.yaml)" ;;
+                    esac
+                  done
+                  # BR4 — périmètre Kyverno (operator-child-visibility) : ConfigMap
+                  # operator-families = clés <group>.<Kind>.plural|version des CRDs des
+                  # familles ANNOTÉES (opérateurs). Apply idempotent : identique = no-op
+                  # serveur ; famille retirée = clé prunée. AUCUN restart lié (Kyverno
+                  # lit la CM en continu). AVANT l'early-exit « rien à faire » ci-dessous.
+                  FAM_OPS=$(printf '%s\n' $FAMILIES_ANNOTATED | grep -E '^[a-z0-9.-]+$' | sort -u | tr '\n' ' ')
+                  OF_ARGS=""
+                  for crd in $(kubectl get crds -o name | sed 's|.*/||'); do
+                    for fam in $FAM_OPS; do
+                      case "$crd" in *.$fam) ;; *) continue ;; esac
+                      p=${crd%.$fam}
+                      case "$p" in *.*) continue ;; esac
+                      info=$(kubectl get crd "$crd" -o jsonpath='{.spec.names.kind}/{.spec.versions[?(@.storage==true)].name}')
+                      OF_ARGS="$OF_ARGS --from-literal=$fam.${info%%/*}.plural=$p --from-literal=$fam.${info%%/*}.version=${info##*/}"
+                    done
+                  done
+                  kubectl -n backstage create configmap operator-families $OF_ARGS \
+                    --dry-run=client -o yaml | kubectl -n backstage apply -f - >/dev/null
+                  echo "operator-families (Kyverno) : $(printf '%s' "$OF_ARGS" | grep -o 'plural' | wc -l | tr -d ' ') CRD(s) opérateur publiées."
+                  # …et la famille annotée doit avoir son bloc de lecture Kyverno (apiCall
+                  # du label owner) — même doctrine : 1 bloc par famille, merge humain.
+                  KYV_GROUPS=$(kubectl get clusterrole kyverno-operator-cr-read -o jsonpath='{range .rules[*]}{.apiGroups[*]}{" "}{end}' 2>/dev/null || true)
+                  for fam in $FAM_OPS; do
+                    case " $KYV_GROUPS " in *" $fam "*) ;; *)
+                      echo "⚠️  RBAC KYVERNO MANQUANT pour la famille '$fam' : ajouter un bloc apiGroups=[$fam] resources=['*'] verbs=[get] à kyverno-operator-cr-read (bootstrap/manifests/kyverno-policies/operator-child-visibility.yaml)" ;;
                     esac
                   done
                   out=/tmp/app-config.dynamic.yaml

@@ -1,0 +1,19 @@
+# App-of-apps : policies Kyverno plateforme (BR4). Wave 2 : la CRD ClusterPolicy
+# est installée par l'app kyverno (wave 1) — GVK inconnu au 1er plan sinon
+# (gotcha provider-terraform : waves + SkipDryRunOnMissingResource ENSEMBLE).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/kyverno-policies
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { selfHeal: true, prune: true }
+    syncOptions: [ ServerSideApply=true, SkipDryRunOnMissingResource=true ]

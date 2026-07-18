@@ -1,0 +1,165 @@
+# BR4 — VISIBILITÉ DES ENFANTS D'OPÉRATEUR (limite écrite OP6) : la fiche/le
+# graphe montrent le CR seul, et l'onglet Kubernetes live ne montre les enfants
+# (STS/Services/CM…) QUE si l'opérateur propage les labels du CR (RabbitMQ le
+# fait ; rien ne le garantit ailleurs). Cette ClusterPolicy GÉNÉRIQUE (mutate à
+# l'admission, CREATE+UPDATE) fait hériter à tout enfant DIRECT d'un CR opérateur :
+#   - backstage.io/kubernetes-id  = le nom du CR (invariant plateforme : le
+#     renderer operator nomme le CR comme le claim ET pose kubernetes-id=nom du
+#     claim → AUCUN lookup nécessaire) ;
+#   - platform.kratix.io/owner    = le label owner du CR (BR2), lu par apiCall.
+# DATA-DRIVEN par les familles opérateur (BR3) : la ConfigMap backstage/
+# operator-families (clés <group>.<Kind>.plural|version, écrite par le CronJob
+# backstage-customresources-sync depuis les annotations
+# platform.kratix.io/operator-group des promesses) sert de périmètre — un objet
+# dont l'ownerReference contrôleur n'appartient PAS à une famille opérateur
+# n'est JAMAIS muté (les workloads hors-plateforme sont hors périmètre).
+# Anchor +(…) = ajout SEULEMENT si absent → idempotent, zéro conflit avec un
+# opérateur qui propage déjà (RabbitMQ). failurePolicy Ignore : la visibilité
+# ne bloque JAMAIS une admission (apiCall en échec → objet inchangé).
+# Limites honnêtes : enfants DIRECTS du CR (pods = 2e saut via le template du
+# contrôleur, que RabbitMQ renseigne lui-même) ; objets existants relabellisés
+# à leur prochain UPDATE (les opérateurs re-réconcilient leurs enfants).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: operator-child-visibility
+spec:
+  webhookConfiguration:
+    failurePolicy: Ignore
+  background: false
+  rules:
+    - name: inherit-kubernetes-id
+      match:
+        any:
+          - resources:
+              kinds: [StatefulSet, Deployment, Service, ConfigMap, Secret]
+              operations: [CREATE, UPDATE]
+      context:
+        - name: fams
+          configMap: { name: operator-families, namespace: backstage }
+        - name: ownerName
+          variable:
+            jmesPath: request.object.metadata.ownerReferences[?controller] | [0].name
+            default: ''
+        - name: ownerKind
+          variable:
+            jmesPath: request.object.metadata.ownerReferences[?controller] | [0].kind
+            default: ''
+        - name: ownerGroup
+          variable:
+            jmesPath: split(request.object.metadata.ownerReferences[?controller] | [0].apiVersion || '/', '/') | [0]
+            default: ''
+        - name: famPlural
+          variable:
+            jmesPath: fams.data."{{ownerGroup}}.{{ownerKind}}.plural"
+            default: ''
+      preconditions:
+        all:
+          - key: '{{ famPlural }}'
+            operator: NotEquals
+            value: ''
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              +(backstage.io/kubernetes-id): '{{ ownerName }}'
+    # Héritage du label owner (BR2) : lu SUR le CR racine (apiCall, plural/version
+    # depuis la ConfigMap — dérivés des CRDs par le CronJob, zéro édition ici).
+    # Règle SÉPARÉE : si le CR n'a pas de label owner (jamais deviné, BR2), seule
+    # cette règle passe son tour — kubernetes-id reste hérité par la règle 1.
+    - name: inherit-owner-label
+      match:
+        any:
+          - resources:
+              kinds: [StatefulSet, Deployment, Service, ConfigMap, Secret]
+              operations: [CREATE, UPDATE]
+      context:
+        - name: fams
+          configMap: { name: operator-families, namespace: backstage }
+        - name: ownerName
+          variable:
+            jmesPath: request.object.metadata.ownerReferences[?controller] | [0].name
+            default: ''
+        - name: ownerKind
+          variable:
+            jmesPath: request.object.metadata.ownerReferences[?controller] | [0].kind
+            default: ''
+        - name: ownerGroup
+          variable:
+            jmesPath: split(request.object.metadata.ownerReferences[?controller] | [0].apiVersion || '/', '/') | [0]
+            default: ''
+        - name: famPlural
+          variable:
+            jmesPath: fams.data."{{ownerGroup}}.{{ownerKind}}.plural"
+            default: ''
+        - name: famVersion
+          variable:
+            jmesPath: fams.data."{{ownerGroup}}.{{ownerKind}}.version"
+            default: ''
+      preconditions:
+        all:
+          - key: '{{ famPlural }}'
+            operator: NotEquals
+            value: ''
+      # l'apiCall vit dans le foreach : il ne s'exécute QUE pour les objets ayant
+      # passé les préconditions (enfants d'opérateur) — jamais pour le reste du
+      # trafic d'admission (un apiCall au niveau context de la règle s'exécuterait
+      # AVANT les préconditions, sur chaque ConfigMap/Service du cluster).
+      mutate:
+        foreach:
+          - list: request.object.metadata.ownerReferences[?controller]
+            context:
+              - name: crOwner
+                apiCall:
+                  method: GET
+                  urlPath: '/apis/{{ownerGroup}}/{{famVersion}}/namespaces/{{request.namespace}}/{{famPlural}}/{{ownerName}}'
+                  jmesPath: metadata.labels."platform.kratix.io/owner" || ''
+            preconditions:
+              all:
+                - key: '{{ crOwner }}'
+                  operator: NotEquals
+                  value: ''
+            patchStrategicMerge:
+              metadata:
+                labels:
+                  +(platform.kratix.io/owner): '{{ crOwner }}'
+---
+# RBAC : Kyverno (admission-controller) lit la ConfigMap de périmètre (context)…
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kyverno-operator-families-read
+  namespace: backstage
+rules:
+  - apiGroups: ['']
+    resources: [configmaps]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kyverno-operator-families-read
+  namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kyverno-operator-families-read
+subjects:
+  - kind: ServiceAccount
+    name: kyverno-admission-controller
+    namespace: kyverno
+---
+# …et lit les CRs des familles opérateur (apiCall du label owner). Doctrine
+# backstage-readonly/BR3 : 1 bloc PAR FAMILLE, jamais par promesse — merge humain.
+# Le label rbac.kyverno.io/aggregate-to-admission-controller agrège ce ClusterRole
+# dans le rôle de l'admission-controller (mécanisme officiel du chart).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno-operator-cr-read
+  labels:
+    rbac.kyverno.io/aggregate-to-admission-controller: 'true'
+rules:
+  - apiGroups: [rabbitmq.com]
+    resources: ['*']
+    verbs: [get]

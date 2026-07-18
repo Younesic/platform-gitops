@@ -1,0 +1,15 @@
+# BR4 — ConfigMap DYNAMIQUE : périmètre de la ClusterPolicy Kyverno
+# operator-child-visibility (héritage des labels aux enfants d'opérateur).
+# Clés <group>.<Kind>.plural|version des CRDs des familles OPÉRATEUR (annotations
+# platform.kratix.io/operator-group des promesses, BR3). SEED committée (le Role
+# du CronJob est scellé par resourceNames → create interdit) ; ensuite RÉGÉNÉRÉE
+# à chaque tick par backstage-customresources-sync — l'app backstage IGNORE le
+# drift de /data (pattern backstage-config-dynamic).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: operator-families
+  namespace: backstage
+data:
+  rabbitmq.com.RabbitmqCluster.plural: rabbitmqclusters
+  rabbitmq.com.RabbitmqCluster.version: v1beta1
