@@ -2,7 +2,7 @@
 # workspace, ...) ouvrent des PR de claims sur Younesic/portal-templates (requests/) ;
 # une fois MERGÉES (gouvernance humaine), cette app applique les claims au cluster.
 # NB : le repo s'appelle portal-templates (historique) mais porte des DEMANDES ;
-# ne pas confondre avec la renommage pending platform-claims->portal-claims.
+# ne pas confondre avec Younesic/portal-claims (ex-platform-claims, legacy — renommé BR12).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

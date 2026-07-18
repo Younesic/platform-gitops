@@ -36,6 +36,15 @@ Install : `ln -sf $(pwd)/new-cluster/native/scaffold/kratix-new-helm-promise /op
 (idem pour `kratix-new-crossplane-promise` ; le nom à underscores donne la commande à tirets,
 convention kubectl — poser AUSSI le symlink à tirets, c'est lui que la factory appelle). Défauts
 plateforme (image backstage, groupe, selector, repo GitOps) : `scaffold/defaults.env`.
+**Cycle de vie des branches `promise/<nom>` (politique — BR13)** : la branche de revue
+vit TANT QUE le PromiseRequest vit (la factory la re-force-pushe à chaque re-run —
+idempotente, alignée sur main quand le généré est identique) ; **jamais de suppression
+d'une branche à claim VIVANT** (elle serait re-poussée au tick suivant) ; une branche
+devient ORPHELINE quand son claim est retiré (le pipeline delete ne touche pas les
+branches — design factory, OP6) → **la suppression est un geste HUMAIN de ménage**
+(`git push origin --delete promise/<nom>`). Invariant vérifiable :
+`git branch -r | grep promise/` == la liste des PromiseRequests vivants.
+
 **Équivalences prouvées** : workspace régénérée = structurellement identique à la prod (re-vérifié
 après l'extraction de la lib) ; sandbox en mode clone = identique au mode `--src` local.
 ⚠️ Garder le CLI local aligné sur la version de l'image factory (v0.17.0 mini — `--functions`).
