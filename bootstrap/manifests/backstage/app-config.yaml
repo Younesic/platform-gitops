@@ -15,6 +15,30 @@ data:
     # via configApi ; déclarée @deepVisibility frontend dans son config.d.ts). Allowlist d'hôtes
     # MIROIR de backend.csp.img-src : le plugin ne rend un <img> QUE pour un hôte autorisé (sinon
     # placeholder propre, pas d'image cassée) → les 2 gates (plugin client + CSP navigateur) s'accordent.
+    # BR9 — sources PLATEFORME des pickers du Studio (partagées par tous les
+    # navigateurs ; frontend-visible via le config.d.ts du plugin kratix-studio).
+    # Ajouter une source = 1 entrée ici + restart (ZÉRO rebuild) ; les Settings
+    # du Studio restent des overrides LOCAUX additifs (badge « locale »).
+    kratixStudio:
+      sources:
+        - id: harbor-platform
+          kind: helm
+          label: Harbor · platform
+          host: harbor.212-47-226-56.nip.io
+          project: platform
+        - id: git-platform-gitops
+          kind: git
+          label: GitHub · platform-gitops
+          host: github.com
+          repo: Younesic/platform-gitops
+        # 3e source ABSENTE des défauts embarqués = la preuve vivante que la
+        # liste vient de LA CONFIG (BR9 DoD a/b).
+        - id: git-kratix-state
+          kind: git
+          label: GitHub · kratix-state
+          host: github.com
+          repo: Younesic/kratix-state
+
     kratixMarketplace:
       logo:
         requireHttps: true
