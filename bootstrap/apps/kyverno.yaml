@@ -30,12 +30,14 @@ spec:
             requests: { cpu: 20m, memory: 64Mi }
             limits: { memory: 256Mi }
   destination: { server: https://kubernetes.default.svc, namespace: kyverno }
-  # le chart OMET spec.conversion des CRDs → l'API server le DÉFAULTE
-  # ({strategy: None}) → OutOfSync perpétuel (même classe que le caBundle istio).
+  # Deux drifts runtime sur les CRDs (même classe que le caBundle istio) :
+  # (1) le chart OMET spec.conversion → l'API server le DÉFAULTE ({strategy: None}) ;
+  # (2) le Job hook kyverno-migrate-resources STRIP labels/annotations helm des
+  #     CRDs policies.kyverno.io après l'apply → OutOfSync perpétuel sinon.
   ignoreDifferences:
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
-      jqPathExpressions: ['.spec.conversion']
+      jqPathExpressions: ['.spec.conversion', '.metadata.labels', '.metadata.annotations']
   syncPolicy:
     automated: { selfHeal: true, prune: true }
     syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]
