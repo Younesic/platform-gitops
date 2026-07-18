@@ -22,6 +22,18 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list]
+  # BR3 — FAMILIES data-driven : le CronJob lit l'annotation
+  # platform.kratix.io/operator-group des PROMESSES (posée par le plugin operator
+  # à la génération) → plus d'édition manuelle par nouvel opérateur.
+  - apiGroups: [platform.kratix.io]
+    resources: [promises]
+    verbs: [get, list]
+  # …et vérifie que chaque famille dérivée a son bloc RBAC de fetch (alerte guidée
+  # sinon) en lisant LE ClusterRole du lecteur backstage.
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    resourceNames: [backstage-readonly]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -94,9 +106,25 @@ spec:
               args:
                 - |
                   set -eu
-                  # rabbitmq.com = famille du groupe de l'opérateur témoin OP5 (moteur
-                  # operator) — règle : une ligne par FAMILLE/provider, jamais par promesse.
-                  FAMILIES="platform.example.io crossplane.platform.example.io group.keycloak.m.crossplane.io rabbitmq.com"
+                  # BR3 — FAMILIES DATA-DRIVEN : socle (familles des moteurs plateforme,
+                  # stables) ∪ annotations `platform.kratix.io/operator-group` des
+                  # PROMESSES (posées par le plugin operator à la génération). Un nouvel
+                  # opérateur = SA promesse porte sa famille → la config live suit au
+                  # tick, ZÉRO édition ici. (rabbitmq.com, ex-en-dur, vient désormais
+                  # de l'annotation de la promesse `rabbit`.)
+                  FAMILIES_BASE="platform.example.io crossplane.platform.example.io group.keycloak.m.crossplane.io"
+                  FAMILIES_ANNOTATED=$(kubectl get promises -o jsonpath='{range .items[*]}{.metadata.annotations.platform\.kratix\.io/operator-group}{" "}{end}' 2>/dev/null || true)
+                  FAMILIES=$(printf '%s\n' $FAMILIES_BASE $FAMILIES_ANNOTATED | grep -E '^[a-z0-9.-]+$' | sort -u | tr '\n' ' ')
+                  echo "familles : $FAMILIES(socle: $FAMILIES_BASE / annotées: ${FAMILIES_ANNOTATED:-aucune})"
+                  # alerte RBAC guidée : une famille dérivée SANS bloc de fetch dans
+                  # backstage-readonly → le live montrerait des 403 ; le fix reste un
+                  # merge humain (1 bloc wildcard par famille dans rbac.yaml).
+                  RBAC_GROUPS=$(kubectl get clusterrole backstage-readonly -o jsonpath='{range .rules[*]}{.apiGroups[*]}{" "}{end}' 2>/dev/null || true)
+                  for fam in $FAMILIES; do
+                    case " $RBAC_GROUPS " in *" $fam "*) ;; *)
+                      echo "⚠️  RBAC MANQUANT pour la famille '$fam' : ajouter un bloc apiGroups=[$fam] resources=['*'] verbs=[get,list,watch] à backstage-readonly (bootstrap/manifests/backstage/rbac.yaml)" ;;
+                    esac
+                  done
                   out=/tmp/app-config.dynamic.yaml
                   {
                     echo "# GÉNÉRÉ par le CronJob backstage-customresources-sync — ne pas éditer."
