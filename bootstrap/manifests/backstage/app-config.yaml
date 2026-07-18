@@ -262,6 +262,12 @@ data:
           rules:
             - allow: [Template]
 
+        # SL5/BR8 — produit « Offboarder une squad » (Platform, gated tech-lead, miroir).
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/offboard-squad.yaml
+          rules:
+            - allow: [Template]
+
     kubernetes:
       serviceLocatorMethod: { type: multiTenant }
       clusterLocatorMethods:

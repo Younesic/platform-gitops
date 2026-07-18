@@ -1,0 +1,61 @@
+# SL5/BR8 — Produit « Offboarder une squad » (Platform, gated tech-lead). Chemin RETOUR
+# de l'échelle SL0–SL4, miroir d'Onboard Squad : picker des squads ONBOARDÉES → action
+# kratix:offboard-squad → UNE PR sur portal-templates, ORDRE FORCÉ par les commits :
+# (1) claims PRODUITS de la squad (attribution spec.team / label component-of-owner —
+# jamais deviné) → (2) keycloak-member → (3) keycloak-group EN DERNIER → (4) fiche org
+# onboarded→offboarded (hiérarchie préservée). Après merge : cascades Kratix → le groupe
+# Keycloak disparaît → O2 dé-projette team-<slug> → les membres retombent à « Portal
+# seul » (SL4 à rebours). Le MERGE est l'acte de gouvernance.
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: offboard-squad
+  title: Offboard Squad
+  description: >-
+    Retire une squad ONBOARDÉE : ses produits d'abord, puis son identité Keycloak
+    (une PR, ordre forcé). Réservé aux tech-leads — le merge est l'acte de gouvernance.
+  annotations:
+    platform.kratix.io/exposure: product
+    platform.kratix.io/audience: portal
+    platform.kratix.io/gated-by: tech-lead
+    platform.kratix.io/marketplace: "true"
+    platform.kratix.io/provider: platform
+  tags: [platform, squad, offboarding]
+spec:
+  type: portal-product
+  owner: group:default/team-platform
+  parameters:
+    - title: Offboarding
+      required: [squad]
+      properties:
+        squad:
+          title: Squad onboardée
+          type: string
+          description: >-
+            La squad à offboarder — ses claims produits sont DÉCOUVERTS (spec.team /
+            label owner), jamais re-tapés ; l'identité part en dernier.
+          ui:field: EntityPicker
+          ui:options:
+            # miroir du picker SL3 : ne cible QUE les squads ONBOARDÉES (status=onboarded)
+            catalogFilter:
+              kind: Group
+              spec.type: squad
+              metadata.annotations.platform.kratix.io/squad-status: onboarded
+  steps:
+    - id: offboard
+      name: Offboarder (produits puis identité)
+      action: kratix:offboard-squad
+      input:
+        squadRef: ${{ parameters.squad }}
+  output:
+    links:
+      - title: Pull request d'offboarding
+        url: ${{ steps.offboard.output.pullRequestUrl }}
+    text:
+      - title: Ce que le merge déclenchera
+        content: >-
+          ${{ steps.offboard.output.removedProducts }} claim(s) produit(s) retirés PUIS
+          l'identité « team-${{ steps.offboard.output.slug }} » (membres, puis groupe).
+          Les namespaces/RBAC/ressources tombent par les cascades Kratix ; le groupe
+          Keycloak disparaît en dernier ; les membres retombent à « Portal seul ».
+          Re-onboarder plus tard = Onboard Squad (SL3), inchangé.
