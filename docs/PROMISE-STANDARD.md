@@ -112,7 +112,22 @@ ENTIERS de l'opérateur deviennent **`spec.dependencies` INLINE** → l'opérate
 - **Curation de l'API** : `spec.source.omit[]` (PromiseRequest ≥ v0.8.1) = le plugin exécute
   l'officiel `kratix update api --property <champ>-`. **BR5 (≥ v0.8.3) : chemins POINTÉS admis**
   (`override.statefulSet` = retrait NESTED ; le reste du parent reste, et le plugin nettoie le
-  `required` orphelin que le CLI v0.17.0 laisse — vérifié par test, sinon objet insatisfiable). ⚠️ vécu : les **défauts PROFONDS** d'une
+  `required` orphelin que le CLI v0.17.0 laisse — vérifié par test, sinon objet insatisfiable).
+- **Gros opérateurs (BR6 — décision instrumentée, 2026-07-18)** : mesures réelles —
+  prometheus-operator **4 399 Ko** (10 CRDs, plus gros doc SEUL 811 Ko) · grafana-operator
+  **772 Ko** (13 CRDs) · minio-operator **255 Ko** rendu par `kubectl kustomize` (2 CRDs —
+  corrige « écarté, kustomize » d'OP1 : on VENDORISE LE RENDU, génération complète prouvée,
+  promesse 563 Ko). **Amplification mesurée deps→Promise ≈ ×2,2** (minio 255→563 ; rabbit
+  342→750) → la garde `OPERATOR_DEPS_MAX_KB=800` reste LE DÉFAUT : au-delà, la Promise
+  inline approche le mur etcd (~1,5 Mo) — `--max-deps-kb` ne fait que déplacer le refus
+  vers l'admission. **Décision (i)** : limite FERME + refus guidé enrichi (2 voies
+  concrètes). **Voie (ii) écrite, AU DÉCLENCHEUR** (premier vrai besoin > seuil) :
+  deps-par-workflow PARTAGÉ — un conteneur générique env-paramétré (GIT_URL/REF/PATH, même
+  clone pinné que la factory) émet les manifestes au promise-configure → statestore : aucun
+  objet etcd géant (plus gros doc prometheus 811 Ko < 1 Mo/objet, apply SSA), AUCUNE image
+  par promesse (le levier tient). ⚠️ Robustesse vécue : la CRD prometheus contient un
+  scalaire YAML 1.1 `=` nu → SafeLoader patché (plugin_lib + derive_server), sinon
+  traceback AVANT la garde. ⚠️ vécu : les **défauts PROFONDS** d'une
   CRD tierce (ex. `override` de RabbitMQ) sont matérialisés par rjsf → des requireds imbriqués
   bloquent la Review d'un formulaire VIERGE → **omettre le champ est la correction**, pas des
   rustines de formulaire. Un champ omis n'est jamais posé → défauts de l'opérande.

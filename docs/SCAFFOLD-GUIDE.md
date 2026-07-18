@@ -250,7 +250,10 @@ picker repo/tag/dossier + Select « CRD contrat » alimenté par l'aperçu deriv
   correction ; le champ jamais posé = défauts de l'opérande.
 - **Garde de taille** : deps inline vs etcd → `OPERATOR_DEPS_MAX_KB=800` (defaults.env) /
   `--max-deps-kb` ; refus guidé au-delà (grafana 771 Ko + 13 CRDs écarté ; rabbit 342 Ko OK,
-  appliqué en ServerSideApply par l'app kratix-promises).
+  appliqué en ServerSideApply par l'app kratix-promises). **BR6 (décision instrumentée)** :
+  limite FERME par défaut — refus enrichi de 2 voies (vendoriser le RENDU, ex. minio
+  `kubectl kustomize` 255 Ko admissible ; deps-par-workflow PARTAGÉ au déclencheur) ;
+  mesures + design dans PROMISE-STANDARD §9 ; amplification deps→Promise ≈ ×2,2 mesurée.
 - **Renderer épinglé par DIGEST sur le miroir Harbor** (`OPERATOR_RENDERER_IMAGE`) — le tag
   ghcr documenté `v0.2.2` était FANTÔME (ImagePullBackOff silencieux, un Job en IPBO ne fail
   jamais) ; politique digest-pinning appliquée au renderer comme au reste.
