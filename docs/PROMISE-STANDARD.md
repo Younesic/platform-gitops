@@ -113,6 +113,13 @@ ENTIERS de l'opérateur deviennent **`spec.dependencies` INLINE** → l'opérate
   l'officiel `kratix update api --property <champ>-`. **BR5 (≥ v0.8.3) : chemins POINTÉS admis**
   (`override.statefulSet` = retrait NESTED ; le reste du parent reste, et le plugin nettoie le
   `required` orphelin que le CLI v0.17.0 laisse — vérifié par test, sinon objet insatisfiable).
+- **Co-mainteneurs (BR15, 2026-07-18)** : `spec.curation.maintainers: "team-b,team-c"`
+  (**CSV** — le CRD curation est une map de STRINGS) → annotation
+  `platform.kratix.io/maintainers` propagée par bc (passthrough générique, fiche+Template).
+  Un co-mainteneur RÉGÉNÈRE sans fork ni 403 (verdict `allow-maintainer`) et **la lignée ne
+  bouge pas** : le forçage O4 pose alors `provider = celui de la CIBLE`, jamais l'auteur.
+  Durabilité : la donnée DURABLE vit dans le CLAIM (`curation.maintainers`) — une annotation
+  posée sur un manifeste GÉNÉRÉ est perdue à la régénération (leçon KS6b).
 - **Gros opérateurs (BR6 — décision instrumentée, 2026-07-18)** : mesures réelles —
   prometheus-operator **4 399 Ko** (10 CRDs, plus gros doc SEUL 811 Ko) · grafana-operator
   **772 Ko** (13 CRDs) · minio-operator **255 Ko** rendu par `kubectl kustomize` (2 CRDs —
