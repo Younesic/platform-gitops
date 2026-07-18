@@ -25,6 +25,7 @@ metadata:
       critical\n  - \"quorum-critical: pod-0, pod-2 (1 unavailable)\" - multiple critical
       pods\n  - \"unavailable\" - all nodes unreachable or StatefulSet not ready",
       "type": "string"}}'
+    platform.kratix.io/operator-group: rabbitmq.com
     platform.kratix.io/provider: ks1prov
 spec:
   api:
