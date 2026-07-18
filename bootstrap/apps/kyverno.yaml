@@ -30,6 +30,12 @@ spec:
             requests: { cpu: 20m, memory: 64Mi }
             limits: { memory: 256Mi }
   destination: { server: https://kubernetes.default.svc, namespace: kyverno }
+  # le chart OMET spec.conversion des CRDs → l'API server le DÉFAULTE
+  # ({strategy: None}) → OutOfSync perpétuel (même classe que le caBundle istio).
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions: ['.spec.conversion']
   syncPolicy:
     automated: { selfHeal: true, prune: true }
-    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]

@@ -24,6 +24,12 @@ kind: ClusterPolicy
 metadata:
   name: operator-child-visibility
 spec:
+  # admission/emitWarning/validationFailureAction/skipBackgroundRequests = les
+  # DÉFAUTS que le webhook Kyverno matérialise sur l'objet — écrits explicitement
+  # pour un diff ArgoCD vide (même doctrine que istio caBundle : pas de drift).
+  admission: true
+  emitWarning: false
+  validationFailureAction: Audit
   webhookConfiguration:
     failurePolicy: Ignore
   background: false
@@ -53,6 +59,7 @@ spec:
           variable:
             jmesPath: fams.data."{{ownerGroup}}.{{ownerKind}}.plural"
             default: ''
+      skipBackgroundRequests: true
       preconditions:
         all:
           - key: '{{ famPlural }}'
@@ -96,6 +103,7 @@ spec:
           variable:
             jmesPath: fams.data."{{ownerGroup}}.{{ownerKind}}.version"
             default: ''
+      skipBackgroundRequests: true
       preconditions:
         all:
           - key: '{{ famPlural }}'
