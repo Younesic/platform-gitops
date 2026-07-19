@@ -59,6 +59,10 @@ data:
         # self-hosted, hôte de confiance où les providers déposent leurs logos). Ajouter un hôte
         # = une ligne ici (miroir de kratixMarketplace.logo.allowedHosts côté plugin).
         img-src: ["'self'", 'data:', 'https://harbor.212-47-226-56.nip.io']
+        # CF5 — Open Sans AUTO-HÉBERGÉ (packages/app/public/fonts, servi en 'self') : la police
+        # est même-origine, aucun CDN. On déclare font-src explicitement (self + data:), jamais
+        # d'hôte de police externe (règle sécurité web : self-host, pas de CDN runtime).
+        font-src: ["'self'", 'data:']
       cors:
         origin: https://backstage.212-47-226-56.nip.io
         methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
