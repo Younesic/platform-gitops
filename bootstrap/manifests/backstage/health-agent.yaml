@@ -1,0 +1,147 @@
+# CX6 — AGENT DE SANTÉ KRATIX-NATIVE (producteur de status.healthStatus)
+#
+# Mécanisme (PROUVÉ sur ce cluster) : un HealthRecord (platform.kratix.io) référençant une
+# ressource → Kratix AGRÈGE en `status.healthStatus` (state « pire des records » + healthRecords[])
+# sur le claim → la console lit `status.healthStatus.state` en PRIORITÉ 1 (resolveHealth, prime
+# sur les conditions). Il n'existe PAS de CRD HealthDefinition dans notre Kratix OSS community
+# → le PRODUCTEUR = cet agent qui écrit des HealthRecords (le DoD initial supposait
+# HealthDefinition ; recadré sur le vrai mécanisme HealthRecord).
+#
+# DATA-DRIVEN : opt-in via le ConfigMap `health-agent-scope` (liste {name,group,plural} des
+# promesses surveillées). Promesse SANS opt-in → aucun HealthRecord → santé DÉRIVÉE (conditions)
+# inchangée = RÉTRO-COMPATIBLE. IDEMPOTENT : n'écrit un HealthRecord que si l'état a changé.
+# CHECK MVP = dérivation depuis status.conditions ; enrichissements (sondes d'endpoint, agrégation
+# récursive des enfants d'un compound) = évolutions branchées sur la MÊME boucle.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backstage-health-agent
+  namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-health-agent
+rules:
+  - apiGroups: [platform.kratix.io]
+    resources: [promises]
+    verbs: [get, list]
+  # écrire les HealthRecords (le PRODUIT de l'agent) ; Kratix les agrège en healthStatus
+  - apiGroups: [platform.kratix.io]
+    resources: [healthrecords]
+    verbs: [get, list, create, update, patch, delete]
+  # lire les claims des familles plateforme (dériver la santé de leurs conditions)
+  - apiGroups: [platform.example.io, crossplane.platform.example.io]
+    resources: ['*']
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-health-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-health-agent
+subjects:
+  - kind: ServiceAccount
+    name: backstage-health-agent
+    namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-health-agent
+  namespace: backstage
+rules:
+  - apiGroups: ['']
+    resources: [configmaps]
+    resourceNames: [health-agent-scope]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-health-agent
+  namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-health-agent
+subjects:
+  - kind: ServiceAccount
+    name: backstage-health-agent
+    namespace: backstage
+---
+# OPT-IN : promesses surveillées. Ajouter une entrée = surveiller (zéro changement d'image).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-agent-scope
+  namespace: backstage
+data:
+  promises: |
+    [
+      {"name": "team-space", "group": "platform.example.io", "plural": "teamspaces"}
+    ]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backstage-health-agent
+  namespace: backstage
+spec:
+  schedule: '*/5 * * * *'
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: backstage-health-agent
+          restartPolicy: Never
+          containers:
+            - name: agent
+              image: alpine/k8s:1.35.3
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 200m, memory: 192Mi }
+              command: [/bin/sh, -c]
+              args:
+                - |
+                  set -eu
+                  SCOPE=$(kubectl -n backstage get cm health-agent-scope -o jsonpath='{.data.promises}' 2>/dev/null || echo '[]')
+                  TS=$(date +%s)
+                  TAB=$(printf '\t')
+                  # une passe jq → TSV par item (name, ns, gen, state) : PAS de re-parse JSON
+                  # ni d'echo (qui interpréterait les \n échappés du JSON = bug).
+                  printf '%s' "$SCOPE" | jq -c '.[]' | while IFS= read -r p; do
+                    PNAME=$(printf '%s' "$p" | jq -r .name)
+                    GVR="$(printf '%s' "$p" | jq -r .plural).$(printf '%s' "$p" | jq -r .group)"
+                    echo "promesse $PNAME ($GVR) :"
+                    kubectl get "$GVR" -A -o json 2>/dev/null | jq -r '.items[]?
+                      | (.status.conditions // []) as $c
+                      | (($c[]|select(.type=="Reconciled")|.status)//"") as $rec
+                      | (($c[]|select(.type=="ConfigureWorkflowCompleted")|.status)//"") as $cwc
+                      | [.metadata.name, .metadata.namespace, (.metadata.generation//0|tostring),
+                         (if $rec=="False" then "unhealthy"
+                          elif ($cwc!="" and $cwc!="True") then "degraded"
+                          elif ($cwc=="True" or $rec=="True") then "healthy"
+                          else "unknown" end)]
+                      | @tsv' | while IFS="$TAB" read -r RN RNS GEN STATE; do
+                      HR="health-agent-$RN"
+                      CUR=$(kubectl -n "$RNS" get healthrecord "$HR" -o jsonpath='{.data.state}' 2>/dev/null || echo "")
+                      if [ "$CUR" = "$STATE" ]; then echo "  $RN : $STATE (inchangé)"; continue; fi
+                      jq -n --arg hr "$HR" --arg ns "$RNS" --arg pn "$PNAME" --arg rn "$RN" \
+                            --argjson gen "$GEN" --arg state "$STATE" --argjson ts "$TS" \
+                        '{apiVersion:"platform.kratix.io/v1alpha1",kind:"HealthRecord",
+                          metadata:{name:$hr,namespace:$ns},
+                          data:{promiseRef:{name:$pn},resourceRef:{name:$rn,namespace:$ns,generation:$gen},
+                                state:$state,lastRun:$ts,details:{source:"backstage-health-agent",check:"conditions"}}}' \
+                        | kubectl apply -f - >/dev/null
+                      echo "  $RN : $STATE (écrit)"
+                    done
+                  done
+                  echo "agent santé : tick terminé."
