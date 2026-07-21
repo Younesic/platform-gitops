@@ -1,0 +1,158 @@
+# Compose UNE MR Workspace NAMESPACÉE (provider-terraform, tf.m.upbound.io) qui exécute
+# terraform-provider-keycloak : random_password + keycloak_user (initial_password TEMPORAIRE).
+# Le mot de passe (output SENSIBLE) est écrit dans le CONNECTION SECRET du Workspace
+# (writeConnectionSecretToRef) → identity le récupère depuis ce secret ; personne ne tape de mot
+# de passe dans un formulaire. random_password est généré UNE FOIS (state Terraform). Auth + backend
+# d'état = ClusterProviderConfig `keycloak`. Nom de MR déterministe `kc-user-<username>` + label
+# fiche→MR (comme keycloak-group). Isolation d'état par MR : provider-terraform crée un
+# `terraform workspace` par MR → NE PAS poser TF_WORKSPACE (sinon « cannot create a new workspace »).
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xkeycloakuser-terraform
+spec:
+  compositeTypeRef:
+    apiVersion: crossplane.platform.example.io/v1alpha1
+    kind: XKeycloakUser
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: workspace
+            base:
+              apiVersion: tf.m.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                writeConnectionSecretToRef:
+                  name: kc-user-creds
+                providerConfigRef:
+                  kind: ClusterProviderConfig
+                  name: keycloak
+                forProvider:
+                  source: Inline
+                  inlineFormat: HCL
+                  # défauts (surchargés par les patches depuis le XR)
+                  varmap:
+                    username: ""
+                    email: ""
+                    first_name: ""
+                    last_name: ""
+                    realm: "platform"
+                    tech_lead: false
+                  module: |
+                    variable "username" {
+                      type = string
+                    }
+                    variable "email" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "first_name" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "last_name" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "realm" {
+                      type    = string
+                      default = "platform"
+                    }
+                    variable "tech_lead" {
+                      type    = bool
+                      default = false
+                    }
+
+                    resource "random_password" "pw" {
+                      length           = 20
+                      special          = true
+                      override_special = "!@#%*-_=+"
+                    }
+
+                    resource "keycloak_user" "this" {
+                      realm_id   = var.realm
+                      username   = var.username
+                      email      = var.email != "" ? var.email : null
+                      first_name = var.first_name
+                      last_name  = var.last_name
+                      enabled    = true
+                      attributes = var.tech_lead ? { "tech-lead" = "true" } : {}
+
+                      initial_password {
+                        value     = random_password.pw.result
+                        temporary = true
+                      }
+                    }
+
+                    output "user_id"  { value = keycloak_user.this.id }
+                    output "username" { value = keycloak_user.this.username }
+                    output "password" {
+                      value     = random_password.pw.result
+                      sensitive = true
+                    }
+            patches:
+              # nom déterministe de la MR + label fiche→MR
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.username
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: kc-user-%s
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels['backstage.io/kubernetes-id']
+              # secret de sortie (mot de passe) déterministe : kc-user-<username>-creds
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.username
+                toFieldPath: spec.writeConnectionSecretToRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: kc-user-%s-creds
+              # variables terraform (depuis le XR)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.username
+                toFieldPath: spec.forProvider.varmap.username
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.email
+                toFieldPath: spec.forProvider.varmap.email
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.firstName
+                toFieldPath: spec.forProvider.varmap.first_name
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.lastName
+                toFieldPath: spec.forProvider.varmap.last_name
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.realm
+                toFieldPath: spec.forProvider.varmap.realm
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.techLead
+                toFieldPath: spec.forProvider.varmap.tech_lead
+                policy:
+                  fromFieldPath: Optional
+              # exports NON sensibles → status du XR
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.user_id
+                toFieldPath: status.userId
+                policy:
+                  fromFieldPath: Optional
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.username
+                toFieldPath: status.username
+                policy:
+                  fromFieldPath: Optional

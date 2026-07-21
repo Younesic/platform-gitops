@@ -1,0 +1,54 @@
+# Auth + configuration Terraform injectée dans CHAQUE Workspace qui référence ce ClusterProviderConfig
+# `keycloak` (miroir EXACT de la config `harbor`). Sert la brique keycloak-user (provider-terraform +
+# terraform-provider-keycloak) : le Terraform génère un random_password + crée le user Keycloak.
+# - credentials: le blob JSON du client `provisioner` (secret keycloak-credentials, ns crossplane-system,
+#   clé `credentials` = {client_id, client_secret, url, realm}) écrit dans un fichier lu par le provider.
+# - configuration: le provider `keycloak` (auth via le JSON décodé) + backend d'ÉTAT kubernetes (REQUIS,
+#   provider-terraform ne persiste pas l'état) + required_providers (keycloak/keycloak + hashicorp/random).
+#   Isolation d'état par MR : provider-terraform crée un `terraform workspace` par MR (nommé d'après
+#   la MR) → secret d'état `tfstate-<nom-MR>-keycloak` distinct par user. NE PAS poser TF_WORKSPACE
+#   (sinon « cannot create a new workspace »). RBAC tfstate = déjà couvert par le Role
+#   provider-terraform-tfstate (secrets/leases crossplane-system) — rien à ajouter.
+apiVersion: tf.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    # la CRD tf.m.upbound.io est installée par le provider (wave 0) → skip le dry-run tant qu'elle
+    # n'existe pas, la wave 2 l'applique (même gotcha que la config harbor).
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  credentials:
+    - filename: keycloak-creds.json
+      source: Secret
+      secretRef:
+        namespace: crossplane-system
+        name: keycloak-credentials
+        key: credentials
+  configuration: |
+    provider "keycloak" {
+      client_id                = jsondecode(file("keycloak-creds.json"))["client_id"]
+      client_secret            = jsondecode(file("keycloak-creds.json"))["client_secret"]
+      url                      = jsondecode(file("keycloak-creds.json"))["url"]
+      realm                    = jsondecode(file("keycloak-creds.json"))["realm"]
+      tls_insecure_skip_verify = true
+    }
+
+    terraform {
+      required_providers {
+        keycloak = {
+          source  = "keycloak/keycloak"
+          version = "~> 5.0"
+        }
+        random = {
+          source  = "hashicorp/random"
+          version = "~> 3.0"
+        }
+      }
+      backend "kubernetes" {
+        secret_suffix     = "keycloak"
+        namespace         = "crossplane-system"
+        in_cluster_config = true
+      }
+    }
