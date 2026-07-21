@@ -5,14 +5,9 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: keycloak-member
   annotations:
-    # KS6 — lignée provider EXPLICITE (véridique : brique team-platform) — ferme le verdict
-    # « legacy » du gate d'écriture Studio.
-    platform.kratix.io/provider: platform
     backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
-    # SL0 — exposition : keycloak-member est une BRIQUE de compound (teaccess/onboarding),
-    # pas un produit standalone → bc ne pousse PAS de Template (pas requestable seule) ;
-    # sa fiche kratix-promise reste (palette du composer + graphe). Défaut = product.
     platform.kratix.io/exposure: internal
+    platform.kratix.io/provider: platform
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -169,6 +164,11 @@ spec:
           containers:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
+            env:
+            - name: UI_SCHEMA_REV
+              value: 40a8c92b0817
+            - name: CURATION_REV
+              value: 44c948cd41a5
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
