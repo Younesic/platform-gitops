@@ -1,0 +1,59 @@
+# Contrat (API) de la brique keycloak-user. Le Studio pointe sur ce dossier (xrd + composition) ;
+# la factory prend CE XRD comme API de la promesse. v2 Namespaced (le renderer Kratix force
+# namespace:default → l'XR doit être namespacé, comme keycloak-group/harbor-project).
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xkeycloakusers.crossplane.platform.example.io
+spec:
+  group: crossplane.platform.example.io
+  names:
+    kind: XKeycloakUser
+    plural: xkeycloakusers
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      referenceable: true
+      served: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - username
+              properties:
+                username:
+                  type: string
+                  description: "Nom d'utilisateur Keycloak (unique dans le realm)."
+                  pattern: '^[a-z0-9][a-z0-9._-]*$'
+                  maxLength: 63
+                email:
+                  type: string
+                  description: "Adresse email de l'utilisateur."
+                firstName:
+                  type: string
+                  description: "Prénom."
+                lastName:
+                  type: string
+                  description: "Nom."
+                realm:
+                  type: string
+                  default: platform
+                  description: "Realm Keycloak où créer l'utilisateur."
+                techLead:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Si true, pose l'attribut Keycloak `tech-lead=true` sur l'utilisateur
+                    (l'autorise à Create Group / Onboard Squad depuis le portail).
+            status:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  description: "UUID Keycloak de l'utilisateur créé (output Terraform)."
+                username:
+                  type: string
+                  description: "Nom d'utilisateur créé (echo)."
