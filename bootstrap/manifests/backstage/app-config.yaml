@@ -160,15 +160,17 @@ data:
     catalog:
       # Modèle Syntasso PUSH : Backstage lit les Components que les WORKFLOWS Kratix poussent
       # dans kratix-state/backstage/ (Resource Configure -> Component du provisionné).
-      # BR1 (2026-07-17) — ANTI-CHURN GitHub : chaque (re)processing d'une location github
-      # coûte des appels API (commits/main/status + lectures) sur le PAT plateforme, dont le
-      # bucket 5000/h est PARTAGÉ au niveau du compte. À 1-2 min de frequency le bucket
-      # s'épuisait les jours de forte activité (VÉCU : generate Studio en 500). Cadences
-      # portées à 30 min (providers ci-dessous + processingInterval global). TRADE-OFF
-      # assumé : fraîcheur d'ingestion ≤ ~30 min ; pour tester vite, nudge en base :
-      #   update catalog.backstage_backend_tasks__tasks set next_run_start_at=now()
-      #   where id like 'github-provider:%';
-      processingInterval: { minutes: 30 }
+      # BR1 (2026-07-17) — ANTI-CHURN GitHub : chaque (re)processing d'une location github coûte
+      # des appels API. À l'époque le catalogue lisait GitHub via le PAT plateforme (bucket 5000/h
+      # PARTAGÉ au niveau du compte) → à 1-2 min le bucket s'épuisait (VÉCU : generate Studio en
+      # 500) → cadences portées à 30 min.
+      # 2026-07-21 — RAMENÉ À 1 MIN (demande user, itération rapide). SÛR désormais : depuis BR16
+      # le catalogue lit GitHub via la GitHub App `attijari-portal` (limite 5000/h PROPRE à
+      # l'installation, PAS le bucket PAT partagé) → le churn du catalogue n'affecte plus le PAT.
+      # NB : les PROVIDERS github (kratixCatalog, portalSquads) restent à 30/10 min ci-dessous
+      # (dis-le si tu veux aussi les baisser). Pour un one-shot immédiat, nudge en base :
+      #   update catalog.refresh_state set next_update_at=now() where entity_ref like 'location:%';
+      processingInterval: { minutes: 1 }
       providers:
         github:
           kratixCatalog:
