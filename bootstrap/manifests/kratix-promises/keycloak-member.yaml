@@ -5,9 +5,9 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: keycloak-member
   annotations:
-    # KS6 — lignée provider EXPLICITE (véridique : brique team-platform) — ferme le verdict
-    # « legacy » du gate d'écriture Studio.
-    platform.kratix.io/provider: platform
+    # Lignée provider : brique de l'équipe IDENTITY (fournisseur des primitives d'identité).
+    # Réaffecté platform → identity lors du rebuild du catalogue (2026-07-21).
+    platform.kratix.io/provider: identity
     backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
     # SL0 — exposition : keycloak-member est une BRIQUE de compound (teaccess/onboarding),
     # pas un produit standalone → bc ne pousse PAS de Template (pas requestable seule) ;
