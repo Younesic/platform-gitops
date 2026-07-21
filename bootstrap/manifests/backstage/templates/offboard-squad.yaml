@@ -20,6 +20,11 @@ metadata:
     platform.kratix.io/gated-by: tech-lead
     platform.kratix.io/marketplace: "true"
     platform.kratix.io/provider: platform
+    # MV2 (complément) — 3e étape du parcours squad : offboard. Offboarder concerne une squad
+    # ONBOARDÉE → ce produit n'apparaît QUE pour un tech-lead onboardé (gate complet), et reste
+    # masqué en « sans squad » / « squad déclarée ». Sans ce marqueur, le fallback rétro-compat
+    # le montrait à tort à un user sans squad.
+    platform.kratix.io/squad-step: offboard
   tags: [platform, squad, offboarding]
 spec:
   type: portal-product
