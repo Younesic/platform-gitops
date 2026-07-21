@@ -21,6 +21,9 @@ metadata:
     # opt-in marketplace + provider platform → carte sous le provider « Platform ».
     platform.kratix.io/marketplace: "true"
     platform.kratix.io/provider: platform
+    # MV2 — étape du parcours squad : onboard (marqueur dédié, cf. declare-squad ; lu par la
+    # visibilité conditionnelle permissionPolicy MV3/MV4).
+    platform.kratix.io/squad-step: onboard
   tags: [platform, squad, onboarding]
 spec:
   type: portal-product

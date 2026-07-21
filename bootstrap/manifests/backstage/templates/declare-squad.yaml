@@ -27,6 +27,10 @@ metadata:
     platform.kratix.io/gated-by: tech-lead
     platform.kratix.io/marketplace: "true"
     platform.kratix.io/provider: portal
+    # MV2 — étape du parcours squad (declare|onboard) : distingue « Create Group » d'« Onboard
+    # Squad » pour la VISIBILITÉ CONDITIONNELLE par état de squad (permissionPolicy MV3/MV4).
+    # Marqueur DÉDIÉ (pas `provider`, partagé avec d'autres produits platform et déjà déplacé en G1).
+    platform.kratix.io/squad-step: declare
     # G3 — logo produit (data-driven). Pour une promesse factory : spec.curation.logo-url →
     # platform.kratix.io/logo-url (passthrough générique platform.kratix.io/*). Ici produit NATIF
     # → annotation directe. Hôte self-hosted (Harbor) autorisé par la CSP img-src + l'allowlist plugin.
