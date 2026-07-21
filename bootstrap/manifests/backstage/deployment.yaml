@@ -12,7 +12,7 @@ spec:
       labels: { app: backstage }
       annotations:
         # redéploie quand l'app-config change (hash injecté par ArgoCD via le ConfigMap)
-        configmap-revision: v14
+        configmap-revision: v15
     spec:
       serviceAccountName: backstage
       priorityClassName: platform-high
