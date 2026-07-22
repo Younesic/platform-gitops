@@ -147,16 +147,15 @@ data:
             additionalScopes: groups
             signIn:
               resolvers:
-                # One-identity : la session se résout par le USERNAME Keycloak
-                # (preferred_username = le nom d'entité User projeté par
-                # http-entities) — l'email n'a AUCUN rôle dans l'identité.
-                # Vécu : cloud_user (email user@cloud.com) → le résolveur
-                # email-local-part cherchait user:default/user (inexistant) et le
-                # flag dangerously* le connectait avec une réf PENDANTE → session
-                # sans annotations/groupes → marketplace VIDE, silencieusement.
-                - resolver: preferredUsernameMatchingUserEntityName
-                # repli historique (sessions dont l'email suit username@…)
+                # ⚠️ TRANSITOIRE — la version n'expose PAS de résolveur par
+                # preferred_username (vérifié dist/resolvers.cjs.js : email* seuls) ;
+                # un nom inconnu TUE le plugin auth au boot (503 login pour tous,
+                # vécu). Un résolveur custom `preferredUsernameMatchingUserEntityName`
+                # arrive par module local (image ≥ 20260722-0004) — d'ici là le
+                # repli historique email-local-part + flag (cloud_user : session
+                # pendante connue, corrigée par le custom).
                 - resolver: emailLocalPartMatchingUserEntityName
+                  dangerouslyAllowSignInWithoutUserInCatalog: true
 
     techdocs:
       builder: local
