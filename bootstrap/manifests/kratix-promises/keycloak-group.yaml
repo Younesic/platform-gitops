@@ -9,7 +9,7 @@ metadata:
       , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
       , \"type\": \"string\"}}"
     platform.kratix.io/exposure: internal
-    platform.kratix.io/provider: platform
+    platform.kratix.io/provider: identity
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -182,7 +182,7 @@ spec:
             name: backstage
             env:
             - name: CURATION_REV
-              value: 44c948cd41a5
+              value: 51b01245bae8
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
