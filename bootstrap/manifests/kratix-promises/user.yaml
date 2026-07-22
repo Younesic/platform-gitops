@@ -106,23 +106,46 @@ spec:
                     \ \"last_name\" {\n  type    = string\n  default = \"\"\n}\nvariable\
                     \ \"realm\" {\n  type    = string\n  default = \"platform\"\n\
                     }\nvariable \"tech_lead\" {\n  type    = bool\n  default = false\n\
-                    }\n\nresource \"random_password\" \"pw\" {\n  length         \
-                    \  = 20\n  special          = true\n  override_special = \"!@#%*-_=+\"\
-                    \n}\n\nresource \"keycloak_user\" \"this\" {\n  realm_id   = var.realm\n\
-                    \  username   = var.username\n  email      = var.email != \"\"\
-                    \ ? var.email : null\n  first_name = var.first_name\n  last_name\
-                    \  = var.last_name\n  enabled    = true\n  attributes = var.tech_lead\
-                    \ ? { \"tech-lead\" = \"true\" } : {}\n\n  initial_password {\n\
-                    \    value     = random_password.pw.result\n    temporary = true\n\
-                    \  }\n}\n\noutput \"user_id\"  { value = keycloak_user.this.id\
+                    }\nvariable \"claim_name\" {\n  type    = string\n  default =\
+                    \ \"\"\n}\nvariable \"reader_group\" {\n  type    = string\n \
+                    \ default = \"team-identity\"\n}\n\nresource \"random_password\"\
+                    \ \"pw\" {\n  length           = 20\n  special          = true\n\
+                    \  override_special = \"!@#%*-_=+\"\n}\n\nresource \"keycloak_user\"\
+                    \ \"this\" {\n  realm_id   = var.realm\n  username   = var.username\n\
+                    \  email      = var.email != \"\" ? var.email : null\n  first_name\
+                    \ = var.first_name\n  last_name  = var.last_name\n  enabled  \
+                    \  = true\n  attributes = var.tech_lead ? { \"tech-lead\" = \"\
+                    true\" } : {}\n\n  initial_password {\n    value     = random_password.pw.result\n\
+                    \    temporary = true\n  }\n}\n\n# RBAC par-claim (option a) :\
+                    \ la squad identity lit LE connection\n# secret de CE claim (resourceNames\
+                    \ EXACT) avec son login OIDC \u2014\n# z\xE9ro admin dans la boucle.\
+                    \ D\xE9truits avec le claim (state).\nresource \"kubernetes_role\"\
+                    \ \"reader\" {\n  metadata {\n    name      = \"kc-user-${var.claim_name}-reader\"\
+                    \n    namespace = \"default\"\n  }\n  rule {\n    api_groups \
+                    \    = [\"\"]\n    resources      = [\"secrets\"]\n    resource_names\
+                    \ = [\"kc-user-${var.claim_name}-creds\"]\n    verbs         \
+                    \ = [\"get\"]\n  }\n}\n\nresource \"kubernetes_role_binding\"\
+                    \ \"reader\" {\n  metadata {\n    name      = \"kc-user-${var.claim_name}-reader\"\
+                    \n    namespace = \"default\"\n  }\n  role_ref {\n    api_group\
+                    \ = \"rbac.authorization.k8s.io\"\n    kind      = \"Role\"\n\
+                    \    name      = kubernetes_role.reader.metadata[0].name\n  }\n\
+                    \  # jumeau prefixe \"-\" : l'apiserver Kapsule PREFIXE les groupes\n\
+                    \  # OIDC \u2014 binder les DEUX variantes (gotcha plateforme).\n\
+                    \  subject {\n    api_group = \"rbac.authorization.k8s.io\"\n\
+                    \    kind      = \"Group\"\n    name      = var.reader_group\n\
+                    \  }\n  subject {\n    api_group = \"rbac.authorization.k8s.io\"\
+                    \n    kind      = \"Group\"\n    name      = \"-${var.reader_group}\"\
+                    \n  }\n}\n\noutput \"user_id\"  { value = keycloak_user.this.id\
                     \ }\noutput \"username\" { value = keycloak_user.this.username\
                     \ }\noutput \"password\" {\n  value     = random_password.pw.result\n\
                     \  sensitive = true\n}\n"
                   source: Inline
                   varmap:
+                    claim_name: ''
                     email: ''
                     first_name: ''
                     last_name: ''
+                    reader_group: team-identity
                     realm: platform
                     tech_lead: false
                     username: ''
@@ -151,6 +174,9 @@ spec:
                   fmt: kc-user-%s-creds
                   type: Format
                 type: string
+              type: FromCompositeFieldPath
+            - fromFieldPath: metadata.name
+              toFieldPath: spec.forProvider.varmap.claim_name
               type: FromCompositeFieldPath
             - fromFieldPath: spec.username
               toFieldPath: spec.forProvider.varmap.username
