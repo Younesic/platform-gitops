@@ -35,6 +35,17 @@ spec:
       tls_insecure_skip_verify = true
     }
 
+    # RBAC par-claim (option a) : le module keycloak-user rend un Role+RoleBinding
+    # `resourceNames` EXACT sur le connection secret → la squad identity lit SES
+    # secrets kc-user-* avec son propre login OIDC (zéro admin). Auth = la SA du
+    # pod provider-terraform (in-cluster) ; ses droits = Role provider-terraform-secrets-rbac
+    # (ns default, ce même dossier).
+    provider "kubernetes" {
+      host                   = "https://kubernetes.default.svc"
+      cluster_ca_certificate = file("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+      token                  = file("/var/run/secrets/kubernetes.io/serviceaccount/token")
+    }
+
     terraform {
       required_providers {
         keycloak = {
@@ -44,6 +55,10 @@ spec:
         random = {
           source  = "hashicorp/random"
           version = "~> 3.0"
+        }
+        kubernetes = {
+          source  = "hashicorp/kubernetes"
+          version = "~> 2.0"
         }
       }
       backend "kubernetes" {

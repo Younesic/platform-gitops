@@ -44,6 +44,8 @@ spec:
                     last_name: ""
                     realm: "platform"
                     tech_lead: false
+                    claim_name: ""
+                    reader_group: "team-identity"
                   module: |
                     variable "username" {
                       type = string
@@ -68,6 +70,14 @@ spec:
                       type    = bool
                       default = false
                     }
+                    variable "claim_name" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "reader_group" {
+                      type    = string
+                      default = "team-identity"
+                    }
 
                     resource "random_password" "pw" {
                       length           = 20
@@ -87,6 +97,46 @@ spec:
                       initial_password {
                         value     = random_password.pw.result
                         temporary = true
+                      }
+                    }
+
+                    # RBAC par-claim (option a) : la squad identity lit LE connection
+                    # secret de CE claim (resourceNames EXACT) avec son login OIDC —
+                    # zéro admin dans la boucle. Détruits avec le claim (state).
+                    resource "kubernetes_role" "reader" {
+                      metadata {
+                        name      = "kc-user-${var.claim_name}-reader"
+                        namespace = "default"
+                      }
+                      rule {
+                        api_groups     = [""]
+                        resources      = ["secrets"]
+                        resource_names = ["kc-user-${var.claim_name}-creds"]
+                        verbs          = ["get"]
+                      }
+                    }
+
+                    resource "kubernetes_role_binding" "reader" {
+                      metadata {
+                        name      = "kc-user-${var.claim_name}-reader"
+                        namespace = "default"
+                      }
+                      role_ref {
+                        api_group = "rbac.authorization.k8s.io"
+                        kind      = "Role"
+                        name      = kubernetes_role.reader.metadata[0].name
+                      }
+                      # jumeau prefixe "-" : l'apiserver Kapsule PREFIXE les groupes
+                      # OIDC — binder les DEUX variantes (gotcha plateforme).
+                      subject {
+                        api_group = "rbac.authorization.k8s.io"
+                        kind      = "Group"
+                        name      = var.reader_group
+                      }
+                      subject {
+                        api_group = "rbac.authorization.k8s.io"
+                        kind      = "Group"
+                        name      = "-${var.reader_group}"
                       }
                     }
 
@@ -123,6 +173,10 @@ spec:
                       type: Format
                       fmt: kc-user-%s-creds
               # variables terraform (depuis le XR)
+              # nom du claim → nommage du Role/RoleBinding lecteur (RFC 1123 sûr)
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.varmap.claim_name
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.username
                 toFieldPath: spec.forProvider.varmap.username
