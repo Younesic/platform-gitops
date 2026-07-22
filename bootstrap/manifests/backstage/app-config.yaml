@@ -147,15 +147,18 @@ data:
             additionalScopes: groups
             signIn:
               resolvers:
-                # ⚠️ TRANSITOIRE — la version n'expose PAS de résolveur par
-                # preferred_username (vérifié dist/resolvers.cjs.js : email* seuls) ;
-                # un nom inconnu TUE le plugin auth au boot (503 login pour tous,
-                # vécu). Un résolveur custom `preferredUsernameMatchingUserEntityName`
-                # arrive par module local (image ≥ 20260722-0004) — d'ici là le
-                # repli historique email-local-part + flag (cloud_user : session
-                # pendante connue, corrigée par le custom).
+                # One-identity : la session se résout par le USERNAME Keycloak
+                # (preferred_username OIDC = le nom d'entité User projeté par
+                # http-entities) — l'email n'a AUCUN rôle dans l'identité.
+                # Résolveur CUSTOM du module local `oidcProvider.ts` (image
+                # ≥ 20260722-0004) — les résolveurs stock de cette version sont
+                # email-only, et un nom inconnu TUE le plugin auth au boot (vécu).
+                - resolver: preferredUsernameMatchingUserEntityName
+                # repli : emails de la forme username@… (utilisateurs pas encore
+                # projetés au catalogue = échec BRUYANT — le flag dangerously* est
+                # RETIRÉ : il fabriquait des sessions PENDANTES silencieuses
+                # (vécu cloud_user : portail vide inexplicable).
                 - resolver: emailLocalPartMatchingUserEntityName
-                  dangerouslyAllowSignInWithoutUserInCatalog: true
 
     techdocs:
       builder: local
