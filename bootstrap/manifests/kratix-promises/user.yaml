@@ -133,7 +133,7 @@ spec:
                   name: kc-user-creds
             name: workspace
             patches:
-            - fromFieldPath: spec.username
+            - fromFieldPath: metadata.name
               toFieldPath: metadata.name
               transforms:
               - string:
@@ -144,7 +144,7 @@ spec:
             - fromFieldPath: metadata.name
               toFieldPath: metadata.labels['backstage.io/kubernetes-id']
               type: FromCompositeFieldPath
-            - fromFieldPath: spec.username
+            - fromFieldPath: metadata.name
               toFieldPath: spec.writeConnectionSecretToRef.name
               transforms:
               - string:
