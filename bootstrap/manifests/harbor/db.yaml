@@ -6,6 +6,13 @@ metadata: { name: harbor-db, namespace: harbor }
 spec:
   instances: 1
   priorityClassName: platform-high
+  # Épisode Kapsule 2026-07-22 : le chemin watch-list du control-plane gèle les
+  # reflectors client-go ≥0.36 (l'instance-manager CNPG crashait « timed out
+  # waiting for cache to be synced *v1.Cluster ») → même gate que le manager
+  # Kratix (BR1) : retombe sur LIST+WATCH classique, qui fonctionne.
+  env:
+    - name: KUBE_FEATURE_WatchListClient
+      value: "false"
   storage: { storageClass: sbs-default, size: 10Gi }
   resources:
     requests: { cpu: 250m, memory: 512Mi }
