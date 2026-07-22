@@ -97,9 +97,13 @@ spec:
                       sensitive = true
                     }
             patches:
-              # nom déterministe de la MR + label fiche→MR
+              # nom déterministe de la MR + label fiche→MR — depuis le NOM DU CLAIM
+              # (déjà RFC 1123 par construction), PAS le username : un username
+              # Keycloak légitime peut porter `_`/`.` (ex. cloud_user) qui sont
+              # INTERDITS dans un nom d'objet k8s (vécu : XR SYNCED=False,
+              # « invalid name kc-user-cloud_user »).
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.username
+                fromFieldPath: metadata.name
                 toFieldPath: metadata.name
                 transforms:
                   - type: string
@@ -109,9 +113,9 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.name
                 toFieldPath: metadata.labels['backstage.io/kubernetes-id']
-              # secret de sortie (mot de passe) déterministe : kc-user-<username>-creds
+              # secret de sortie (mot de passe) déterministe : kc-user-<claim>-creds
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.username
+                fromFieldPath: metadata.name
                 toFieldPath: spec.writeConnectionSecretToRef.name
                 transforms:
                   - type: string
