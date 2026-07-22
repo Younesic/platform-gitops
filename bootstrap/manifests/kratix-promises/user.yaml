@@ -44,6 +44,12 @@ spec:
                     default: platform
                     description: "Realm Keycloak o\xF9 cr\xE9er l'utilisateur."
                     type: string
+                  team:
+                    description: "Squad propri\xE9taire de l'instance (gouvernance)\
+                      \ \u2014 auto-d\xE9riv\xE9e de l'identit\xE9 du demandeur au\
+                      \ portail (RequesterTeamPicker, O5). Sans elle, la fiche retombait\
+                      \ sur team-platform (r\xE9f\xE9rence pendante)."
+                    type: string
                   techLead:
                     default: false
                     description: "Si true, pose l'attribut Keycloak `tech-lead=true`\
@@ -245,6 +251,12 @@ spec:
                   realm:
                     default: platform
                     description: "Realm Keycloak o\xF9 cr\xE9er l'utilisateur."
+                    type: string
+                  team:
+                    description: "Squad propri\xE9taire de l'instance (gouvernance)\
+                      \ \u2014 auto-d\xE9riv\xE9e de l'identit\xE9 du demandeur au\
+                      \ portail (RequesterTeamPicker, O5). Sans elle, la fiche retombait\
+                      \ sur team-platform (r\xE9f\xE9rence pendante)."
                     type: string
                   techLead:
                     default: false
