@@ -1,14 +1,9 @@
-# Promesse `keycloak-group` — crée un groupe Keycloak (realm platform).
-# XRD v2 NAMESPACÉE (contrainte du renderer officiel from-api-to-crossplane-claim) ;
-# compose la MR NAMESPACÉE Group (group.keycloak.m.crossplane.io) — les variantes
-# `.m.` sont requises car une XR namespacée ne compose que du namespacé.
-# ⚠️ Les schémas des champs `group` et `realm` sont BYTE-IDENTIQUES à ceux de
-# keycloak-member : le composer FUSIONNE les homonymes de schéma identique
-# (un champ parent routé vers les deux enfants) — ne pas les faire diverger.
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
   name: xkeycloakgroups.crossplane.platform.example.io
+  annotations:
+    platform.kratix.io/contracts: '{"provides":[{"kind":"keycloak-group","name":"${spec.group}","defaultName":"team-${spec.team}","severity":"suggest"}]}'
 spec:
   scope: Namespaced
   group: crossplane.platform.example.io
@@ -42,8 +37,7 @@ spec:
                   enum:
                     - consumer
                     - provider
-                  description: >-
-                    Rôle de gouvernance de la squad (posé en attribut du groupe
+                  description: Rôle de gouvernance de la squad (posé en attribut du groupe
                     Keycloak, lu par le RBAC portail). Omis = pas d'attribut.
             status:
               type: object
