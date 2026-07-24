@@ -340,7 +340,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:9dc7521a387babfb152f3593d10b9027452d43ec01b6c5fc8bf50567e61114c6
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:4372f22bb994bf7751cf9fe2677980d708772c803749f94f6623b7b0b405db8e
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git

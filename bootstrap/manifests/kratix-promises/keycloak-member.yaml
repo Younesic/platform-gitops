@@ -5,6 +5,7 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: keycloak-member
   annotations:
+    platform.kratix.io/contracts: '{"requires":[{"kind":"keycloak-group","name":"${spec.group}","origin":"derived"},{"kind":"keycloak-realm","partial":true,"origin":"derived"}]}'
     backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
