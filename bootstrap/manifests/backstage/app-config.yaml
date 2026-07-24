@@ -281,12 +281,10 @@ data:
       # (les locations examples/* du scaffold ont été retirées : absentes de l'image,
       # elles échouaient en NotFoundError à chaque cycle de processing)
       locations:
-        # Template utilitaire « en faire la règle » (Inc 3 option a) — cible du deep-link
-        # du bouton CompoundComposer ; action kratix:promote-usage-hint (PR sur portal-templates).
-        - type: url
-          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/promote-usage-hint.yaml
-          rules:
-            - allow: [Template]
+        # CT4 (loi 6, fusion usageHints→contrats) : le template promote-usage-hint est
+        # RETIRÉ des surfaces — « en faire la règle » passe par POST /kratix-studio/
+        # promote-contract (PR de contrat sur le claim cible). Le fichier template et
+        # l'action backend restent une itération (sunset propre, rien ne les référence).
         # SL1 — provider Portal (Group natif) + produit « Déclarer une squad » (Template natif).
         - type: url
           target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/team-portal.yaml
