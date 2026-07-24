@@ -8,6 +8,9 @@ metadata:
     platform.kratix.io/status-schema: "{\"groupId\": {\"path\": \".status.groupId\"\
       , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
       , \"type\": \"string\"}}"
+    platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
+      "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
+      "origin": "source"}]}'
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
 spec:
@@ -122,6 +125,8 @@ spec:
   - apiVersion: apiextensions.crossplane.io/v2
     kind: CompositeResourceDefinition
     metadata:
+      annotations:
+        platform.kratix.io/contracts: '{"provides":[{"kind":"keycloak-group","name":"${spec.group}","defaultName":"team-${spec.team}","severity":"suggest"}]}'
       name: xkeycloakgroups.crossplane.platform.example.io
     spec:
       group: crossplane.platform.example.io
@@ -181,6 +186,8 @@ spec:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
             env:
+            - name: CONTRACTS_REV
+              value: 59e32cc2a610
             - name: CURATION_REV
               value: 51b01245bae8
     resource:
