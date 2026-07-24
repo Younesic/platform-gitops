@@ -1,0 +1,260 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: harbor-base
+  annotations:
+    platform.kratix.io/status-schema: "{\"projectName\": {\"path\": \".status.projectName\"\
+      , \"label\": \"Nom du projet Harbor provisionn\xE9.\", \"type\": \"string\"\
+      }, \"robotName\": {\"path\": \".status.robotName\", \"label\": \"Nom complet\
+      \ du robot write (robot$<projet>+publisher).\", \"type\": \"string\"}}"
+    platform.kratix.io/provider: indus
+spec:
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: harborbases.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: HarborBase
+        plural: harborbases
+        singular: harborbase
+      scope: Namespaced
+      versions:
+      - name: v1alpha1
+        schema:
+          openAPIV3Schema:
+            properties:
+              spec:
+                properties:
+                  group:
+                    default: ''
+                    description: "Groupe OIDC (ex. team-paiement) \xE0 qui accorder\
+                      \ project-admin sur le projet. Vide = pas de mapping de groupe\
+                      \ (le robot write suffit \xE0 publier)."
+                    type: string
+                  project:
+                    description: Nom du projet Harbor (le registre du fournisseur,
+                      ex. team-paiement).
+                    maxLength: 255
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  public:
+                    default: false
+                    description: Projet public (lecture anonyme des artefacts).
+                    type: boolean
+                  storageQuotaGb:
+                    default: -1
+                    description: "Quota de stockage du projet en Go (-1 = illimit\xE9\
+                      )."
+                    type: integer
+                required:
+                - project
+                type: object
+              status:
+                properties:
+                  projectName:
+                    description: "Nom du projet Harbor provisionn\xE9."
+                    type: string
+                  robotName:
+                    description: Nom complet du robot write (robot$<projet>+publisher).
+                    type: string
+                type: object
+            type: object
+        served: true
+        storage: true
+    status:
+      acceptedNames:
+        kind: ''
+        plural: ''
+      conditions: null
+      storedVersions: null
+  dependencies:
+  - apiVersion: apiextensions.crossplane.io/v1
+    kind: Composition
+    metadata:
+      name: xharborproject-terraform
+    spec:
+      compositeTypeRef:
+        apiVersion: crossplane.platform.example.io/v1alpha1
+        kind: XHarborProject
+      mode: Pipeline
+      pipeline:
+      - functionRef:
+          name: function-patch-and-transform
+        input:
+          apiVersion: pt.fn.crossplane.io/v1beta1
+          kind: Resources
+          resources:
+          - base:
+              apiVersion: tf.m.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                forProvider:
+                  inlineFormat: HCL
+                  module: "variable \"project\" {\n  type = string\n}\nvariable \"\
+                    group\" {\n  type    = string\n  default = \"\"\n}\nvariable \"\
+                    storage_quota\" {\n  type    = number\n  default = -1\n}\nvariable\
+                    \ \"public\" {\n  type    = bool\n  default = false\n}\n\nresource\
+                    \ \"harbor_project\" \"this\" {\n  name                   = var.project\n\
+                    \  public                 = var.public\n  vulnerability_scanning\
+                    \ = true\n  storage_quota          = var.storage_quota\n}\n\n\
+                    resource \"harbor_robot_account\" \"publisher\" {\n  name    \
+                    \    = \"publisher\"\n  description = \"Robot write plateforme\
+                    \ pour le projet ${var.project}\"\n  level       = \"project\"\
+                    \n  permissions {\n    access {\n      action   = \"push\"\n \
+                    \     resource = \"repository\"\n    }\n    access {\n      action\
+                    \   = \"pull\"\n      resource = \"repository\"\n    }\n    kind\
+                    \      = \"project\"\n    namespace = harbor_project.this.name\n\
+                    \  }\n}\n\nresource \"harbor_project_member_group\" \"admins\"\
+                    \ {\n  count      = var.group == \"\" ? 0 : 1\n  project_id =\
+                    \ harbor_project.this.id\n  group_name = var.group\n  role   \
+                    \    = \"projectadmin\"\n  type       = \"oidc\"\n}\n\noutput\
+                    \ \"project_name\"    { value = harbor_project.this.name }\noutput\
+                    \ \"robot_full_name\" { value = harbor_robot_account.publisher.full_name\
+                    \ }\noutput \"robot_secret\" {\n  value     = harbor_robot_account.publisher.secret\n\
+                    \  sensitive = true\n}\n"
+                  source: Inline
+                  varmap:
+                    group: ''
+                    project: ''
+                    public: false
+                    storage_quota: -1
+                providerConfigRef:
+                  kind: ClusterProviderConfig
+                  name: harbor
+            name: workspace
+            patches:
+            - fromFieldPath: spec.project
+              toFieldPath: metadata.name
+              transforms:
+              - string:
+                  fmt: harbor-project-%s
+                  type: Format
+                type: string
+              type: FromCompositeFieldPath
+            - fromFieldPath: metadata.name
+              toFieldPath: metadata.labels['backstage.io/kubernetes-id']
+              type: FromCompositeFieldPath
+            - fromFieldPath: spec.project
+              toFieldPath: spec.forProvider.varmap.project
+              type: FromCompositeFieldPath
+            - fromFieldPath: spec.group
+              toFieldPath: spec.forProvider.varmap.group
+              type: FromCompositeFieldPath
+            - fromFieldPath: spec.storageQuotaGb
+              toFieldPath: spec.forProvider.varmap.storage_quota
+              type: FromCompositeFieldPath
+            - fromFieldPath: spec.public
+              toFieldPath: spec.forProvider.varmap.public
+              type: FromCompositeFieldPath
+            - fromFieldPath: status.atProvider.outputs.project_name
+              policy:
+                fromFieldPath: Optional
+              toFieldPath: status.projectName
+              type: ToCompositeFieldPath
+            - fromFieldPath: status.atProvider.outputs.robot_full_name
+              policy:
+                fromFieldPath: Optional
+              toFieldPath: status.robotName
+              type: ToCompositeFieldPath
+        step: patch-and-transform
+  - apiVersion: apiextensions.crossplane.io/v2
+    kind: CompositeResourceDefinition
+    metadata:
+      name: xharborprojects.crossplane.platform.example.io
+    spec:
+      group: crossplane.platform.example.io
+      names:
+        kind: XHarborProject
+        plural: xharborprojects
+      scope: Namespaced
+      versions:
+      - name: v1alpha1
+        referenceable: true
+        schema:
+          openAPIV3Schema:
+            properties:
+              spec:
+                properties:
+                  group:
+                    default: ''
+                    description: "Groupe OIDC (ex. team-paiement) \xE0 qui accorder\
+                      \ project-admin sur le projet. Vide = pas de mapping de groupe\
+                      \ (le robot write suffit \xE0 publier)."
+                    type: string
+                  project:
+                    description: Nom du projet Harbor (le registre du fournisseur,
+                      ex. team-paiement).
+                    maxLength: 255
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  public:
+                    default: false
+                    description: Projet public (lecture anonyme des artefacts).
+                    type: boolean
+                  storageQuotaGb:
+                    default: -1
+                    description: "Quota de stockage du projet en Go (-1 = illimit\xE9\
+                      )."
+                    type: integer
+                required:
+                - project
+                type: object
+              status:
+                properties:
+                  projectName:
+                    description: "Nom du projet Harbor provisionn\xE9."
+                    type: string
+                  robotName:
+                    description: Nom complet du robot write (robot$<projet>+publisher).
+                    type: string
+                type: object
+            type: object
+        served: true
+  destinationSelectors:
+  - matchLabels:
+      environment: platform
+  workflows:
+    config: {}
+    promise:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: promise-configure
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            name: backstage
+            env:
+            - name: CURATION_REV
+              value: 8d6474e96568
+    resource:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: instance-configure
+        spec:
+          containers:
+          - env:
+            - name: XRD_GROUP
+              value: crossplane.platform.example.io
+            - name: XRD_VERSION
+              value: v1alpha1
+            - name: XRD_KIND
+              value: XHarborProject
+            image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
+            name: from-api-to-crossplane-claim
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            name: backstage
+          jobOptions: {}
+          rbac: {}
+status:
+  workflows: 0
+  workflowsFailed: 0
+  workflowsSucceeded: 0
