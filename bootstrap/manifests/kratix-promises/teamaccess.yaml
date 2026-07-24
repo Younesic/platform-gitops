@@ -5,6 +5,7 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: teamaccess
   annotations:
+    backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
     platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
       "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
       "origin": "claim"}]}'
@@ -72,6 +73,8 @@ spec:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
             env:
+            - name: UI_SCHEMA_REV
+              value: 40a8c92b0817
             - name: CONTRACTS_REV
               value: c6656a3b479e
             - name: CURATION_REV
