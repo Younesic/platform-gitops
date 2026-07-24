@@ -5,6 +5,10 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: user
   annotations:
+    # CT3 (loi 6 / H0 encapsulation) — `realm` n'a qu'UNE valeur valide (platform) :
+    # masqué au formulaire, le défaut du schéma le matérialise dans le claim.
+    # PILOTE sur manifeste GÉNÉRÉ — durable = spec.uiSchema au claim (PR portal-templates).
+    backstage.example.io/ui-schema: '{"properties":{"realm":{"ui:widget":"hidden"}}}'
     platform.kratix.io/status-schema: "{\"userId\": {\"path\": \".status.userId\"\
       , \"label\": \"UUID Keycloak de l'utilisateur cr\xE9\xE9 (output Terraform).\"\
       , \"type\": \"string\"}, \"username\": {\"path\": \".status.username\", \"label\"\
