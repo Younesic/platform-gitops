@@ -5,7 +5,7 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: teamspace
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{},"ui:order":["environment","mesh","team","tier","users","*"]}'
+    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["environment","mesh","team","tier","users","*"]}'
     platform.kratix.io/provider: cloud
 spec:
   api:
@@ -96,7 +96,7 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: b224a276bc57
+              value: 1e0c5ba49020
             - name: CURATION_REV
               value: 1cc1f5a4af7a
     resource:
