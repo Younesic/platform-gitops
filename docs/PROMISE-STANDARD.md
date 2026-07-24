@@ -185,6 +185,33 @@ l'opérateur revient (destination re-sync).
 
 ---
 
+## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
+
+**Règle d'or : un champ dont UNE SEULE valeur est valide dans le contexte d'usage ne
+s'expose pas.** Il se dérive, se fige, ou prend un défaut + `ui:widget: hidden`.
+Le contrat déclaré (requires/provides) est le FILET, pas l'excuse.
+
+**Test de décision** — avant d'exposer un champ, demander :
+> « Un demandeur pourrait-il LÉGITIMEMENT mettre une autre valeur ? »
+- Non → ne pas l'exposer (défaut + masqué, ou dérivé d'un autre champ). Ex. : `realm`
+  (toujours `platform` sur cette plateforme) — vécu CT3 : exposé sur le template User,
+  un demandeur pouvait le corrompre pour rien.
+- Oui mais UNE valeur est attendue par une autre brique → l'exposer ET déclarer le
+  contrat (`requires`/`provides`, annotation `platform.kratix.io/contracts`). Ex. :
+  `group` de teamaccess (libre en général, `team-<team>` exigé par workspace).
+
+**Hiérarchie des interventions (du moins cher au plus cher — on ne descend une marche
+que si la précédente est impossible) :**
+1. **H0 ÉLIMINER** — champ mono-valeur : défaut+masqué / dérivé. État invalide
+   irreprésentable, zéro machinerie.
+2. **H1 FIGER À LA COMPOSITION** — brique générique, valeur déterminée dans CE
+   compound : `fix` de recette (ex. team-space fige `group=team-${spec.team}`).
+3. **H2 DÉCLARER UN CONTRAT** — valeur réellement libre ET couplée à une autre brique
+   du canevas : provides/requires (le Studio pré-câble et valide à la conception).
+4. **H3 MACHINERIE** (dérivation auto, scan) — uniquement à l'échelle, sur déclencheur.
+
+Audit du catalogue : `docs/AUDIT-ENCAPSULATION.md` (à refaire à chaque brique ajoutée).
+
 ## Ce qu'on NE construit PAS (over-engineering — leçons de cette itération)
 - **Pas de renderer générique maison** : les variantes câblent déjà un renderer partagé Syntasso.
 - **Pas de générateur « schéma → CRD » maison** : les variantes à schéma riche le font déjà (XRD/CRD/pulumi).
