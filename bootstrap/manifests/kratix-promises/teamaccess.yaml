@@ -5,11 +5,10 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: teamaccess
   annotations:
+    platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
+      "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
+      "origin": "claim"}]}'
     platform.kratix.io/provider: cloud
-    # LOI 6 — contrat déclaré : teamaccess FOURNIT le groupe Keycloak nommé par son
-    # champ `group`. PILOTE annotation directe (manifeste GÉNÉRÉ : une régénération
-    # l'écraserait) — la déclaration DURABLE = curation.contracts au claim portal-templates.
-    platform.kratix.io/contracts: '{"provides":[{"kind":"keycloak-group","name":"${spec.group}","defaultName":"team-${spec.team}","severity":"suggest","origin":"claim"}]}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -73,6 +72,8 @@ spec:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6895ecfcd0b302dac0c620453554f66def5bb014e6ac0211044cab888f9a60df
             name: backstage
             env:
+            - name: CONTRACTS_REV
+              value: c6656a3b479e
             - name: CURATION_REV
               value: 1cc1f5a4af7a
     resource:
