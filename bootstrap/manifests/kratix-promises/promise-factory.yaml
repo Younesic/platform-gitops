@@ -306,7 +306,7 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:9a2e61a1b9fa754e50ffac55a59f3a3b987c6a5fdf73055f7d70ddecedf46b27
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             # La MÉTA-promesse n'est PAS une offre publique : son Template + sa fiche
             # restent réservés au plan plateforme/provider (pas les consommateurs).
             env:
@@ -340,7 +340,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:9038dca5b5165e49949106483972782a6568bc3d9fb85f560ea3d44556f93b64
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:5f2a13905bab88125b08810e96b2138e1f9b9d63b50a2fcffc2066149cd169e5
             volumeMounts:
             - name: git-creds
               mountPath: /kratix/secrets/git
