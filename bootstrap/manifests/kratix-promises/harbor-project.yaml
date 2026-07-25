@@ -1,0 +1,130 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: harbor-project
+  annotations:
+    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","public","storageQuotaGb","users","team","*"]}'
+    platform.kratix.io/provider: indus
+spec:
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: harborprojects.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: HarborProject
+        plural: harborprojects
+        singular: harborproject
+      scope: Namespaced
+      versions:
+      - name: v1alpha1
+        schema:
+          openAPIV3Schema:
+            properties:
+              spec:
+                properties:
+                  project:
+                    description: Nom du projet Harbor (le registre du fournisseur,
+                      ex. team-paiement).
+                    maxLength: 255
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  public:
+                    default: false
+                    description: Projet public (lecture anonyme des artefacts).
+                    type: boolean
+                  storageQuotaGb:
+                    default: -1
+                    description: "Quota de stockage du projet en Go (-1 = illimit\xE9\
+                      )."
+                    type: integer
+                  team:
+                    type: string
+                  users:
+                    description: "Usernames Keycloak membres du groupe \u2014 ce claim\
+                      \ g\xE8re LA liste compl\xE8te (1 claim par groupe)."
+                    items:
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    minItems: 1
+                    type: array
+                required:
+                - project
+                - users
+                - team
+                type: object
+            type: object
+        served: true
+        storage: true
+  destinationSelectors:
+  - matchLabels:
+      environment: platform
+  requiredPromises:
+  - name: harbor-base
+    version: v0.0.1
+  - name: teamaccess
+    version: v0.0.1
+  workflows:
+    config: {}
+    promise:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: promise-configure
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            name: backstage
+            env:
+            - name: UI_SCHEMA_REV
+              value: eb19a741c2ea
+            - name: CURATION_REV
+              value: 8d6474e96568
+    resource:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: instance-configure
+        spec:
+          containers:
+          - image: harbor.212-47-226-56.nip.io/platform/compound-renderer@sha256:1c02176ab0f52bed5758625fb09b80d683c10cec8706744872867f2848dd16d8
+            name: compound-renderer
+            env:
+            - name: COMPOUND_RECIPE
+              value: "api:\n  type: object\n  properties:\n    project:\n      description:\
+                \ Nom du projet Harbor (le registre du fournisseur, ex. team-paiement).\n\
+                \      maxLength: 255\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
+                \ string\n    public:\n      default: false\n      description: Projet\
+                \ public (lecture anonyme des artefacts).\n      type: boolean\n \
+                \   storageQuotaGb:\n      default: -1\n      description: Quota de\
+                \ stockage du projet en Go (-1 = illimit\xE9).\n      type: integer\n\
+                \    users:\n      description: Usernames Keycloak membres du groupe\
+                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
+                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
+                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
+                \    team:\n      type: string\n  required:\n  - project\n  - users\n\
+                \  - team\nchildren:\n- name: harbor-base\n  promise: harbor-base\n\
+                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
+                \ kind: HarborBase\n  spec:\n    group: harbor-${spec.project}\n \
+                \   project: ${spec.project}\n    public: ${spec.public}\n    storageQuotaGb:\
+                \ ${spec.storageQuotaGb}\n- name: teamaccess\n  promise: teamaccess\n\
+                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
+                \ kind: TeamAccess\n  spec:\n    group: team-${spec.project}\n   \
+                \ users: ${spec.users}\n"
+            - name: COMPOUND_STAGE
+              value: emit
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            name: backstage
+          jobOptions: {}
+          rbac: {}
+status:
+  workflows: 0
+  workflowsFailed: 0
+  workflowsSucceeded: 0
