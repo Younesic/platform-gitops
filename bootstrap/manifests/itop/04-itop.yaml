@@ -1,0 +1,131 @@
+# iTop — réglages non secrets (les secrets vivent dans itop-credentials,
+# généré dans le cluster par le hook PreSync).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itop-env
+  namespace: itop
+data:
+  ITOP_DB_HOST: itop-db.itop.svc.cluster.local
+  ITOP_DB_NAME: itop
+  ITOP_DB_USER: itop
+  ITOP_ADMIN_USER: admin
+  ITOP_REST_USER: svc-portal
+  ITOP_URL: https://itop.212-47-226-56.nip.io/
+  # L'OpenLDAP du cluster : LA MÊME doublure d'AD que Jenkins et SonarQube.
+  # Chez le client, seules ces quatre valeurs changent.
+  ITOP_LDAP_HOST: openldap.ldap.svc.cluster.local
+  ITOP_LDAP_PORT: "389"
+  ITOP_LDAP_BASE_DN: ou=users,dc=platform,dc=local
+  ITOP_LDAP_USER_QUERY: (uid=%1$s)
+  # Liaison de recherche laissée vide = liaison anonyme (comportement documenté
+  # par Combodo, et l'OpenLDAP du projet autorise la lecture anonyme).
+  # Chez un client qui l'interdit : renseigner un DN ici et le mot de passe par
+  # un Secret monté en variable ITOP_LDAP_BIND_PWD.
+  ITOP_LDAP_BIND_DN: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: itop-data
+  namespace: itop
+spec:
+  accessModes: [ ReadWriteOnce ]
+  storageClassName: sbs-default
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: itop
+  namespace: itop
+  labels: { app: itop }
+spec:
+  selector: { app: itop }
+  ports: [ { name: http, port: 80, targetPort: 80 } ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: itop
+  namespace: itop
+spec:
+  replicas: 1
+  # Recreate, PAS RollingUpdate : le volume est en ReadWriteOnce (sbs-default).
+  # Un rolling update laisserait le nouveau pod en Multi-Attach derrière l'ancien
+  # — c'est exactement le blocage vécu sur Harbor dans ce projet.
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: itop } }
+  template:
+    metadata: { labels: { app: itop } }
+    spec:
+      priorityClassName: platform-high
+      initContainers:
+        # 1) Le volume porte la racine web. On y déverse les sources pristine de
+        #    l'image, SANS jamais rien supprimer : conf/production/config-itop.php,
+        #    data/ et env-production/ (produits par l'installation) survivent.
+        - name: seed-webroot
+          image: harbor.212-47-226-56.nip.io/platform/itop:3.2.3-1@sha256:3a0ace8a2acb8f48f69184b9223bc9549495865bad1b3422ba1e796ba9e5a526
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              SRC=/opt/itop-src ; DST=/persist
+              want="$(cat "$SRC/.itop-image-version")"
+              have="$(cat "$DST/.itop-image-version" 2>/dev/null || echo none)"
+              if [ "$want" = "$have" ]; then
+                echo "[seed] sources déjà en place ($have) → rien à copier."
+                exit 0
+              fi
+              echo "[seed] déploiement des sources $want (présent : $have)"
+              cp -a "$SRC/." "$DST/"
+              chown -R www-data:www-data "$DST"
+              echo "[seed] terminé."
+          volumeMounts: [ { name: data, mountPath: /persist } ]
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: "1",  memory: 512Mi }
+        # 2) Installation sans interface + configuration. Idempotent : si la
+        #    configuration ET la base sont déjà là, il ne réinstalle RIEN.
+        #    Tant que MariaDB n'est pas prête, cet initContainer BLOQUE : le pod
+        #    ne devient jamais Ready, l'ingress renvoie 503 et iTop ne sert
+        #    jamais une page d'erreur ouverte (DoD f).
+        - name: install
+          image: harbor.212-47-226-56.nip.io/platform/itop:3.2.3-1@sha256:3a0ace8a2acb8f48f69184b9223bc9549495865bad1b3422ba1e796ba9e5a526
+          command: [/bin/sh, /scripts/install.sh]
+          envFrom:
+            - configMapRef: { name: itop-env }
+            - secretRef:    { name: itop-credentials }
+          volumeMounts:
+            - { name: data,    mountPath: /var/www/html }
+            - { name: scripts, mountPath: /scripts, readOnly: true }
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits:   { cpu: "2",  memory: 1Gi }
+      containers:
+        - name: itop
+          image: harbor.212-47-226-56.nip.io/platform/itop:3.2.3-1@sha256:3a0ace8a2acb8f48f69184b9223bc9549495865bad1b3422ba1e796ba9e5a526
+          ports: [ { containerPort: 80, name: http } ]
+          envFrom:
+            - configMapRef: { name: itop-env }
+          volumeMounts:
+            - { name: data, mountPath: /var/www/html }
+          readinessProbe:
+            httpGet: { path: /index.php, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /index.php, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits:   { cpu: "2",  memory: 1536Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: itop-data }
+        - name: scripts
+          configMap: { name: itop-install-scripts, defaultMode: 0555 }

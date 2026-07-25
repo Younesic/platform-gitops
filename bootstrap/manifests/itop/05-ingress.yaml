@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: itop
+  namespace: itop
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Pièces jointes iTop : aligné sur upload_max_filesize (32M) du php.ini de l'image.
+    nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+    # La compilation du modèle de données et les exports peuvent être longs.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [itop.212-47-226-56.nip.io]
+      secretName: itop-tls
+  rules:
+    - host: itop.212-47-226-56.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: itop
+                port: { number: 80 }

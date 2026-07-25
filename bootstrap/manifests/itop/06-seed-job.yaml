@@ -1,0 +1,135 @@
+# Jeu d'essai — Job PostSync REJOUABLE, 100 % par l'API REST.
+#
+# Pourquoi par REST et pas par un import XML : c'est le MÊME chemin que celui
+# qu'empruntera Backstage (IT2/IT4). Si le jeu d'essai se crée, l'API est
+# prouvée utilisable ; s'il échoue, on l'apprend ici plutôt qu'en IT4.
+#
+# Idempotent par construction : chaque objet est cherché par OQL avant d'être
+# créé. Rejouer le Job ne duplique rien (c'est aussi la moitié de la DoD (e)).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: itop-seed
+  namespace: itop
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 900
+  template:
+    metadata: { labels: { app: itop-seed } }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: alpine/k8s:1.35.3      # apporte curl ET jq
+          envFrom:
+            - configMapRef: { name: itop-env }
+            - secretRef:    { name: itop-credentials }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              ENDPOINT="http://itop.itop.svc.cluster.local/webservices/rest.php?version=1.3"
+
+              log() { echo "[itop-seed] $*"; }
+
+              log "Attente d'iTop..."
+              i=0
+              until curl -sf -o /dev/null "http://itop.itop.svc.cluster.local/index.php"; do
+                i=$((i+1)); [ "$i" -gt 60 ] && { log "iTop indisponible"; exit 1; }; sleep 5
+              done
+
+              # Les identifiants transitent par --data-urlencode (corps POST),
+              # jamais dans l'URL : ils ne finissent donc pas dans les journaux
+              # d'accès de l'ingress.
+              rest() {
+                curl -sS -m 60 -X POST "$ENDPOINT" \
+                  --data-urlencode "auth_user=${ITOP_ADMIN_USER}" \
+                  --data-urlencode "auth_pwd=${ITOP_ADMIN_PASSWORD}" \
+                  --data-urlencode "json_data=$1"
+              }
+
+              # id d'un objet désigné par OQL, ou chaîne vide.
+              find_id() {
+                rest "{\"operation\":\"core/get\",\"class\":\"$1\",\"key\":\"$2\",\"output_fields\":\"id\"}" \
+                  | jq -r 'if (.code==0 and (.objects|type=="object")) then (.objects|to_entries[0].value.key // "") else "" end'
+              }
+
+              # crée l'objet SEULEMENT s'il n'existe pas ; renvoie son id.
+              ensure() { # $1=classe $2=OQL $3=champs JSON $4=libellé
+                _id="$(find_id "$1" "$2")"
+                if [ -n "$_id" ]; then log "$4 : déjà présent (id=$_id)"; echo "$_id"; return 0; fi
+                _r="$(rest "{\"operation\":\"core/create\",\"class\":\"$1\",\"fields\":$3,\"comment\":\"jeu d'essai GitOps\",\"output_fields\":\"id\"}")"
+                _c="$(echo "$_r" | jq -r '.code')"
+                if [ "$_c" != "0" ]; then log "ÉCHEC création $4 : $_r"; exit 1; fi
+                _id="$(echo "$_r" | jq -r '.objects|to_entries[0].value.key')"
+                log "$4 : créé (id=$_id)"
+                echo "$_id"
+              }
+
+              # --- Contrôle d'accès : l'API répond-elle ? ---------------------
+              probe="$(rest '{"operation":"list_operations"}')"
+              if [ "$(echo "$probe" | jq -r '.code')" != "0" ]; then
+                log "L'API REST refuse l'appel : $probe"
+                exit 1
+              fi
+              log "API REST joignable ($(echo "$probe" | jq -r '.version'))."
+
+              # --- Organisation ----------------------------------------------
+              ensure Organization "SELECT Organization WHERE name='Plateforme'" \
+                '{"name":"Plateforme"}' "organisation Plateforme" >/dev/null
+
+              # --- Personnes, alignées sur l'annuaire LDAP -------------------
+              ensure Person "SELECT Person WHERE email='jdupont@platform.local'" \
+                '{"name":"Dupont","first_name":"Jean","org_id":{"name":"Plateforme"},"email":"jdupont@platform.local"}' \
+                "personne Jean Dupont" >/dev/null
+              ensure Person "SELECT Person WHERE email='mmartin@platform.local'" \
+                '{"name":"Martin","first_name":"Marie","org_id":{"name":"Plateforme"},"email":"mmartin@platform.local"}' \
+                "personne Marie Martin" >/dev/null
+
+              # --- Catalogue de services -------------------------------------
+              ensure ServiceFamily "SELECT ServiceFamily WHERE name='Plateforme'" \
+                '{"name":"Plateforme"}' "famille de services" >/dev/null
+              ensure Service "SELECT Service WHERE name='Plateforme interne'" \
+                '{"name":"Plateforme interne","org_id":{"name":"Plateforme"},"servicefamily_id":{"name":"Plateforme"},"description":"Ressources livrées par le portail interne"}' \
+                "service Plateforme interne" >/dev/null
+              ensure ServiceSubcategory "SELECT ServiceSubcategory WHERE name='Demande de ressource'" \
+                '{"name":"Demande de ressource","service_id":{"name":"Plateforme interne"}}' \
+                "sous-catégorie de service" >/dev/null
+
+              # --- Comptes LDAP : les personnes de l'annuaire deviennent des
+              #     utilisateurs iTop. C'est ce qui rend la connexion LDAP
+              #     démontrable (le module vérifie le mot de passe côté annuaire).
+              P_SDA="$(find_id URP_Profiles "SELECT URP_Profiles WHERE name='Service Desk Agent'")"
+              P_CHG="$(find_id URP_Profiles "SELECT URP_Profiles WHERE name='Change Approver'")"
+              if [ -n "$P_SDA" ]; then
+                ensure UserLDAP "SELECT UserLDAP WHERE login='jdupont'" \
+                  "{\"login\":\"jdupont\",\"contactid\":{\"email\":\"jdupont@platform.local\"},\"language\":\"FR FR\",\"profile_list\":[{\"profileid\":$P_SDA}]}" \
+                  "compte LDAP jdupont" >/dev/null
+              fi
+              if [ -n "$P_CHG" ]; then
+                ensure UserLDAP "SELECT UserLDAP WHERE login='mmartin'" \
+                  "{\"login\":\"mmartin\",\"contactid\":{\"email\":\"mmartin@platform.local\"},\"language\":\"FR FR\",\"profile_list\":[{\"profileid\":$P_CHG}]}" \
+                  "compte LDAP mmartin (approbateur de changement)" >/dev/null
+              fi
+
+              # --- Au moins un objet de CHAQUE classe visée par l'intégration --
+              ensure UserRequest "SELECT UserRequest WHERE title='Jeu d essai - demande de reference'" \
+                '{"title":"Jeu d essai - demande de reference","description":"Objet de reference cree par le GitOps pour valider la lecture OQL.","org_id":{"name":"Plateforme"},"caller_id":{"email":"jdupont@platform.local"},"service_id":{"name":"Plateforme interne"},"servicesubcategory_id":{"name":"Demande de ressource"},"origin":"portal"}' \
+                "demande de reference" >/dev/null
+              ensure NormalChange "SELECT NormalChange WHERE title='Jeu d essai - changement de reference'" \
+                '{"title":"Jeu d essai - changement de reference","description":"Objet de reference cree par le GitOps pour valider la lecture OQL.","org_id":{"name":"Plateforme"},"requestor_id":{"email":"jdupont@platform.local"}}' \
+                "changement de reference" >/dev/null
+
+              # --- Les références réelles, pour les preuves ------------------
+              log "Références du jeu d'essai :"
+              rest '{"operation":"core/get","class":"Change","key":"SELECT Change","output_fields":"ref,title,status"}' \
+                | jq -r '(.objects // {}) | to_entries[] | "  Change   \(.value.fields.ref) [\(.value.fields.status)] \(.value.fields.title)"'
+              rest '{"operation":"core/get","class":"UserRequest","key":"SELECT UserRequest","output_fields":"ref,title,status"}' \
+                | jq -r '(.objects // {}) | to_entries[] | "  Demande  \(.value.fields.ref) [\(.value.fields.status)] \(.value.fields.title)"'
+              log "Terminé."

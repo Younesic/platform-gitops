@@ -1,0 +1,328 @@
+# Logique d'installation d'iTop — DANS DES CONFIGMAPS, PAS DANS L'IMAGE.
+#
+# Raison : l'image est construite et poussée à la main (identifiants Harbor).
+# Si la logique d'installation y vivait, la moindre correction imposerait un
+# cycle build+push. Ici elle est modifiable par un simple commit GitOps.
+# L'image ne contient que « PHP + Apache + les sources iTop pristine ».
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itop-install-scripts
+  namespace: itop
+data:
+  # ---------------------------------------------------------------------------
+  # Fichier de réponses de l'installation sans interface.
+  # Modelé sur web/setup/unattended-install/xml_setup/itil-fresh-install.xml de
+  # la release 3.2.3-1 (doublons de balises du modèle d'origine retirés).
+  #
+  # sample_data = 0 : on ne veut PAS les données de démonstration de Combodo.
+  # Le jeu d'essai du projet est créé par le Job `itop-seed` via l'API REST,
+  # ce qui le rend rejouable et lisible dans Git.
+  #
+  # selected_extensions pilote le calcul des modules (--installation_xml). Les
+  # modules de catégorie « authentication » — dont authent-ldap — sont ajoutés
+  # AUTOMATIQUEMENT par InstallationFileService::ProcessDefaultModules(), à la
+  # condition que l'extension PHP ldap soit chargée (module.authent-ldap.php est
+  # enveloppé dans un if (function_exists('ldap_connect'))). C'est pour ça que
+  # le Dockerfile l'installe.
+  # ---------------------------------------------------------------------------
+  params.xml.tmpl: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <installation>
+      <mode>__MODE__</mode>
+      <preinstall></preinstall>
+      <source_dir>datamodels/2.x/</source_dir>
+      <datamodel_version>2.7.0</datamodel_version>
+      <previous_configuration_file>/var/www/html/conf/production/config-itop.php</previous_configuration_file>
+      <extensions_dir>extensions</extensions_dir>
+      <target_env>production</target_env>
+      <workspace_dir></workspace_dir>
+      <database>
+        <server>__DB_SERVER__</server>
+        <user>__DB_USER__</user>
+        <pwd>__DB_PWD__</pwd>
+        <name>__DB_NAME__</name>
+        <db_tls_enabled></db_tls_enabled>
+        <db_tls_ca></db_tls_ca>
+        <prefix></prefix>
+      </database>
+      <url>__URL__</url>
+      <graphviz_path>/usr/bin/dot</graphviz_path>
+      <admin_account>
+        <user>__ADMIN_USER__</user>
+        <pwd>__ADMIN_PWD__</pwd>
+        <language>FR FR</language>
+      </admin_account>
+      <language>FR FR</language>
+      <sample_data>0</sample_data>
+      <old_addon></old_addon>
+      <options type="array"/>
+      <mysql_bindir></mysql_bindir>
+      <selected_modules type="array"/>
+      <selected_extensions type="array">
+        <item>itop-config-mgmt-core</item>
+        <item>itop-config-mgmt-datacenter</item>
+        <item>itop-config-mgmt-end-user</item>
+        <item>itop-config-mgmt-storage</item>
+        <item>itop-config-mgmt-virtualization</item>
+        <item>itop-service-mgmt-enterprise</item>
+        <item>itop-ticket-mgmt-itil</item>
+        <item>itop-ticket-mgmt-itil-user-request</item>
+        <item>itop-ticket-mgmt-itil-incident</item>
+        <item>itop-ticket-mgmt-itil-enhanced-portal</item>
+        <item>itop-change-mgmt-itil</item>
+        <item>itop-kown-error-mgmt</item>
+      </selected_extensions>
+    </installation>
+
+  # ---------------------------------------------------------------------------
+  # Orchestrateur. Tourne en initContainer, PAS en Job hook.
+  #
+  # Pourquoi pas un Job PostSync comme harbor-oidc-config : ce Job-là ne parle
+  # qu'HTTP. Ici l'installation ÉCRIT sur le volume d'iTop (config compilée,
+  # env-production). Un Job séparé devrait donc monter le MÊME PVC que le pod
+  # iTop — or il est en ReadWriteOnce (sbs-default) : c'est le verrou
+  # Multi-Attach déjà payé sur Harbor dans ce projet. En initContainer, le
+  # problème n'existe pas et l'idempotence devient structurelle.
+  # ---------------------------------------------------------------------------
+  install.sh: |
+    #!/bin/sh
+    set -eu
+    umask 077
+
+    APPROOT=/var/www/html
+    CONF="$APPROOT/conf/production/config-itop.php"
+    PARAMS=/tmp/itop-params.xml
+    MYCNF=/tmp/itop-db.cnf
+
+    log() { echo "[itop-install] $*"; }
+
+    : "${ITOP_DB_HOST:?}" ; : "${ITOP_DB_NAME:?}" ; : "${ITOP_DB_USER:?}"
+    : "${MARIADB_PASSWORD:?}" ; : "${ITOP_ADMIN_USER:?}" ; : "${ITOP_ADMIN_PASSWORD:?}"
+    : "${ITOP_URL:?}"
+
+    # Identifiants de base dans un fichier 0600 : jamais sur une ligne de
+    # commande (sinon visibles dans `ps` depuis le conteneur).
+    cat > "$MYCNF" <<EOF
+    [client]
+    host=$ITOP_DB_HOST
+    user=$ITOP_DB_USER
+    password=$MARIADB_PASSWORD
+    EOF
+    db() { mariadb --defaults-extra-file="$MYCNF" "$@"; }
+
+    log "Attente de MariaDB sur $ITOP_DB_HOST ..."
+    i=0
+    until db -e "SELECT 1" "$ITOP_DB_NAME" >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -gt 120 ] && { log "ÉCHEC : MariaDB injoignable après 10 minutes."; exit 1; }
+      sleep 5
+    done
+    log "MariaDB répond."
+
+    # --- État réel, constaté des deux côtés ---------------------------------
+    # priv_module_install est la table d'historique d'installation d'iTop :
+    # sa présence signifie « cette base porte déjà une instance ».
+    DB_INSTALLED=0
+    if db -N -B -e "SHOW TABLES LIKE 'priv_module_install'" "$ITOP_DB_NAME" 2>/dev/null | grep -q .; then
+      DB_INSTALLED=1
+    fi
+    CONF_PRESENT=0
+    [ -f "$CONF" ] && CONF_PRESENT=1
+    log "état : configuration=$CONF_PRESENT base=$DB_INSTALLED"
+
+    MODE=""
+    if [ "$CONF_PRESENT" = "1" ] && [ "$DB_INSTALLED" = "1" ]; then
+      log "Déjà installé → AUCUNE réinstallation. On se contente de ré-appliquer la configuration."
+    elif [ "$CONF_PRESENT" = "0" ] && [ "$DB_INSTALLED" = "0" ]; then
+      MODE=install
+    elif [ "$CONF_PRESENT" = "0" ] && [ "$DB_INSTALLED" = "1" ]; then
+      # Volume applicatif perdu, base intacte : on régénère configuration et
+      # modèle compilé SANS toucher aux données (mode upgrade = ALTER, pas CREATE).
+      log "Configuration absente mais base installée → régénération (mode upgrade)."
+      MODE=upgrade
+    else
+      # Configuration orpheline : elle désigne une base qui ne contient pas
+      # d'iTop (volume de base perdu, ou pointage erroné). On l'écarte en la
+      # conservant comme pièce à conviction, puis on installe proprement.
+      log "ANOMALIE : configuration présente mais base VIDE. La configuration est mise de côté."
+      mv "$CONF" "$CONF.orphelin-$(date +%Y%m%d%H%M%S)"
+      MODE=install
+    fi
+
+    if [ -n "$MODE" ]; then
+      log "Installation sans interface — mode=$MODE"
+      sed -e "s|__MODE__|$MODE|" \
+          -e "s|__DB_SERVER__|$ITOP_DB_HOST|" \
+          -e "s|__DB_USER__|$ITOP_DB_USER|" \
+          -e "s|__DB_PWD__|$MARIADB_PASSWORD|" \
+          -e "s|__DB_NAME__|$ITOP_DB_NAME|" \
+          -e "s|__URL__|$ITOP_URL|" \
+          -e "s|__ADMIN_USER__|$ITOP_ADMIN_USER|" \
+          -e "s|__ADMIN_PWD__|$ITOP_ADMIN_PASSWORD|" \
+          /scripts/params.xml.tmpl > "$PARAMS"
+
+      mkdir -p "$APPROOT/conf/production" "$APPROOT/data" "$APPROOT/log" "$APPROOT/env-production"
+      chown -R www-data:www-data "$APPROOT/conf" "$APPROOT/data" "$APPROOT/log" "$APPROOT/env-production"
+
+      # --clean n'est JAMAIS passé : il ferait un DROP DATABASE.
+      cd "$APPROOT"
+      php setup/unattended-install/unattended-install.php \
+          --installation_xml="$APPROOT/datamodels/2.x/installation.xml" \
+          --param-file="$PARAMS"
+      rm -f "$PARAMS"
+      log "Installation terminée."
+    fi
+
+    # --- Configuration ré-appliquée à CHAQUE démarrage ----------------------
+    # Idempotent : c'est ce qui rend le LDAP, l'URL publique et le compte de
+    # service pilotables depuis Git sans réinstaller quoi que ce soit.
+    log "Application de la configuration (LDAP, URL, compte de service REST)."
+    cd "$APPROOT"
+    php /scripts/configure.php
+
+    chown -R www-data:www-data "$APPROOT"
+    rm -f "$MYCNF"
+    log "Terminé."
+
+  # ---------------------------------------------------------------------------
+  # Configuration post-installation, écrite avec les API d'iTop lui-même
+  # (classe Config, MetaModel) plutôt qu'en bricolant le fichier PHP à la main :
+  # une future version d'iTop peut changer le format du fichier, pas ses API.
+  # ---------------------------------------------------------------------------
+  configure.php: |
+    <?php
+    // Exécuté en CLI depuis /var/www/html après l'installation.
+    require_once('/var/www/html/approot.inc.php');
+    require_once(APPROOT.'/application/startup.inc.php');
+
+    function say($s) { echo "[itop-configure] $s\n"; }
+    function env_or($k, $d = '') { $v = getenv($k); return ($v === false || $v === '') ? $d : $v; }
+
+    $sConfigFile = APPCONF.'production/'.ITOP_CONFIG_FILE;
+    $oConfig = new Config($sConfigFile);
+
+    // --- URL publique --------------------------------------------------------
+    $sUrl = env_or('ITOP_URL');
+    if ($sUrl !== '') {
+        $oConfig->Set('app_root_url', $sUrl, 'GitOps');
+    }
+    // iTop est derrière ingress-nginx qui termine le TLS : sans ce drapeau il
+    // reconstruirait des URL en http:// et les redirections casseraient.
+    $oConfig->Set('behind_reverse_proxy', true, 'GitOps');
+
+    // --- Les services REST restent RÉSERVÉS ---------------------------------
+    // On le RÉ-AFFIRME explicitement : c'est ce réglage qui impose le profil
+    // « REST Services User ». Le laisser à false serait ouvrir l'API à tout
+    // compte authentifié.
+    $oConfig->Set('secure_rest_services', true, 'GitOps');
+
+    // --- Authentification LDAP ----------------------------------------------
+    // Le même annuaire OpenLDAP que Jenkins et SonarQube : la doublure de l'AD
+    // du client. Rien ici n'est propre à OpenLDAP — chez le client, seuls
+    // l'hôte, le DN de base et la requête changent (variables d'environnement).
+    $sLdapHost = env_or('ITOP_LDAP_HOST');
+    if ($sLdapHost !== '') {
+        $oConfig->SetModuleSetting('authent-ldap', 'host',         $sLdapHost);
+        $oConfig->SetModuleSetting('authent-ldap', 'port',         (int) env_or('ITOP_LDAP_PORT', '389'));
+        $oConfig->SetModuleSetting('authent-ldap', 'base_dn',      env_or('ITOP_LDAP_BASE_DN'));
+        $oConfig->SetModuleSetting('authent-ldap', 'user_query',   env_or('ITOP_LDAP_USER_QUERY', '(uid=%1$s)'));
+        // Liaison anonyme si default_user est vide (comportement documenté par
+        // Combodo). L'OpenLDAP du projet autorise la lecture anonyme ; chez un
+        // client qui l'interdit, on renseigne ces deux valeurs depuis un Secret.
+        $oConfig->SetModuleSetting('authent-ldap', 'default_user', env_or('ITOP_LDAP_BIND_DN'));
+        $oConfig->SetModuleSetting('authent-ldap', 'default_pwd',  env_or('ITOP_LDAP_BIND_PWD'));
+        $oConfig->SetModuleSetting('authent-ldap', 'options',      [17 => 3, 8 => 0]); // PROTOCOL_VERSION=3, REFERRALS=0
+        $oConfig->SetModuleSetting('authent-ldap', 'start_tls',    false);
+        $oConfig->SetModuleSetting('authent-ldap', 'debug',        false);
+        say("LDAP configuré sur $sLdapHost (base ".env_or('ITOP_LDAP_BASE_DN').")");
+    }
+
+    // Le fichier est passé en 0440 par l'installeur : on l'ouvre, on écrit, on referme.
+    @chmod($sConfigFile, 0770);
+    $oConfig->WriteToFile($sConfigFile);
+    @chmod($sConfigFile, 0440);
+    say('Configuration écrite.');
+
+    // --- Comptes -------------------------------------------------------------
+    // On repasse par le MetaModel avec la configuration fraîchement écrite.
+    MetaModel::ResetAllCaches();
+
+    $oCtx = new ContextTag(ContextTag::TAG_SETUP);
+    CMDBObject::SetTrackInfo('Amorçage GitOps (itop-install)');
+    CMDBObject::SetTrackOrigin('custom-extension');
+    UserRights::Login(env_or('ITOP_ADMIN_USER', 'admin'));
+
+    function profile_id($sName) {
+        $oSet = new DBObjectSet(DBObjectSearch::FromOQL('SELECT URP_Profiles WHERE name = :n'), [], ['n' => $sName]);
+        $o = $oSet->Fetch();
+        return $o ? $o->GetKey() : null;
+    }
+    function link_profiles($oUser, $aNames) {
+        $oLinks = $oUser->Get('profile_list');
+        $aExisting = $oLinks->GetColumnAsArray('profileid');
+        $bChanged = false;
+        foreach ($aNames as $sName) {
+            $iId = profile_id($sName);
+            if ($iId === null) { say("profil introuvable, ignoré : $sName"); continue; }
+            if (in_array($iId, $aExisting)) { continue; }
+            $oLnk = MetaModel::NewObject('URP_UserProfile');
+            $oLnk->Set('profileid', $iId);
+            $oLinks->AddItem($oLnk);
+            $bChanged = true;
+        }
+        if ($bChanged) { $oUser->Set('profile_list', $oLinks); }
+        return $bChanged;
+    }
+    function find_user($sLogin) {
+        $oSet = new DBObjectSet(DBObjectSearch::FromOQL('SELECT User WHERE login = :l'), [], ['l' => $sLogin]);
+        return $oSet->Fetch();
+    }
+
+    // 1) L'administrateur gagne « REST Services User » : c'est lui qui amorce le
+    //    jeu d'essai (organisations, personnes, comptes) via l'API REST, actes
+    //    qui exigent le profil Administrator.
+    $sAdmin = env_or('ITOP_ADMIN_USER', 'admin');
+    $oAdmin = find_user($sAdmin);
+    if ($oAdmin !== null) {
+        if (link_profiles($oAdmin, ['REST Services User'])) {
+            $oAdmin->DBUpdate();
+            say("profil « REST Services User » ajouté à $sAdmin");
+        } else {
+            say("$sAdmin possède déjà « REST Services User »");
+        }
+    } else {
+        say("ATTENTION : administrateur $sAdmin introuvable");
+    }
+
+    // 2) Le compte de service du portail. MOINDRE PRIVILÈGE VOLONTAIRE : il peut
+    //    créer/lire des demandes et des changements, rien d'autre. C'est ce
+    //    compte que Backstage utilisera (IT2/IT4/IT5/IT6), pas l'administrateur.
+    $sSvc    = env_or('ITOP_REST_USER', 'svc-portal');
+    $sSvcPwd = env_or('ITOP_REST_PASSWORD');
+    $aSvcProfiles = ['REST Services User', 'Service Desk Agent', 'Change Supervisor'];
+    $oSvc = find_user($sSvc);
+    if ($oSvc === null) {
+        if ($sSvcPwd === '') { say('ERREUR : ITOP_REST_PASSWORD vide, compte de service non créé'); exit(1); }
+        $oSvc = MetaModel::NewObject('UserLocal');
+        $oSvc->Set('login', $sSvc);
+        $oSvc->Set('password', $sSvcPwd);
+        $oSvc->Set('language', 'FR FR');
+        // Le mot de passe est géré par GitOps (Secret) : ne jamais exiger un
+        // changement au premier accès, ce compte n'a pas d'humain derrière.
+        if (MetaModel::IsValidAttCode('UserLocal', 'expiration')) { $oSvc->Set('expiration', 'never_expire'); }
+        link_profiles($oSvc, $aSvcProfiles);
+        $oSvc->DBInsert();
+        say("compte de service $sSvc créé (".implode(', ', $aSvcProfiles).')');
+    } else {
+        $bChanged = link_profiles($oSvc, $aSvcProfiles);
+        if ($sSvcPwd !== '' && !UserRights::CheckCredentials($sSvc, $sSvcPwd)) {
+            $oSvc->Set('password', $sSvcPwd);
+            $bChanged = true;
+            say("mot de passe de $sSvc réaligné sur le Secret");
+        }
+        if ($bChanged) { $oSvc->DBUpdate(); say("compte de service $sSvc mis à jour"); }
+        else { say("compte de service $sSvc déjà conforme"); }
+    }
+
+    say('Terminé.');

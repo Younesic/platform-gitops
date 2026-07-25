@@ -1,0 +1,25 @@
+# iTop — l'ITSM de répétition (doublure de celui du client, comme OpenLDAP est
+# la doublure de son AD). Une seule source : nos manifestes. Pas de chart Helm —
+# Combodo n'en publie pas, et l'image est construite depuis la release officielle.
+#
+# Enchaînement d'une synchronisation :
+#   PreSync  vague -1 : ServiceAccount + Role + RoleBinding d'amorçage
+#   PreSync  vague  0 : Job qui génère itop-credentials s'il n'existe pas
+#   Sync     vague -2 : Namespace  (R-TPL-7 : appliqué en premier, prune en dernier)
+#   Sync     vague  0 : MariaDB, ConfigMaps, PVC, Deployment, Service, Ingress
+#   PostSync          : Job de jeu d'essai (rejouable, par l'API REST)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: itop, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/itop
+  destination: { server: https://kubernetes.default.svc, namespace: itop }
+  syncPolicy:
+    # prune: false — le même choix que Harbor et Backstage. Un volume de base de
+    # données ne se supprime pas par accident de rendu.
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true, RespectIgnoreDifferences=true ]

@@ -1,0 +1,108 @@
+# Base de données d'iTop.
+#
+# Pourquoi MariaDB et pas CloudNativePG (le standard de ce cluster) : iTop ne
+# parle QUE MySQL/MariaDB (setuputils.class.inc.php : MYSQL_MIN_VERSION 5.7.0,
+# extension mysqli obligatoire). Postgres n'est pas une option, ce n'est pas un
+# choix de confort.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itop-db-config
+  namespace: itop
+data:
+  itop.cnf: |
+    [mysqld]
+    # iTop stocke des pièces jointes et des dumps : le paquet par défaut (16M sur
+    # certaines distributions) fait échouer l'import du modèle de données.
+    max_allowed_packet = 64M
+
+    # utf8mb4 de bout en bout (iTop 3.x écrit en utf8mb4 ; un jeu de caractères
+    # serveur différent produit des collations mixtes et des erreurs de jointure).
+    character_set_server = utf8mb4
+    collation_server     = utf8mb4_unicode_ci
+
+    # iTop ne garantit pas la compatibilité avec le mode STRICT : ses requêtes
+    # d'installation insèrent des chaînes vides dans des colonnes DATE.
+    sql_mode = NO_ENGINE_SUBSTITUTION
+
+    innodb_buffer_pool_size = 512M
+    innodb_file_per_table   = 1
+    max_connections         = 150
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: itop-db
+  namespace: itop
+  labels: { app: itop-db }
+spec:
+  clusterIP: None            # headless : identité stable du StatefulSet
+  selector: { app: itop-db }
+  ports: [ { name: mysql, port: 3306, targetPort: 3306 } ]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: itop-db
+  namespace: itop
+spec:
+  serviceName: itop-db
+  replicas: 1
+  selector: { matchLabels: { app: itop-db } }
+  template:
+    metadata: { labels: { app: itop-db } }
+    spec:
+      priorityClassName: platform-high
+      securityContext:
+        fsGroup: 999          # groupe mysql de l'image officielle
+      containers:
+        - name: mariadb
+          image: mariadb:10.11.18@sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: itop-credentials, key: MARIADB_ROOT_PASSWORD } }
+            - name: MARIADB_PASSWORD
+              valueFrom: { secretKeyRef: { name: itop-credentials, key: MARIADB_PASSWORD } }
+            - { name: MARIADB_DATABASE, value: itop }
+            - { name: MARIADB_USER,     value: itop }
+          ports: [ { containerPort: 3306, name: mysql } ]
+          volumeMounts:
+            - { name: data,   mountPath: /var/lib/mysql }
+            - { name: config, mountPath: /etc/mysql/conf.d }
+          # healthcheck.sh --su-mysql passe par la socket unix en authentification
+          # système : aucun mot de passe sur une ligne de commande (donc rien
+          # dans `ps` à l'intérieur du conteneur).
+          startupProbe:
+            exec: { command: [/usr/local/bin/healthcheck.sh, --su-mysql, --connect, --innodb_initialized] }
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck.sh, --su-mysql, --connect, --innodb_initialized] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec: { command: [/usr/local/bin/healthcheck.sh, --su-mysql, --connect] }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 200m, memory: 768Mi }
+            limits:   { cpu: "1",  memory: 1536Mi }
+      volumes:
+        - name: config
+          configMap: { name: itop-db-config }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ ReadWriteOnce ]
+        storageClassName: sbs-default
+        resources: { requests: { storage: 10Gi } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: itop-db
+  namespace: itop
+spec:
+  maxUnavailable: 1
+  selector: { matchLabels: { app: itop-db } }
