@@ -1,0 +1,148 @@
+# ── LE CONTENU ANSIBLE, ET SA DISTRIBUTION À AWX ─────────────────────────────
+#
+# Chez le client, un projet AWX pointe vers son GitLab. Ici les dépôts de la
+# plateforme sont privés (clés de déploiement) et l'instance AWX est une doublure :
+# on distribue le playbook par ARCHIVE HTTP servie dans le cluster (type de projet
+# « Remote Archive », natif AWX). Zéro identifiant, zéro dépendance sortante,
+# et le contenu reste dans Git — ici même.
+#
+# ⚠️ En modifiant le playbook, incrémenter `playbooks-revision` dans le modèle de
+# pod ci-dessous : c'est ce qui force la reconstruction de l'archive.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: awx-playbooks-src
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  legacy-marker.yml: |
+    ---
+    # Produit « service legacy » : configure un service sur une cible qui n'a
+    # AUCUNE API déclarative — on n'y accède qu'en SSH.
+    #
+    # Trois propriétés, et ce sont elles qui comptent :
+    #   · idempotent      — rejoué, il ne change rien (changed=0) ;
+    #   · paramétré       — les valeurs viennent du sondage / des extra_vars ;
+    #   · réversible      — marker_state=absent dé-provisionne réellement.
+    # La troisième est ce qui permettra au finalizer d'un opérateur de faire
+    # disparaître l'effet, au lieu de laisser un objet orphelin sur la cible.
+    - name: Service legacy sur cible sans API declarative
+      hosts: all
+      gather_facts: false
+      vars:
+        service_name: legacy-app
+        marker_content: "gere par la plateforme"
+        marker_state: present
+      tasks:
+        - name: Amorcer l'interpreteur Python (cible legacy)
+          # Le geste classique face à une cible qui n'a rien : `raw` ne demande
+          # pas d'interpréteur. changed_when: false — c'est un constat, pas un
+          # changement, et l'idempotence de la lecture ne doit pas être polluée.
+          ansible.builtin.raw: command -v python3 >/dev/null || apk add --no-cache python3
+          changed_when: false
+
+        - name: Repertoire d'installation
+          ansible.builtin.file:
+            path: /opt/legacy
+            state: directory
+            mode: "0755"
+          when: marker_state == "present"
+
+        - name: Fichier de configuration du service
+          ansible.builtin.copy:
+            dest: "/opt/legacy/{{ service_name }}.conf"
+            mode: "0644"
+            content: |
+              # genere par la plateforme - ne pas editer a la main
+              service={{ service_name }}
+              message={{ marker_content }}
+          when: marker_state == "present"
+
+        - name: Retrait du service (de-provisionnement)
+          ansible.builtin.file:
+            path: "/opt/legacy/{{ service_name }}.conf"
+            state: absent
+          when: marker_state == "absent"
+
+        - name: Etat constate sur la cible
+          ansible.builtin.stat:
+            path: "/opt/legacy/{{ service_name }}.conf"
+          register: marker
+
+        - name: Resultat
+          ansible.builtin.debug:
+            msg: "{{ service_name }} : fichier {{ 'PRESENT' if marker.stat.exists else 'ABSENT' }} sur {{ inventory_hostname }}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awx-playbooks
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels: { app: awx-playbooks }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: awx-playbooks }
+  template:
+    metadata:
+      labels: { app: awx-playbooks }
+      annotations:
+        # Incrémenter à chaque modification du playbook ci-dessus : ArgoCD ne
+        # redémarre pas un pod parce qu'une ConfigMap a changé.
+        playbooks-revision: "1"
+    spec:
+      priorityClassName: platform-high
+      volumes:
+        - name: src
+          configMap: { name: awx-playbooks-src }
+        - name: www
+          emptyDir: {}
+      initContainers:
+        - name: pack
+          image: alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc # alpine:3.20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 200m, memory: 64Mi }
+          volumeMounts:
+            - { name: src, mountPath: /src, readOnly: true }
+            - { name: www, mountPath: /www }
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              # Copie explicite puis archive : un montage de ConfigMap est un jeu
+              # de liens symboliques vers ..data/, `tar .` embarquerait ces
+              # répertoires internes.
+              mkdir -p /work && cp -L /src/*.yml /work/
+              tar czf /www/legacy-playbooks.tar.gz -C /work .
+              echo "archive: $(wc -c < /www/legacy-playbooks.tar.gz) octets, contenu:"
+              tar tzf /www/legacy-playbooks.tar.gz
+      containers:
+        - name: nginx
+          image: nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 # nginx:1.27-alpine
+          resources:
+            requests: { cpu: 10m, memory: 24Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          ports: [{ containerPort: 80, name: http }]
+          volumeMounts:
+            - { name: www, mountPath: /usr/share/nginx/html, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /legacy-playbooks.tar.gz, port: 80 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: awx-playbooks
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector: { app: awx-playbooks }
+  ports:
+    - { name: http, port: 80, targetPort: 80 }

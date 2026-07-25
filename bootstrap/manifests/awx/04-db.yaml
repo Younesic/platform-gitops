@@ -1,0 +1,35 @@
+# PostgreSQL CloudNativePG pour AWX (base « awx », propriétaire « awx »).
+#
+# Contrairement à iTop (MySQL/MariaDB uniquement), AWX parle PostgreSQL : la base
+# standard de la plateforme convient, et AWX la consomme comme base EXTERNE via
+# `postgres_configuration_secret` (Secret awx-postgres-configuration, amorçage 01).
+#
+# Le mot de passe du rôle vient du Secret awx-db-credentials créé par le Job
+# d'amorçage — CNPG ne génère donc PAS le sien, sinon AWX et la base auraient deux
+# mots de passe différents.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: awx-db
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: 1
+  priorityClassName: platform-high
+  # Épisode Kapsule 2026-07-22 : le chemin watch-list du control-plane gèle les
+  # reflectors client-go ≥0.36 (l'instance-manager CNPG crashait « timed out waiting
+  # for cache to be synced *v1.Cluster ») → même gate que Harbor et Kratix.
+  env:
+    - name: KUBE_FEATURE_WatchListClient
+      value: "false"
+  storage: { storageClass: sbs-default, size: 8Gi }
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits:   { cpu: "1", memory: 1Gi }
+  bootstrap:
+    initdb:
+      database: awx
+      owner: awx
+      secret:
+        name: awx-db-credentials

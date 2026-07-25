@@ -1,0 +1,57 @@
+# Client OIDC Keycloak pour AWX — identity-as-code (Crossplane provider-keycloak),
+# exactement le geste de Harbor et DependencyTrack.
+#
+# Client CONFIDENTIEL : le secret généré sort par writeConnectionSecretToRef vers le
+# Secret `awx-oidc-client` (clé `attribute.client_secret`), lu par le Job de jeu
+# d'essai (09) qui configure l'authentification par l'API. Le secret ne transite
+# donc ni par Git ni par un humain.
+#
+# Chemin de retour d'AWX : son backend générique s'appelle « oidc » (social-auth),
+# d'où /sso/complete/oidc/.
+apiVersion: openidclient.keycloak.crossplane.io/v1alpha1
+kind: Client
+metadata:
+  name: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  forProvider:
+    realmId: platform
+    clientId: awx
+    name: AWX
+    enabled: true
+    accessType: CONFIDENTIAL
+    standardFlowEnabled: true
+    implicitFlowEnabled: false
+    directAccessGrantsEnabled: false
+    rootUrl: https://awx.212-47-226-56.nip.io
+    validRedirectUris:
+      - https://awx.212-47-226-56.nip.io/sso/complete/oidc/
+    webOrigins:
+      - "+"
+  writeConnectionSecretToRef:
+    name: awx-oidc-client
+    namespace: awx
+  providerConfigRef:
+    name: default
+---
+# Mapper « groups » → claim `groups` : contrat one-identity du projet (team-<slug>).
+apiVersion: openidgroup.keycloak.crossplane.io/v1alpha1
+kind: GroupMembershipProtocolMapper
+metadata:
+  name: awx-groups
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  forProvider:
+    realmId: platform
+    clientIdRef:
+      name: awx
+    name: groups
+    claimName: groups
+    fullPath: false
+    addToIdToken: true
+    addToAccessToken: true
+    addToUserinfo: true
+  providerConfigRef:
+    name: default

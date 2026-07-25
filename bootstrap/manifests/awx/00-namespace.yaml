@@ -1,0 +1,15 @@
+# Le namespace est appliqué en PREMIER (sync-wave -2) et prune EN DERNIER.
+# Gotcha R-TPL-7 du projet : ArgoCD lance `kubectl auth reconcile` sur le RBAC
+# indépendamment des vagues et exige le namespace préexistant.
+#
+# PAS d'injection Istio : AWX parle SSH à des cibles hors mesh et l'opérateur
+# pilote des Deployments qu'il ne connaît pas ; un sidecar n'apporterait rien
+# et compliquerait le diagnostic.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app.kubernetes.io/part-of: platform

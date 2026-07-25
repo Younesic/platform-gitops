@@ -1,0 +1,81 @@
+# L'instance AWX elle-même. C'est l'opérateur (03) qui en dérive web, task, redis,
+# le Service et l'Ingress.
+#
+# Vague 3 : l'opérateur (vague 1) doit tourner avant que ce CR n'ait un sens, et sa
+# CRD (vague 0) doit exister avant même que le plan de synchronisation soit validé.
+# SkipDryRunOnMissingResource couvre la toute première synchronisation, quand
+# awxs.awx.ansible.com n'est pas encore enregistrée — le deadlock vécu avec
+# provider-terraform.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  # ── Identité et base ────────────────────────────────────────────────────────
+  admin_user: admin
+  admin_password_secret: awx-admin-password          # créé par l'amorçage (01)
+  postgres_configuration_secret: awx-postgres-configuration
+  # Pas de jeu de démonstration : il crée une organisation « Default », un projet
+  # pointant vers un dépôt GitHub public et un job template factices. Notre jeu
+  # d'essai (09) est explicite et rejouable ; celui-ci ajouterait une dépendance
+  # réseau au démarrage et du bruit dans la démonstration.
+  create_preload_data: false
+
+  # ── Exposition ──────────────────────────────────────────────────────────────
+  service_type: ClusterIP
+  ingress_type: ingress
+  ingress_class_name: nginx
+  hostname: awx.212-47-226-56.nip.io
+  ingress_tls_secret: awx-tls
+  ingress_annotations: |
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+  # Django 4 vérifie l'en-tête Origin contre CSRF_TRUSTED_ORIGINS. Derrière un
+  # ingress qui termine le TLS, sans cette ligne toute soumission de formulaire
+  # (dont la connexion) part en 403 « CSRF verification failed ».
+  extra_settings:
+    - setting: CSRF_TRUSTED_ORIGINS
+      value: "['https://awx.212-47-226-56.nip.io']"
+
+  # ── Ordonnancement et taille ────────────────────────────────────────────────
+  control_plane_priority_class: platform-high
+  # Les nœuds sont déjà réservés à ~90 % en mémoire : on dimensionne pour de vrai.
+  # uwsgi lance par défaut 5 processus Django (≈150 Mio chacun) — deux suffisent
+  # largement pour un portail de démonstration.
+  uwsgi_processes: 2
+  web_resource_requirements:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { cpu: "1500m", memory: 2Gi }
+  task_resource_requirements:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { cpu: "1500m", memory: 2Gi }
+  ee_resource_requirements:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { cpu: "1", memory: 1Gi }
+  redis_resource_requirements:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits:   { cpu: 200m, memory: 256Mi }
+  init_container_resource_requirements:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits:   { cpu: 500m, memory: 256Mi }
+
+  # Pas de volume de projets : le seul projet est distribué par archive HTTP (08),
+  # AWX le retélécharge à chaque lancement. Un PVC ReadWriteOnce serait de toute
+  # façon indisponible aux deux déploiements web et task à la fois (sbs-default = RWO).
+  projects_persistence: false
+
+  # ── Environnement d'exécution, épinglé par empreinte ────────────────────────
+  # Le catalogue par défaut de l'opérateur enregistre « awx-ee:latest » — un tag
+  # mouvant (rebâti en 2026). On n'expose qu'un environnement, épinglé.
+  control_plane_ee_image: quay.io/ansible/awx-ee@sha256:89593d2a0268acacdbd1c075d8810ab50d961cf7769e36de19219bb6cb4efcc1
+  # Le nom doit rester EXACTEMENT celui que cherche le jeu d'essai (09, EE_NAME).
+  ee_images:
+    - name: AWX EE 24.6.1
+      image: quay.io/ansible/awx-ee@sha256:89593d2a0268acacdbd1c075d8810ab50d961cf7769e36de19219bb6cb4efcc1

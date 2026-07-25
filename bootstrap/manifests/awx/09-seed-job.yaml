@@ -1,0 +1,261 @@
+# ── JEU D'ESSAI AWX (rejouable) ──────────────────────────────────────────────
+# Hook PostSync : tout est créé PAR L'API, jamais à la main dans l'interface.
+# Chaque objet est cherché par son nom avant d'être créé — rejouer le Job ne
+# produit donc aucun doublon (c'est la DoD (f)).
+#
+# Il fait quatre choses :
+#   1. l'authentification OIDC Keycloak (le secret client vient de Crossplane et ne
+#      passe ni par Git ni par un humain — geste identique au Job OIDC de Harbor) ;
+#   2. l'organisation / l'inventaire / la cible témoin / l'identifiant machine ;
+#   3. le projet (archive HTTP servie par 08) et le job template AVEC SON SONDAGE —
+#      ce sondage est le point de comparaison du contrat dérivé d'AN4 ;
+#   4. un JETON d'API rangé dans le Secret awx-api-token : c'est LUI que
+#      l'opérateur Ansible d'AN2 utilisera, jamais le mot de passe administrateur.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: awx-seed
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: awx-seed
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+rules:
+  # `get` : lire le secret du client OIDC produit par Crossplane.
+  # `create`/`patch` : ranger le jeton d'API — celui-là DOIT pouvoir être remplacé
+  # (un jeton devenu invalide, base recréée, doit être renouvelé).
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-seed
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: awx-seed }
+subjects:
+  - { kind: ServiceAccount, name: awx-seed, namespace: awx }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: awx-seed
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    metadata: { labels: { app: awx-seed } }
+    spec:
+      restartPolicy: Never
+      serviceAccountName: awx-seed
+      priorityClassName: platform-high
+      volumes:
+        - name: admin
+          secret:
+            secretName: awx-admin-password
+            items: [{ key: password, path: admin-password }]
+        - name: sshkey
+          secret:
+            secretName: awx-legacy-ssh
+            items: [{ key: ssh-privatekey, path: ssh-privatekey }]
+      containers:
+        - name: seed
+          image: alpine/k8s@sha256:097aa60cbef561146757c7494468e9d7b04d843597ad1a1515ed09d0708c8014 # alpine/k8s:1.35.3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits:   { cpu: 500m, memory: 384Mi }
+          volumeMounts:
+            - { name: admin,  mountPath: /creds,  readOnly: true }
+            - { name: sshkey, mountPath: /sshkey, readOnly: true }
+          env:
+            - { name: AWX_HOST,      value: "http://awx-service.awx.svc.cluster.local" }
+            - { name: KEYCLOAK_ISSUER, value: "https://keycloak.212-47-226-56.nip.io/realms/platform" }
+            - { name: ORG_NAME,      value: "Plateforme" }
+            - { name: INV_NAME,      value: "Parc legacy" }
+            - { name: HOST_NAME,     value: "legacy-vm-01" }
+            - { name: CRED_NAME,     value: "legacy-vm-ssh" }
+            - { name: PROJECT_NAME,  value: "Playbooks legacy" }
+            - { name: JT_NAME,       value: "legacy-service" }
+            - { name: EE_NAME,       value: "AWX EE 24.6.1" }
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              API="$AWX_HOST/api/v2"
+              AUTH="admin:$(cat /creds/admin-password)"
+
+              # ── outils ────────────────────────────────────────────────────────
+              # `must_id` : rien ne se poursuit sur une création silencieusement
+              # ratée (défaut fermé). Le corps de la réponse est affiché pour le
+              # diagnostic — l'API AWX ne renvoie jamais de secret en clair.
+              must_id() {
+                out=$(cat); id=$(printf '%s' "$out" | jq -r '.id // empty')
+                if [ -z "$id" ]; then echo "ERREUR creation $1 :" >&2; printf '%s\n' "$out" | head -c 1500 >&2; exit 1; fi
+                printf '%s' "$id"
+              }
+              find_id() { curl -sS -u "$AUTH" -G --data-urlencode "name=$2" "$API/$1/" | jq -r '.results[0].id // empty'; }
+              post() { curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' --data-binary "$2" "$API$1"; }
+              patch() { curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' --data-binary "$2" "$API$1"; }
+
+              # ── 0. attendre qu'AWX réponde ────────────────────────────────────
+              echo "== attente de l'API AWX =="
+              i=0
+              until curl -sf -o /dev/null "$API/ping/"; do
+                i=$((i+1)); [ "$i" -lt 120 ] || { echo "ERREUR: API AWX injoignable apres 20 min"; exit 1; }
+                sleep 10
+              done
+              curl -sS "$API/ping/" | jq -c '{version, active_node, ha}'
+
+              # ── 1. authentification OIDC Keycloak ─────────────────────────────
+              # Le secret du client est produit par Crossplane (06). On l'attend :
+              # sans lui, on ne configure PAS une authentification à moitié.
+              echo "== authentification OIDC =="
+              i=0
+              until kubectl -n awx get secret awx-oidc-client >/dev/null 2>&1; do
+                i=$((i+1)); [ "$i" -lt 24 ] || { echo "ERREUR: secret awx-oidc-client absent apres 4 min (Crossplane ?)"; exit 1; }
+                sleep 10
+              done
+              OIDC_SECRET=$(kubectl -n awx get secret awx-oidc-client -o jsonpath='{.data.attribute\.client_secret}' | base64 -d)
+              [ -n "$OIDC_SECRET" ] || { echo "ERREUR: client_secret vide"; exit 1; }
+              jq -n --arg s "$OIDC_SECRET" --arg e "$KEYCLOAK_ISSUER" \
+                '{SOCIAL_AUTH_OIDC_KEY:"awx", SOCIAL_AUTH_OIDC_SECRET:$s, SOCIAL_AUTH_OIDC_OIDC_ENDPOINT:$e, SOCIAL_AUTH_OIDC_VERIFY_SSL:true}' \
+                > /tmp/oidc.json
+              patch /settings/authentication/ "@/tmp/oidc.json" | jq -c '{SOCIAL_AUTH_OIDC_KEY, SOCIAL_AUTH_OIDC_OIDC_ENDPOINT, SOCIAL_AUTH_OIDC_VERIFY_SSL}'
+              rm -f /tmp/oidc.json
+              unset OIDC_SECRET
+
+              # ── 2. organisation, inventaire, cible ────────────────────────────
+              echo "== organisation / inventaire / cible =="
+              ORG=$(find_id organizations "$ORG_NAME")
+              [ -n "$ORG" ] || ORG=$(post /organizations/ "$(jq -nc --arg n "$ORG_NAME" '{name:$n, description:"Offres de la plateforme self-service"}')" | must_id organisation)
+              echo "organisation=$ORG"
+
+              INV=$(find_id inventories "$INV_NAME")
+              [ -n "$INV" ] || INV=$(post /inventories/ "$(jq -nc --arg n "$INV_NAME" --argjson o "$ORG" '{name:$n, organization:$o, description:"Cibles sans API Kubernetes"}')" | must_id inventaire)
+              echo "inventaire=$INV"
+
+              HOSTVARS=$(jq -nc '{
+                ansible_host:"legacy-vm.awx.svc.cluster.local",
+                ansible_user:"root",
+                ansible_port:22,
+                ansible_python_interpreter:"/usr/bin/python3",
+                ansible_ssh_common_args:"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+              }')
+              HST=$(find_id hosts "$HOST_NAME")
+              [ -n "$HST" ] || HST=$(post /hosts/ "$(jq -nc --arg n "$HOST_NAME" --argjson i "$INV" --arg v "$HOSTVARS" '{name:$n, inventory:$i, variables:$v, description:"Serveur legacy temoin - joignable uniquement en SSH"}')" | must_id hote)
+              echo "hote=$HST"
+
+              # ── 3. identifiant machine (clé SSH) ──────────────────────────────
+              echo "== identifiant machine =="
+              CT=$(find_id credential_types "Machine")
+              [ -n "$CT" ] || { echo "ERREUR: type d'identifiant Machine introuvable"; exit 1; }
+              CRED=$(find_id credentials "$CRED_NAME")
+              if [ -z "$CRED" ]; then
+                # --rawfile conserve le saut de ligne final : AWX refuse une clé
+                # privée qui n'en a pas.
+                jq -n --arg n "$CRED_NAME" --argjson o "$ORG" --argjson t "$CT" --rawfile k /sshkey/ssh-privatekey \
+                  '{name:$n, organization:$o, credential_type:$t, inputs:{username:"root", ssh_key_data:$k}}' > /tmp/cred.json
+                CRED=$(post /credentials/ "@/tmp/cred.json" | must_id identifiant)
+                rm -f /tmp/cred.json
+              fi
+              echo "identifiant=$CRED"
+
+              # ── 4. projet (archive HTTP) ──────────────────────────────────────
+              echo "== projet =="
+              PRJ=$(find_id projects "$PROJECT_NAME")
+              [ -n "$PRJ" ] || PRJ=$(post /projects/ "$(jq -nc --arg n "$PROJECT_NAME" --argjson o "$ORG" \
+                    '{name:$n, organization:$o, scm_type:"archive", scm_url:"http://awx-playbooks.awx.svc.cluster.local/legacy-playbooks.tar.gz", scm_update_on_launch:true, description:"Playbooks du parc legacy, distribues par archive HTTP"}')" | must_id projet)
+              echo "projet=$PRJ"
+              # Le job template refuse un playbook que le projet n'a pas encore vu :
+              # on attend la fin de la synchronisation.
+              i=0
+              while :; do
+                ST=$(curl -sS -u "$AUTH" "$API/projects/$PRJ/" | jq -r '.status')
+                case "$ST" in
+                  successful) echo "projet synchronise"; break;;
+                  failed|error|canceled) echo "ERREUR: synchronisation du projet en $ST"; curl -sS -u "$AUTH" "$API/projects/$PRJ/" | jq -c '{status, scm_url}'; exit 1;;
+                esac
+                i=$((i+1)); [ "$i" -lt 60 ] || { echo "ERREUR: projet toujours en '$ST' apres 5 min"; exit 1; }
+                sleep 5
+              done
+              curl -sS -u "$AUTH" "$API/projects/$PRJ/playbooks/" | jq -c .
+
+              # ── 5. job template + sondage ─────────────────────────────────────
+              echo "== job template =="
+              EE=$(find_id execution_environments "$EE_NAME")
+              JT=$(find_id job_templates "$JT_NAME")
+              if [ -z "$JT" ]; then
+                # ask_variables_on_launch : SANS lui, AWX IGNORE les extra_vars
+                # passées au lancement — c'est-à-dire tout ce qu'un opérateur
+                # Kubernetes voudra transmettre depuis le spec d'un CR (AN2).
+                jq -nc --arg n "$JT_NAME" --argjson i "$INV" --argjson p "$PRJ" \
+                  '{name:$n, job_type:"run", inventory:$i, project:$p, playbook:"legacy-marker.yml",
+                    ask_variables_on_launch:true, become_enabled:false, verbosity:1,
+                    description:"Configure un service sur une cible legacy (SSH uniquement)"}' > /tmp/jt.json
+                JT=$(post /job_templates/ "@/tmp/jt.json" | must_id "job template")
+                rm -f /tmp/jt.json
+              fi
+              echo "job template=$JT"
+              [ -z "$EE" ] || patch "/job_templates/$JT/" "$(jq -nc --argjson e "$EE" '{execution_environment:$e}')" > /dev/null
+              # Rattachement de l'identifiant (idempotent : AWX ignore un doublon).
+              post "/job_templates/$JT/credentials/" "$(jq -nc --argjson c "$CRED" '{id:$c}')" > /dev/null || true
+
+              # Le SONDAGE : la forme du contrat côté AWX. C'est lui qu'AN4 devra
+              # retrouver, dérivé de meta/argument_specs.yml, sans le ressaisir.
+              cat > /tmp/survey.json <<'SURVEY'
+              {
+                "name": "Parametres du service legacy",
+                "description": "Ce que le demandeur choisit",
+                "spec": [
+                  {"question_name":"Nom du service","question_description":"Identifiant technique du service sur la cible","variable":"service_name","type":"text","required":true,"default":"legacy-app","min":1,"max":63},
+                  {"question_name":"Message de configuration","question_description":"Ecrit dans le fichier de configuration du service","variable":"marker_content","type":"text","required":true,"default":"gere par la plateforme","min":1,"max":255},
+                  {"question_name":"Etat attendu","question_description":"present = le service est configure ; absent = il est retire","variable":"marker_state","type":"multiplechoice","required":true,"default":"present","choices":"present\nabsent"}
+                ]
+              }
+              SURVEY
+              post "/job_templates/$JT/survey_spec/" "@/tmp/survey.json" > /dev/null
+              patch "/job_templates/$JT/" '{"survey_enabled":true}' > /dev/null
+              rm -f /tmp/survey.json
+              curl -sS -u "$AUTH" "$API/job_templates/$JT/" | jq -c '{id, name, playbook, survey_enabled, ask_variables_on_launch}'
+
+              # ── 6. jeton d'API pour l'opérateur (AN2) ─────────────────────────
+              echo "== jeton d'API =="
+              NEED_TOKEN=1
+              if kubectl -n awx get secret awx-api-token >/dev/null 2>&1; then
+                T=$(kubectl -n awx get secret awx-api-token -o jsonpath='{.data.token}' | base64 -d)
+                if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
+                  echo "jeton existant valide -> inchange (idempotent)."; NEED_TOKEN=0
+                else
+                  echo "jeton existant INVALIDE -> renouvellement."
+                fi
+                unset T
+              fi
+              if [ "$NEED_TOKEN" -eq 1 ]; then
+                post /tokens/ '{"description":"platform-ansible-operator","scope":"write"}' | jq -r '.token // empty' > /tmp/token
+                [ -s /tmp/token ] || { echo "ERREUR: creation du jeton d'API"; exit 1; }
+                kubectl -n awx create secret generic awx-api-token --from-file=token=/tmp/token \
+                  --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+                rm -f /tmp/token
+                echo "awx-api-token cree/renouvele (valeur jamais affichee)."
+              fi
+
+              echo "== jeu d'essai termine =="

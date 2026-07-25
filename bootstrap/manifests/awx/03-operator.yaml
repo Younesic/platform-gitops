@@ -1,0 +1,407 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# awx-operator 2.19.1 — RBAC + manager, RENDU VENDORISÉ (ne pas éditer à la main)
+#
+# Écarts ASSUMÉS par rapport au rendu brut — ce sont les seuls :
+#   1. Namespace retiré      → géré par 00-namespace.yaml (R-TPL-7, vague -2).
+#   2. imagePullSecrets      → `redhat-operators-pull-secret` retiré : ce Secret n'existe
+#                              pas ici et quay.io/ansible est public (sinon
+#                              FailedToRetrieveImagePullSecret à chaque démarrage).
+#   3. manager_auth_proxy_patch NON appliqué → pas de sidecar
+#                              gcr.io/kubebuilder/kube-rbac-proxy (registre déprécié ;
+#                              une image non tirable = opérateur jamais Ready).
+#                              Sans conséquence : le manager expose ses métriques sur
+#                              127.0.0.1:8080 (controller_manager_config) — rien à protéger.
+#   4. priorityClassName: platform-high (convention plateforme).
+#   5. env RELATED_IMAGE_*   → LE levier d'épinglage par EMPREINTE des images AWX :
+#                              l'opérateur les utilise telles quelles
+#                              (roles/installer/tasks/resources_configuration.yml:231,246
+#                               et set_images.yml). Sans elles il composerait `image:tag`,
+#                              et un tag est mouvant (awx-ee:latest a été rebâti en 2026).
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: awx-operator-controller-manager
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: awx-operator-awx-manager-role
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+rules:
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  - routes/custom-host
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - services
+  - services/finalizers
+  - serviceaccounts
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  - configmaps
+  - secrets
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - get
+  - list
+  - create
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - apps
+  resourceNames:
+  - awx-operator
+  resources:
+  - deployments/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments/scale
+  - statefulsets/scale
+  verbs:
+  - patch
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  - pods/attach
+  - pods/log
+  verbs:
+  - create
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - awx.ansible.com
+  resources:
+  - '*'
+  - awxbackups
+  - awxrestores
+  verbs:
+  - '*'
+- apiGroups:
+  - traefik.containo.us
+  - traefik.io
+  resources:
+  - ingressroutetcps
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: awx-operator-leader-election-role
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: awx-operator-metrics-reader
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: awx-operator-proxy-role
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-operator-awx-manager-rolebinding
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: awx-operator-awx-manager-role
+subjects:
+- kind: ServiceAccount
+  name: awx-operator-controller-manager
+  namespace: awx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-operator-leader-election-rolebinding
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: awx-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: awx-operator-controller-manager
+  namespace: awx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: awx-operator-proxy-rolebinding
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: awx-operator-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: awx-operator-controller-manager
+  namespace: awx
+---
+apiVersion: v1
+data:
+  controller_manager_config.yaml: "apiVersion: controller-runtime.sigs.k8s.io/v1alpha1\nkind: ControllerManagerConfig\nhealth:\n  healthProbeBindAddress: :6789\nmetrics:\n  bindAddress: 127.0.0.1:8080\n\nleaderElection:\n  leaderElect: true\n  resourceName: 811c9dc5.ansible.com\n# leaderElectionReleaseOnCancel defines if the leader should step down volume\n# when the Manager ends. This requires the binary to immediately end when the\n# Manager is stopped, otherwise, this setting is unsafe. Setting this significantly\n# speeds up voluntary leader transitions as the new leader don't have to wait\n# LeaseDuration time first.\n# In the default scaffold provided, the program ends immediately after\n# the manager stops, so would be fine to enable this option. However,\n# if you are doing or is intended to do any operation such as perform cleanups\n# after the manager stops then its usage might be unsafe.\n# leaderElectionReleaseOnCancel: true\n"
+kind: ConfigMap
+metadata:
+  name: awx-operator-awx-manager-config
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: awx-operator-controller-manager-metrics-service
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '0'
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: awx-operator-controller-manager
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: '1'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: awx-manager
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --leader-elect
+        - --leader-election-id=awx-operator
+        env:
+        - name: ANSIBLE_GATHERING
+          value: explicit
+        - name: ANSIBLE_DEBUG_LOGS
+          value: 'false'
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DEFAULT_AWX_VERSION
+          value: 24.6.1
+        - name: RELATED_IMAGE_AWX
+          value: quay.io/ansible/awx@sha256:5d47e132014ae4c6a026a2e8f19ce7b3cf3c8f313d59e44fdfa95cd9f3669209
+        - name: RELATED_IMAGE_CONTROL_PLANE_EE
+          value: quay.io/ansible/awx-ee@sha256:89593d2a0268acacdbd1c075d8810ab50d961cf7769e36de19219bb6cb4efcc1
+        - name: RELATED_IMAGE_AWX_INIT_CONTAINER
+          value: quay.io/ansible/awx-ee@sha256:89593d2a0268acacdbd1c075d8810ab50d961cf7769e36de19219bb6cb4efcc1
+        - name: RELATED_IMAGE_AWX_INIT_PROJECTS_CONTAINER
+          value: quay.io/centos/centos@sha256:3714c89f1903dac5a5e1eb6c02d84189ff6d962a0c18df01feba0a5406856926
+        - name: RELATED_IMAGE_AWX_REDIS
+          value: docker.io/redis@sha256:a8f08480e1f88f2647fed492d1178c06abb0d0c1fbf02c682a61e2f483fb3954
+        image: quay.io/ansible/awx-operator@sha256:7302e0c8e5a79c11275848b36c63c61d8e7487840164c109b7cda9aa93456901
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 6789
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: awx-manager
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 6789
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 1500m
+            memory: 960Mi
+          requests:
+            cpu: 50m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: awx-operator-controller-manager
+      terminationGracePeriodSeconds: 10
+      priorityClassName: platform-high

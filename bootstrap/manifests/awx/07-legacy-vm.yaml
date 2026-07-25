@@ -1,0 +1,112 @@
+# ── LA « VM LEGACY » TÉMOIN ──────────────────────────────────────────────────
+# Un serveur qui n'a PAS d'API Kubernetes : on ne l'atteint qu'en SSH, exactement
+# comme une VM, une appliance ou un serveur Windows du parc d'une banque.
+#
+# C'est la pièce qui donne sa valeur à tout le reste : sans cible réelle, la chaîne
+# marketplace → PR → AWX → Ansible ne fait que se parler à elle-même.
+#
+# Ce qu'elle prouve : le chemin (clé SSH, identifiant machine, inventaire, effet
+# observable et idempotent). Ce qu'elle ne prouve pas : le comportement d'un OS
+# complet — c'est un pod, pas une machine (limite écrite dans RESULTS.json).
+#
+# Le disque /opt/legacy est un VOLUME PERSISTANT : un vrai serveur garde son état
+# au redémarrage. Sans lui, un simple redémarrage du pod effacerait l'effet et on
+# confondrait « dérive » et « redémarrage » — ce qui rendrait la preuve de
+# réconciliation d'AN2 ininterprétable.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: legacy-vm-disk
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: sbs-default
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-vm
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels: { app: legacy-vm }
+spec:
+  replicas: 1
+  # Recreate et non RollingUpdate : le volume est ReadWriteOnce (sbs-default), deux
+  # pods simultanés se bloqueraient en Multi-Attach — le piège déjà vécu sur Harbor.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: legacy-vm }
+  template:
+    metadata:
+      labels: { app: legacy-vm }
+    spec:
+      priorityClassName: platform-high
+      volumes:
+        - name: authorized
+          secret:
+            secretName: awx-legacy-ssh
+            defaultMode: 0400
+            items:
+              - { key: ssh-publickey, path: authorized_keys }
+        - name: disk
+          persistentVolumeClaim: { claimName: legacy-vm-disk }
+        - name: run
+          emptyDir: {}
+      containers:
+        - name: sshd
+          image: alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc # alpine:3.20
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          ports: [{ containerPort: 22, name: ssh }]
+          volumeMounts:
+            - { name: authorized, mountPath: /keys, readOnly: true }
+            - { name: disk, mountPath: /opt/legacy }
+            - { name: run, mountPath: /run }
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              # openssh-server pour le SSH, python3 parce qu'Ansible pilote ses
+              # modules par un interpréteur sur la CIBLE. Dépendance d'egress vers
+              # le miroir Alpine, assumée et BRUYANTE : si elle tombe, le pod ne
+              # démarre pas (jamais un demi-serveur qui répond).
+              apk add --no-cache openssh-server python3 >/dev/null
+              ssh-keygen -A
+              mkdir -p /root/.ssh
+              install -m 600 /keys/authorized_keys /root/.ssh/authorized_keys
+              chmod 700 /root/.ssh
+              echo "cible legacy prête : $(python3 -V 2>&1), $(/usr/sbin/sshd -V 2>&1 | head -1)"
+              exec /usr/sbin/sshd -D -e \
+                -o PermitRootLogin=prohibit-password \
+                -o PasswordAuthentication=no \
+                -o PubkeyAuthentication=yes \
+                -o UseDNS=no
+          readinessProbe:
+            tcpSocket: { port: 22 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: 22 }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy-vm
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector: { app: legacy-vm }
+  ports:
+    - { name: ssh, port: 22, targetPort: 22 }

@@ -1,0 +1,44 @@
+# AWX — le moteur d'exécution Ansible de la plateforme, et sa cible témoin.
+#
+# Pourquoi il est là : les quatre moteurs de promesses existants (helm, crossplane,
+# operator, compound) visent des objets à API déclarative. AWX est ce qui fait passer
+# le contrat de self-service de l'autre côté de la frontière Kubernetes — VM,
+# middleware, appliances, Windows, legacy.
+#
+# Cette instance est une SCÈNE DE RÉPÉTITION : le client a déjà son AAP, on prouve
+# le chemin. Exactement comme OpenLDAP simule son annuaire.
+#
+# Enchaînement d'une synchronisation :
+#   PreSync  vague -1 : ServiceAccount + Role + RoleBinding d'amorçage
+#   PreSync  vague  0 : Job qui génère les identifiants s'ils n'existent pas
+#                       (mot de passe admin, couple base, paire SSH)
+#   Sync     vague -2 : Namespace  (R-TPL-7 : appliqué en premier, prune en dernier)
+#   Sync     vague  0 : CRD de l'opérateur, son RBAC, le client OIDC Keycloak
+#   Sync     vague  1 : l'opérateur, la base CNPG, la VM témoin, le serveur d'archives
+#   Sync     vague  3 : le CR AWX (l'opérateur doit tourner avant)
+#   PostSync vague  0 : RBAC du jeu d'essai
+#   PostSync vague  1 : Job de jeu d'essai (OIDC, organisation, inventaire, projet,
+#                       job template + sondage, jeton d'API) — rejouable
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: awx, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/awx
+  destination: { server: https://kubernetes.default.svc, namespace: awx }
+  syncPolicy:
+    # prune: false — même choix que Harbor, Backstage et iTop : ni un volume de base
+    # de données ni le disque de la cible témoin ne se suppriment par accident de rendu.
+    automated: { selfHeal: true, prune: false }
+    syncOptions:
+      - CreateNamespace=true
+      # ServerSideApply : la CRD `awxs.awx.ansible.com` fait ~120 Kio, au-delà de ce
+      # qu'une annotation last-applied peut porter (le geste déjà fait pour Kratix).
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+      # Première synchronisation : le CR AWX est d'un kind que le cluster ne connaît
+      # pas encore (sa CRD est appliquée dans la même synchronisation, vague 0).
+      - SkipDryRunOnMissingResource=true
