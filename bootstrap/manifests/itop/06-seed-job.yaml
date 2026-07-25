@@ -36,7 +36,10 @@ spec:
               set -eu
               ENDPOINT="http://itop.itop.svc.cluster.local/webservices/rest.php?version=1.3"
 
-              log() { echo "[itop-seed] $*"; }
+              # Les traces vont sur la sortie d'ERREUR : la sortie standard sert
+              # à remonter les identifiants d'objets entre fonctions. Les mélanger
+              # rendrait le journal illisible ET les identifiants faux.
+              log() { echo "[itop-seed] $*" >&2; }
 
               log "Attente d'iTop..."
               i=0

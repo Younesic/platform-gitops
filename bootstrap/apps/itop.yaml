@@ -18,6 +18,15 @@ spec:
     targetRevision: main
     path: bootstrap/manifests/itop
   destination: { server: https://kubernetes.default.svc, namespace: itop }
+  # Drift CONSTATÉ après deux cycles de synchronisation (pas de superstition) :
+  # l'API server défaute un bloc `status: {phase: Pending}` sur chaque
+  # volumeClaimTemplate du StatefulSet. Git ne l'a pas → OutOfSync perpétuel.
+  # Même famille que le `spec.conversion` défauté sur les CRD (déjà traité ici).
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: itop-db
+      jqPathExpressions: [ '.spec.volumeClaimTemplates[].status' ]
   syncPolicy:
     # prune: false — le même choix que Harbor et Backstage. Un volume de base de
     # données ne se supprime pas par accident de rendu.
