@@ -1,17 +1,25 @@
-# CX6 — AGENT DE SANTÉ KRATIX-NATIVE (producteur de status.healthStatus)
+# CX6 + AD3 — AGENT DE SANTÉ KRATIX-NATIVE (producteur de status.healthStatus)
 #
 # Mécanisme (PROUVÉ sur ce cluster) : un HealthRecord (platform.kratix.io) référençant une
 # ressource → Kratix AGRÈGE en `status.healthStatus` (state « pire des records » + healthRecords[])
-# sur le claim → la console lit `status.healthStatus.state` en PRIORITÉ 1 (resolveHealth, prime
-# sur les conditions). Il n'existe PAS de CRD HealthDefinition dans notre Kratix OSS community
-# → le PRODUCTEUR = cet agent qui écrit des HealthRecords (le DoD initial supposait
-# HealthDefinition ; recadré sur le vrai mécanisme HealthRecord).
+# sur le claim → la console lit `status.healthStatus.state` en PRIORITÉ 1 et AFFICHE
+# `healthRecords[0].details.reason` comme raison (resolveHealth) — le FAUTIF nommé, zéro
+# rebuild backstage.
 #
-# DATA-DRIVEN : opt-in via le ConfigMap `health-agent-scope` (liste {name,group,plural} des
-# promesses surveillées). Promesse SANS opt-in → aucun HealthRecord → santé DÉRIVÉE (conditions)
-# inchangée = RÉTRO-COMPATIBLE. IDEMPOTENT : n'écrit un HealthRecord que si l'état a changé.
-# CHECK MVP = dérivation depuis status.conditions ; enrichissements (sondes d'endpoint, agrégation
-# récursive des enfants d'un compound) = évolutions branchées sur la MÊME boucle.
+# AD3 — SANTÉ PROFONDE : « Reconciled » au sommet ne masque plus du cassé en dessous.
+# L'agent DESCEND l'arbre du claim : claims ENFANTS (labels kratix.io/component-of-resource-*)
+# récursifs + provisionedResources de chaque claim (XR crossplane : conditions Synced/Ready)
+# → LE PIRE ÉTAT GAGNE, et details.reason NOMME la ressource fautive exacte.
+# Vécu déclencheur : XR probe-fix-teamaccess-keycloak-group Synced=False pendant 23 h,
+# chaque étage au-dessus « Reconciled », console « saine » — le mensonge le plus cher.
+#
+# DATA-DRIVEN : opt-in via le ConfigMap `health-agent-scope` (liste {name} des promesses
+# surveillées — group/plural DÉRIVÉS de la promesse installée, plus jamais codés en dur :
+# le scope pré-reset pointait « team-space » (renommée teamspace) → promiseRef faux →
+# l'agrégation Kratix était silencieusement MORTE). Promesse SANS opt-in → santé dérivée
+# (conditions) inchangée = RÉTRO-COMPATIBLE. IDEMPOTENT : n'écrit que si (state, reason)
+# change. SWEEP : un HealthRecord health-agent-* dont le claim n'existe plus est SUPPRIMÉ
+# (vécu : record orphelin teamspace2, 5 j après le reset).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -30,7 +38,7 @@ rules:
   - apiGroups: [platform.kratix.io]
     resources: [healthrecords]
     verbs: [get, list, create, update, patch, delete]
-  # lire les claims des familles plateforme (dériver la santé de leurs conditions)
+  # lire les claims des familles plateforme + les XR crossplane (conditions Synced/Ready)
   - apiGroups: [platform.example.io, crossplane.platform.example.io]
     resources: ['*']
     verbs: [get, list]
@@ -59,6 +67,19 @@ rules:
     resourceNames: [health-agent-scope]
     verbs: [get]
 ---
+# OPT-IN : promesses surveillées (le SOMMET des arbres). Ajouter un nom = surveiller.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-agent-scope
+  namespace: backstage
+data:
+  promises: |
+    [
+      {"name": "teamspace"},
+      {"name": "harbor-project"}
+    ]
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -72,18 +93,6 @@ subjects:
   - kind: ServiceAccount
     name: backstage-health-agent
     namespace: backstage
----
-# OPT-IN : promesses surveillées. Ajouter une entrée = surveiller (zéro changement d'image).
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: health-agent-scope
-  namespace: backstage
-data:
-  promises: |
-    [
-      {"name": "team-space", "group": "platform.example.io", "plural": "teamspaces"}
-    ]
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -106,8 +115,8 @@ spec:
             - name: agent
               image: alpine/k8s:1.35.3
               resources:
-                requests: { cpu: 20m, memory: 64Mi }
-                limits: { cpu: 200m, memory: 192Mi }
+                requests: { cpu: 20m, memory: 96Mi }
+                limits: { cpu: 200m, memory: 256Mi }
               command: [/bin/sh, -c]
               args:
                 - |
@@ -115,33 +124,92 @@ spec:
                   SCOPE=$(kubectl -n backstage get cm health-agent-scope -o jsonpath='{.data.promises}' 2>/dev/null || echo '[]')
                   TS=$(date +%s)
                   TAB=$(printf '\t')
-                  # une passe jq → TSV par item (name, ns, gen, state) : PAS de re-parse JSON
-                  # ni d'echo (qui interpréterait les \n échappés du JSON = bug).
+                  PROMS=$(kubectl get promises -o json)
+                  # POOL = tous les claims de TOUTES les promesses installées (GVR dérivés
+                  # des APIs des promesses — data-driven, zéro kind en dur).
+                  POOL='[]'
+                  for GVR in $(printf '%s' "$PROMS" | jq -r '.items[] | .spec.api.spec.names.plural + "." + .spec.api.spec.group'); do
+                    ITEMS=$(kubectl get "$GVR" -A -o json 2>/dev/null | jq -c '.items // []' || printf '[]')
+                    POOL=$(jq -n -c --argjson a "$POOL" --argjson b "$ITEMS" '$a + $b')
+                  done
+                  printf '%s' "$POOL" > /tmp/pool.json
+                  # état PROPRE d'un claim depuis ses conditions (règles CX6 inchangées)
+                  # rang : healthy=0 < unknown=1 < degraded=2 < unhealthy=3 (le pire gagne)
                   printf '%s' "$SCOPE" | jq -c '.[]' | while IFS= read -r p; do
                     PNAME=$(printf '%s' "$p" | jq -r .name)
-                    GVR="$(printf '%s' "$p" | jq -r .plural).$(printf '%s' "$p" | jq -r .group)"
-                    echo "promesse $PNAME ($GVR) :"
-                    kubectl get "$GVR" -A -o json 2>/dev/null | jq -r '.items[]?
-                      | (.status.conditions // []) as $c
-                      | (($c[]|select(.type=="Reconciled")|.status)//"") as $rec
-                      | (($c[]|select(.type=="ConfigureWorkflowCompleted")|.status)//"") as $cwc
-                      | [.metadata.name, .metadata.namespace, (.metadata.generation//0|tostring),
-                         (if $rec=="False" then "unhealthy"
-                          elif ($cwc!="" and $cwc!="True") then "degraded"
-                          elif ($cwc=="True" or $rec=="True") then "healthy"
-                          else "unknown" end)]
-                      | @tsv' | while IFS="$TAB" read -r RN RNS GEN STATE; do
+                    API=$(printf '%s' "$PROMS" | jq -c --arg n "$PNAME" '.items[] | select(.metadata.name==$n) | {kind:.spec.api.spec.names.kind, group:.spec.api.spec.group}')
+                    [ -n "$API" ] || { echo "promesse $PNAME : INTROUVABLE (scope à corriger)"; continue; }
+                    KIND=$(printf '%s' "$API" | jq -r .kind)
+                    echo "promesse $PNAME (kind $KIND) :"
+                    # SOMMETS = claims de CE kind ; pour chacun : arbre (descendants par labels,
+                    # profondeur <=5) + refs provisionnées des familles plateforme.
+                    jq -r --arg kind "$KIND" '
+                      def stateof: (.status.conditions // []) as $c
+                        | (($c[]|select(.type=="Reconciled")|.status)//"") as $rec
+                        | (($c[]|select(.type=="ConfigureWorkflowCompleted")|.status)//"") as $cwc
+                        | (if $rec=="False" then "unhealthy"
+                           elif ($cwc!="" and $cwc!="True") then "degraded"
+                           elif ($cwc=="True" or $rec=="True") then "healthy"
+                           else "unknown" end);
+                      def reasonof: ((.status.conditions // [])[]|select(.type=="Reconciled" and .status=="False")|(.reason//"")+": "+(.message//"")) // "";
+                      . as $pool
+                      | $pool[] | select(.kind==$kind) | . as $top
+                      | [$top] as $lvl0
+                      | reduce range(0;5) as $i ({all:$lvl0, cur:$lvl0};
+                          (.cur | map(. as $par | $pool[] | select(
+                            (.metadata.labels["kratix.io/component-of-resource-name"]//"") == $par.metadata.name and
+                            (.metadata.labels["kratix.io/component-of-resource-namespace"]//"") == ($par.metadata.namespace//"default")
+                          ))) as $kids
+                          | {all: (.all + $kids), cur: $kids})
+                      | .all as $tree
+                      | [$top.metadata.name, ($top.metadata.namespace//"default"), ($top.metadata.generation//0|tostring),
+                         ([$tree[] | {n:.metadata.name, k:.kind, s:stateof, r:reasonof}] | tojson),
+                         ([$tree[] | .metadata.name as $cn | .kind as $ck | (.status.provisionedResources//[])[]
+                            | select((.apiVersion//"") | test("^(crossplane\\.)?platform\\.example\\.io/"))
+                            | [((.apiVersion//"")|split("/")[0]), (.kind//""), (.name//""), (.namespace//"default"), $ck, $cn] | join(",")
+                          ] | join(" "))
+                        ] | @tsv' /tmp/pool.json | while IFS="$TAB" read -r RN RNS GEN CLAIMS REFS; do
+                      # pire état des CLAIMS de l'arbre + fautif éventuel
+                      WORST=$(printf '%s' "$CLAIMS" | jq -r 'map(.s) | if any(.=="unhealthy") then "unhealthy" elif any(.=="degraded") then "degraded" elif any(.=="unknown") then "unknown" else "healthy" end')
+                      REASON=$(printf '%s' "$CLAIMS" | jq -r '[.[]|select(.s=="unhealthy" or .s=="degraded")][0] // empty | .k+" "+.n+" : "+(.r // .s)')
+                      # refs provisionnées (XR crossplane…) : Synced/Ready=False = unhealthy + fautif nommé
+                      for REF in $REFS; do
+                        RG=$(printf '%s' "$REF" | cut -d, -f1); RK=$(printf '%s' "$REF" | cut -d, -f2)
+                        RRN=$(printf '%s' "$REF" | cut -d, -f3); RRNS=$(printf '%s' "$REF" | cut -d, -f4)
+                        CK=$(printf '%s' "$REF" | cut -d, -f5); CN=$(printf '%s' "$REF" | cut -d, -f6)
+                        LC=$(printf '%s' "$RK" | tr 'A-Z' 'a-z')
+                        BAD=$(kubectl -n "$RRNS" get "$LC.$RG" "$RRN" -o json 2>/dev/null | jq -r '
+                          (.status.conditions // []) as $c
+                          | [($c[]|select(.type=="Synced" or .type=="Ready")|select(.status=="False"))][0] // empty
+                          | .type+"=False - "+(.reason//"")+": "+(.message//"")' || printf '')
+                        if [ -n "$BAD" ]; then
+                          WORST="unhealthy"
+                          [ -n "$REASON" ] || REASON="$RK $RRN : $BAD (sous $CK $CN)"
+                        fi
+                      done
                       HR="health-agent-$RN"
-                      CUR=$(kubectl -n "$RNS" get healthrecord "$HR" -o jsonpath='{.data.state}' 2>/dev/null || echo "")
-                      if [ "$CUR" = "$STATE" ]; then echo "  $RN : $STATE (inchangé)"; continue; fi
+                      CUR=$(kubectl -n "$RNS" get healthrecord "$HR" -o jsonpath='{.data.state}|{.data.details.reason}' 2>/dev/null || printf '')
+                      if [ "$CUR" = "$WORST|$REASON" ]; then echo "  $RN : $WORST (inchangé)"; continue; fi
                       jq -n --arg hr "$HR" --arg ns "$RNS" --arg pn "$PNAME" --arg rn "$RN" \
-                            --argjson gen "$GEN" --arg state "$STATE" --argjson ts "$TS" \
+                            --argjson gen "$GEN" --arg state "$WORST" --arg reason "$REASON" --argjson ts "$TS" \
                         '{apiVersion:"platform.kratix.io/v1alpha1",kind:"HealthRecord",
                           metadata:{name:$hr,namespace:$ns},
                           data:{promiseRef:{name:$pn},resourceRef:{name:$rn,namespace:$ns,generation:$gen},
-                                state:$state,lastRun:$ts,details:{source:"backstage-health-agent",check:"conditions"}}}' \
+                                state:$state,lastRun:$ts,
+                                details:{source:"backstage-health-agent",check:"deep-tree",reason:$reason}}}' \
                         | kubectl apply -f - >/dev/null
-                      echo "  $RN : $STATE (écrit)"
+                      echo "  $RN : $WORST (écrit)${REASON:+ — $REASON}"
                     done
+                  done
+                  # SWEEP — records orphelins (claim référencé disparu) : supprimés.
+                  kubectl get healthrecords -A -o json 2>/dev/null | jq -r '.items[]
+                    | select(.metadata.name | startswith("health-agent-"))
+                    | [.metadata.namespace, .metadata.name, (.data.resourceRef.name//""), (.data.resourceRef.namespace//"")] | @tsv' \
+                  | while IFS="$TAB" read -r HNS HN REFN REFNS; do
+                    FOUND=$(jq -r --arg n "$REFN" --arg ns "$REFNS" '[.[] | select(.metadata.name==$n and (.metadata.namespace//"default")==$ns)] | length' /tmp/pool.json)
+                    if [ "$FOUND" = "0" ]; then
+                      kubectl -n "$HNS" delete healthrecord "$HN" >/dev/null 2>&1 || true
+                      echo "sweep : $HNS/$HN (claim $REFN disparu) supprimé"
+                    fi
                   done
                   echo "agent santé : tick terminé."
