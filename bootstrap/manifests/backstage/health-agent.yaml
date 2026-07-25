@@ -124,20 +124,23 @@ spec:
                   SCOPE=$(kubectl -n backstage get cm health-agent-scope -o jsonpath='{.data.promises}' 2>/dev/null || echo '[]')
                   TS=$(date +%s)
                   TAB=$(printf '\t')
-                  PROMS=$(kubectl get promises -o json)
+                  kubectl get promises -o json > /tmp/promises.json
                   # POOL = tous les claims de TOUTES les promesses installées (GVR dérivés
                   # des APIs des promesses — data-driven, zéro kind en dur).
-                  POOL='[]'
-                  for GVR in $(printf '%s' "$PROMS" | jq -r '.items[] | .spec.api.spec.names.plural + "." + .spec.api.spec.group'); do
-                    ITEMS=$(kubectl get "$GVR" -A -o json 2>/dev/null | jq -c '.items // []' || printf '[]')
-                    POOL=$(jq -n -c --argjson a "$POOL" --argjson b "$ITEMS" '$a + $b')
+                  # ⚠️ TOUT passe par FICHIERS : un pool en argument jq (--argjson) dépasse
+                  # la limite argv Linux (128 Ko/arg) → « Argument list too long » (vécu).
+                  mkdir -p /tmp/pool
+                  N=0
+                  for GVR in $(jq -r '.items[] | .spec.api.spec.names.plural + "." + .spec.api.spec.group' /tmp/promises.json); do
+                    kubectl get "$GVR" -A -o json 2>/dev/null | jq -c '.items // []' > "/tmp/pool/$N.json" || printf '[]' > "/tmp/pool/$N.json"
+                    N=$((N+1))
                   done
-                  printf '%s' "$POOL" > /tmp/pool.json
+                  jq -s -c 'add // []' /tmp/pool/*.json > /tmp/pool.json
                   # état PROPRE d'un claim depuis ses conditions (règles CX6 inchangées)
                   # rang : healthy=0 < unknown=1 < degraded=2 < unhealthy=3 (le pire gagne)
                   printf '%s' "$SCOPE" | jq -c '.[]' | while IFS= read -r p; do
                     PNAME=$(printf '%s' "$p" | jq -r .name)
-                    API=$(printf '%s' "$PROMS" | jq -c --arg n "$PNAME" '.items[] | select(.metadata.name==$n) | {kind:.spec.api.spec.names.kind, group:.spec.api.spec.group}')
+                    API=$(jq -c --arg n "$PNAME" '.items[] | select(.metadata.name==$n) | {kind:.spec.api.spec.names.kind, group:.spec.api.spec.group}' /tmp/promises.json)
                     [ -n "$API" ] || { echo "promesse $PNAME : INTROUVABLE (scope à corriger)"; continue; }
                     KIND=$(printf '%s' "$API" | jq -r .kind)
                     echo "promesse $PNAME (kind $KIND) :"
