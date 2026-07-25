@@ -9,6 +9,8 @@ metadata:
       , \"label\": \"Nom du projet Harbor provisionn\xE9.\", \"type\": \"string\"\
       }, \"robotName\": {\"path\": \".status.robotName\", \"label\": \"Nom complet\
       \ du robot write (robot$<projet>+publisher).\", \"type\": \"string\"}}"
+    platform.kratix.io/contracts: '{"requires": [{"kind": "keycloak-group", "name":
+      "${spec.group}", "origin": "claim"}]}'
     platform.kratix.io/provider: indus
 spec:
   api:
@@ -231,6 +233,8 @@ spec:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             name: backstage
             env:
+            - name: CONTRACTS_REV
+              value: f4337e9e9108
             - name: CURATION_REV
               value: 8d6474e96568
     resource:
