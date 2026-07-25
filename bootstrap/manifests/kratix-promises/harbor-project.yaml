@@ -5,7 +5,7 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: harbor-project
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","public","storageQuotaGb","users","team","*"]}'
+    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","storageQuotaGb","users","team","*"]}'
     platform.kratix.io/provider: indus
 spec:
   api:
@@ -33,10 +33,6 @@ spec:
                     maxLength: 255
                     pattern: ^[a-z][a-z0-9-]*$
                     type: string
-                  public:
-                    default: false
-                    description: Projet public (lecture anonyme des artefacts).
-                    type: boolean
                   storageQuotaGb:
                     default: -1
                     description: "Quota de stockage du projet en Go (-1 = illimit\xE9\
@@ -83,7 +79,7 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: eb19a741c2ea
+              value: e08477857898
             - name: CURATION_REV
               value: 8d6474e96568
     resource:
@@ -101,23 +97,20 @@ spec:
               value: "api:\n  type: object\n  properties:\n    project:\n      description:\
                 \ Nom du projet Harbor (le registre du fournisseur, ex. team-paiement).\n\
                 \      maxLength: 255\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
-                \ string\n    public:\n      default: false\n      description: Projet\
-                \ public (lecture anonyme des artefacts).\n      type: boolean\n \
-                \   storageQuotaGb:\n      default: -1\n      description: Quota de\
-                \ stockage du projet en Go (-1 = illimit\xE9).\n      type: integer\n\
-                \    users:\n      description: Usernames Keycloak membres du groupe\
-                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
-                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
-                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
-                \    team:\n      type: string\n  required:\n  - project\n  - users\n\
-                \  - team\nchildren:\n- name: harbor-base\n  promise: harbor-base\n\
+                \ string\n    storageQuotaGb:\n      default: -1\n      description:\
+                \ Quota de stockage du projet en Go (-1 = illimit\xE9).\n      type:\
+                \ integer\n    users:\n      description: Usernames Keycloak membres\
+                \ du groupe \u2014 ce claim g\xE8re LA liste compl\xE8te\n       \
+                \ (1 claim par groupe).\n      items:\n        maxLength: 63\n   \
+                \     minLength: 1\n        type: string\n      minItems: 1\n    \
+                \  type: array\n    team:\n      type: string\n  required:\n  - project\n\
+                \  - users\n  - team\nchildren:\n- name: harbor-base\n  promise: harbor-base\n\
                 \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
                 \ kind: HarborBase\n  spec:\n    group: harbor-${spec.project}\n \
-                \   project: ${spec.project}\n    public: ${spec.public}\n    storageQuotaGb:\
-                \ ${spec.storageQuotaGb}\n- name: teamaccess\n  promise: teamaccess\n\
-                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
-                \ kind: TeamAccess\n  spec:\n    group: team-${spec.project}\n   \
-                \ users: ${spec.users}\n"
+                \   project: ${spec.project}\n    storageQuotaGb: ${spec.storageQuotaGb}\n\
+                - name: teamaccess\n  promise: teamaccess\n  version: v0.0.1\n  apiVersion:\
+                \ platform.example.io/v1alpha1\n  kind: TeamAccess\n  spec:\n    group:\
+                \ harbor-${spec.project}\n    users: ${spec.users}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
