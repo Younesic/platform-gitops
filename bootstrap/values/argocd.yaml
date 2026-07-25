@@ -41,8 +41,11 @@ controller:
     enabled: true
     minAvailable: 1
   resources:
-    requests: { cpu: 250m, memory: 512Mi }
-    limits:   { cpu: "1",  memory: 1Gi }
+    requests: { cpu: 250m, memory: 1Gi }
+    # 1Gi -> 2Gi (2026-07-25) : CrashLoopBackOff OOMKilled toutes les ~30s (18 restarts),
+    # AUCUN sync ne pouvait aboutir — le compare du repo recursif kratix-destination
+    # + le parc actuel depassent 1Gi. Patch break-glass applique puis grave ici.
+    limits:   { cpu: "1",  memory: 2Gi }
 
 server:
   replicas: 2
