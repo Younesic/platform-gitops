@@ -205,14 +205,22 @@ spec:
                     done
                   done
                   # SWEEP — records orphelins (claim référencé disparu) : supprimés.
+                  # ⚠️ Le match inclut le KIND (dérivé du promiseRef du record) : deux claims
+                  # peuvent porter le MÊME nom dans des kinds différents (collision vécue :
+                  # KeycloakGroup « vente » vs HarborProject « vente »). Sans le kind, un
+                  # record périmé survivait tant qu'un homonyme d'un autre kind existait.
                   kubectl get healthrecords -A -o json 2>/dev/null | jq -r '.items[]
                     | select(.metadata.name | startswith("health-agent-"))
-                    | [.metadata.namespace, .metadata.name, (.data.resourceRef.name//""), (.data.resourceRef.namespace//"")] | @tsv' \
-                  | while IFS="$TAB" read -r HNS HN REFN REFNS; do
-                    FOUND=$(jq -r --arg n "$REFN" --arg ns "$REFNS" '[.[] | select(.metadata.name==$n and (.metadata.namespace//"default")==$ns)] | length' /tmp/pool.json)
+                    | [.metadata.namespace, .metadata.name, (.data.resourceRef.name//""),
+                       (.data.resourceRef.namespace//""), (.data.promiseRef.name//"")] | @tsv' \
+                  | while IFS="$TAB" read -r HNS HN REFN REFNS REFP; do
+                    RKIND=$(jq -r --arg p "$REFP" '.items[] | select(.metadata.name==$p) | .spec.api.spec.names.kind // ""' /tmp/promises.json)
+                    # promesse disparue → on ne devine pas le kind : record laissé en place
+                    [ -n "$RKIND" ] || { echo "sweep : $HNS/$HN — promesse « $REFP » introuvable, record CONSERVÉ"; continue; }
+                    FOUND=$(jq -r --arg n "$REFN" --arg ns "$REFNS" --arg k "$RKIND" '[.[] | select(.metadata.name==$n and (.metadata.namespace//"default")==$ns and .kind==$k)] | length' /tmp/pool.json)
                     if [ "$FOUND" = "0" ]; then
                       kubectl -n "$HNS" delete healthrecord "$HN" >/dev/null 2>&1 || true
-                      echo "sweep : $HNS/$HN (claim $REFN disparu) supprimé"
+                      echo "sweep : $HNS/$HN ($RKIND $REFN disparu) supprimé"
                     fi
                   done
                   echo "agent santé : tick terminé."
