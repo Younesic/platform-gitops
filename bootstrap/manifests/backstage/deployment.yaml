@@ -47,6 +47,12 @@ spec:
             #     le PAT classic n'est PLUS référencé -> révocable) ---
             - name: GITHUB_PROXY_TOKEN
               valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_PROXY_TOKEN } }
+            # --- AWX (proxy /awx-api) : jeton de LECTURE de `portail-lecture`,
+            #     fabriqué DANS le cluster par awx/12-jeton-portail.yaml et jamais
+            #     affiché. ⚠️ Le secret doit exister AVANT ce câblage, sinon la
+            #     substitution de config échoue et le portail ne démarre pas. ---
+            - name: AWX_API_TOKEN
+              valueFrom: { secretKeyRef: { name: awx-portal-token, key: token } }
             # --- connecteur http-entities (sources catalogue config-driven) ---
             - name: HTTP_ENTITIES_KC_CLIENT_ID
               valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientId } }
