@@ -1,0 +1,36 @@
+---
+# LE CONTRAT DU PRODUIT, écrit UNE SEULE FOIS, là où il vit déjà.
+#
+# `meta/argument_specs.yml` est le mécanisme NATIF d'Ansible pour spécifier les
+# arguments d'un rôle : il valide le rôle à l'exécution, et il documente son API.
+# `argspec-to-crd.py` en dérive la CRD du produit — l'auteur n'écrit donc jamais
+# de CRD, exactement comme un auteur de chart n'écrit que `values.schema.json`.
+#
+# Ces noms sont AUSSI ceux des variables du sondage du job template AWX : c'est le
+# même contrat des deux côtés. AN3 a montré ce qui arrive quand ils divergent —
+# AWX refuse le lancement (« 'marker_content' value missing ») et le produit
+# devient inutilisable, puis indestructible.
+argument_specs:
+  main:
+    short_description: Un service configure sur une machine du parc legacy
+    description:
+      - Configure un service sur une cible qui n'a aucune API declarative.
+      - Kubernetes reconcilie, Ansible (AWX) execute.
+    options:
+      service_name:
+        type: str
+        required: true
+        description: Nom technique du service sur la machine cible.
+      marker_content:
+        type: str
+        required: true
+        default: gere par la plateforme
+        description: Message inscrit dans le fichier de configuration du service.
+      marker_state:
+        type: str
+        choices: [present, absent]
+        default: present
+        description: present = le service est configure ; absent = il est retire.
+        # Piloté par le runtime (AWX_STATE_VAR), pas par le demandeur : la
+        # suppression d'une demande vaut « absent ». On ne l'expose donc pas.
+        x-kratix-internal: true
