@@ -332,11 +332,11 @@ spec:
   - apiVersion: v1
     data:
       watches.yaml: "---\n- version: v1alpha1\n  group: temoin.ansible.example.io\n\
-        \  kind: LegacyService\n  role: /opt/ansible/roles/awx-runner\n  # Ce qui\
-        \ distingue cette architecture d'un playbook lanc\xE9 une fois : l'\xE9tat\n\
-        \  # d\xE9clar\xE9 est r\xE9-impos\xE9 \xE0 la machine \xE0 chaque \xE9ch\xE9\
-        ance.\n  reconcilePeriod: 120s\n  finalizer:\n    name: temoin.ansible.example.io/deprovision\n\
-        \    role: /opt/ansible/roles/awx-remover\n"
+        \  kind: LegacyService\n  playbook: /opt/ansible/generic/provision.yml\n \
+        \ # Ce qui distingue cette architecture d'un playbook lanc\xE9 une fois :\
+        \ l'\xE9tat\n  # d\xE9clar\xE9 est r\xE9-impos\xE9 \xE0 la machine \xE0 chaque\
+        \ \xE9ch\xE9ance.\n  reconcilePeriod: 120s\n  finalizer:\n    name: temoin.ansible.example.io/deprovision\n\
+        \    playbook: /opt/ansible/generic/deprovision.yml\n"
     kind: ConfigMap
     metadata:
       name: legacy-temoin-watches
@@ -356,7 +356,7 @@ spec:
       template:
         metadata:
           annotations:
-            roles-revision: '1'
+            roles-revision: '2'
           labels:
             app: legacy-operator
         spec:
@@ -428,6 +428,9 @@ spec:
             - mountPath: /opt/ansible/roles
               name: roles
               readOnly: true
+            - mountPath: /opt/ansible/generic
+              name: generic
+              readOnly: true
             - mountPath: /opt/ansible/produit
               name: produit
               readOnly: true
@@ -446,6 +449,14 @@ spec:
                 path: awx-remover/tasks/main.yml
               name: ansible-operator-roles
             name: roles
+          - configMap:
+              items:
+              - key: provision.yml
+                path: provision.yml
+              - key: deprovision.yml
+                path: deprovision.yml
+              name: ansible-operator-roles
+            name: generic
           - configMap:
               name: legacy-temoin-watches
             name: produit
