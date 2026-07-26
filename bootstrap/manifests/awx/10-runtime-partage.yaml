@@ -67,6 +67,19 @@ data:
         k8s_api: https://kubernetes.default.svc
         k8s_ca: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
         k8s_token: "{{ lookup('file', '/var/run/secrets/kubernetes.io/serviceaccount/token') }}"
+        # Champs du `spec` qui ne partent JAMAIS dans le sondage AWX. Ce ne sont pas
+        # des refus : ce sont des champs de PLATEFORME, que le job template ne connaît
+        # pas. Les envoyer ferait rejeter le lancement — AWX n'accepte que les
+        # variables de son sondage (leçon d'AN3 : le contrat du produit EST le
+        # contrat du sondage, nom pour nom).
+        #   · target : la cible, vérifiée ici contre la liste déclarée, puis passée
+        #     en `limit` — jamais en variable.
+        #   · team   : la squad demandeuse (O5). Elle sert à l'ownership de la fiche
+        #     Backstage, pas à l'automatisation. Sans cette exclusion, la lignée
+        #     consommateur coûterait un job refusé.
+        cles_hors_job:
+          - target
+          - team
         # Ce qu'un demandeur ne peut JAMAIS décider. `target` fait exception : il est
         # accepté, mais uniquement contre la liste déclarée (voir plus bas).
         cles_reservees:
@@ -179,10 +192,10 @@ data:
       ansible.builtin.set_fact:
         vars_du_job: >-
           {{ dict(
-               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'in', cles_hors_job) | list)
                | map(attribute='key') | map('regex_replace', '([A-Z])', '_\1') | map('lower') | list
                | zip(
-                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'in', cles_hors_job) | list)
                  | map(attribute='value') | list)
              ) }}
 
@@ -325,10 +338,10 @@ data:
       ansible.builtin.set_fact:
         vars_du_job: >-
           {{ dict(
-               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'in', cles_hors_job) | list)
                | map(attribute='key') | map('regex_replace', '([A-Z])', '_\1') | map('lower') | list
                | zip(
-                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'in', cles_hors_job) | list)
                  | map(attribute='value') | list)
              ) }}
 
