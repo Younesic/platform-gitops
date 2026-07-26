@@ -88,21 +88,67 @@ spec:
                 '{"name":"Plateforme"}' "organisation Plateforme" >/dev/null
 
               # --- Personnes, alignées sur l'annuaire LDAP -------------------
-              ensure Person "SELECT Person WHERE email='jdupont@platform.local'" \
+              JEAN_ID="$(ensure Person "SELECT Person WHERE email='jdupont@platform.local'" \
                 '{"name":"Dupont","first_name":"Jean","org_id":{"name":"Plateforme"},"email":"jdupont@platform.local"}' \
-                "personne Jean Dupont" >/dev/null
-              ensure Person "SELECT Person WHERE email='mmartin@platform.local'" \
+                "personne Jean Dupont")"
+              MARIE_ID="$(ensure Person "SELECT Person WHERE email='mmartin@platform.local'" \
                 '{"name":"Martin","first_name":"Marie","org_id":{"name":"Plateforme"},"email":"mmartin@platform.local"}' \
-                "personne Marie Martin" >/dev/null
+                "personne Marie Martin")"
 
               # --- Équipe -----------------------------------------------------
               # Le cycle de vie ITIL d'un changement exige une équipe et des
               # personnes (team_id, supervisor_group_id, manager_group_id,
               # agent_id…) AVANT de pouvoir être approuvé. Sans elles, aucune
               # approbation n'est possible : ce n'est pas du décor.
-              ensure Team "SELECT Team WHERE name='Equipe changement'" \
+              TEAM_ID="$(ensure Team "SELECT Team WHERE name='Equipe changement'" \
                 '{"name":"Equipe changement","org_id":{"name":"Plateforme"}}' \
-                "équipe changement" >/dev/null
+                "équipe changement")"
+
+              # --- L'ÉPINE DORSALE qui rend l'équipe SÉLECTIONNABLE -----------
+              # Piège vécu : « Équipe » restait vide au formulaire de validation
+              # alors que « Équipe de supervision » proposait la même équipe.
+              # Ce n'est pas un bug d'iTop : `Ticket::team_id` est FILTRÉ, là où
+              # supervisor_group_id/manager_group_id ne le sont pas —
+              #
+              #   SELECT Team AS t
+              #     JOIN lnkDeliveryModelToContact ON contact_id = t.id
+              #     JOIN DeliveryModel dm ON ...
+              #     JOIN Organization o ON o.deliverymodel_id = dm.id
+              #    WHERE o.id = :this->org_id
+              #
+              # Une équipe n'est proposée que si l'organisation possède un
+              # MODÈLE DE LIVRAISON et que l'équipe y est rattachée. Créer une
+              # Team ne suffit donc pas : sans cette épine, aucune transition
+              # exigeant team_id n'est franchissable, sur AUCUNE classe de
+              # ticket. Ce n'est pas du décor.
+              DM_ID="$(ensure DeliveryModel "SELECT DeliveryModel WHERE name='Modele plateforme'" \
+                '{"name":"Modele plateforme","org_id":{"name":"Plateforme"},"description":"Modele de livraison du portail interne"}' \
+                "modèle de livraison")"
+
+              # L'organisation doit POINTER le modèle. C'est une mise à jour d'un
+              # objet existant : on ne la rejoue que si le champ est vide.
+              ORG_DM="$(rest "{\"operation\":\"core/get\",\"class\":\"Organization\",\"key\":\"SELECT Organization WHERE name='Plateforme'\",\"output_fields\":\"deliverymodel_id\"}" \
+                | jq -r 'if (.code==0 and (.objects|type=="object")) then (.objects|to_entries[0].value.fields.deliverymodel_id|tostring) else "" end')"
+              if [ "$ORG_DM" = "$DM_ID" ]; then
+                log "organisation → modèle de livraison : déjà rattachée"
+              else
+                _r="$(rest "{\"operation\":\"core/update\",\"class\":\"Organization\",\"key\":\"SELECT Organization WHERE name='Plateforme'\",\"comment\":\"jeu d'essai GitOps\",\"fields\":{\"deliverymodel_id\":$DM_ID},\"output_fields\":\"id\"}")"
+                [ "$(echo "$_r" | jq -r '.code')" = "0" ] || { log "ÉCHEC rattachement organisation→modèle : $_r"; exit 1; }
+                log "organisation → modèle de livraison : rattachée"
+              fi
+
+              ensure lnkDeliveryModelToContact \
+                "SELECT lnkDeliveryModelToContact WHERE deliverymodel_id=$DM_ID AND contact_id=$TEAM_ID" \
+                "{\"deliverymodel_id\":$DM_ID,\"contact_id\":$TEAM_ID}" \
+                "équipe rattachée au modèle de livraison" >/dev/null
+
+              # `agent_id` est filtré à son tour sur les MEMBRES de l'équipe
+              # choisie : sans ces appartenances, la transition suivante bute sur
+              # une liste vide, exactement de la même façon.
+              ensure lnkPersonToTeam "SELECT lnkPersonToTeam WHERE team_id=$TEAM_ID AND person_id=$JEAN_ID" \
+                "{\"team_id\":$TEAM_ID,\"person_id\":$JEAN_ID}" "Jean Dupont dans l'équipe" >/dev/null
+              ensure lnkPersonToTeam "SELECT lnkPersonToTeam WHERE team_id=$TEAM_ID AND person_id=$MARIE_ID" \
+                "{\"team_id\":$TEAM_ID,\"person_id\":$MARIE_ID}" "Marie Martin dans l'équipe" >/dev/null
 
               # --- Catalogue de services -------------------------------------
               ensure ServiceFamily "SELECT ServiceFamily WHERE name='Plateforme'" \
