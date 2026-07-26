@@ -113,6 +113,107 @@ data:
           ansible.builtin.debug:
             msg: "banniere {{ 'PRESENTE' if motd.stat.exists else 'ABSENTE' }} sur {{ inventory_hostname }}"
 
+  compte-service.yml: |
+    ---
+    # Produit « compte de service applicatif » — la PREMIÈRE offre Ansible réelle.
+    #
+    # Le cas d'école bancaire : une application a besoin d'un compte technique sur
+    # un serveur du parc. Aujourd'hui c'est un ticket, un échange, un accès posé à
+    # la main, et personne ne sait six mois plus tard qui l'a demandé ni pourquoi.
+    # Ici : une demande dans le portail, une approbation, un accès posé — et
+    # surtout, RETIRÉ pour de bon quand la demande disparaît.
+    #
+    # Les trois propriétés qui comptent (les mêmes que le témoin) :
+    #   · idempotent  — rejoué toutes les 2 minutes par l'opérateur, il ne change rien ;
+    #   · paramétré   — tout vient du sondage / des extra_vars, rien n'est en dur ;
+    #   · réversible  — account_state=absent supprime le compte, sa clé et son sudo.
+    #
+    # ⚠️ Les noms de variables sont AUSSI ceux de `meta/argument_specs.yml` et du
+    # sondage AWX. Les trois doivent coïncider : AN3 a montré qu'un écart rend le
+    # produit inutilisable, puis INDESTRUCTIBLE (son finalizer échoue en boucle).
+    - name: Compte de service applicatif sur une cible sans API declarative
+      hosts: all
+      gather_facts: false
+      vars:
+        account_name: ""
+        ssh_public_key: ""
+        sudo_command: ""
+        account_state: present
+      tasks:
+        - name: Amorcer l'interpreteur et l'outillage de comptes (cible legacy)
+          # `raw` ne demande pas d'interpreteur — le geste face a une cible nue.
+          # Alpine n'a pas useradd : il vient du paquet shadow. changed_when:false,
+          # c'est un amorcage, pas un changement du service rendu.
+          ansible.builtin.raw: >-
+            command -v python3 >/dev/null || apk add --no-cache python3;
+            command -v useradd >/dev/null || apk add --no-cache shadow;
+            command -v visudo  >/dev/null || apk add --no-cache sudo
+          changed_when: false
+
+        - name: Refuser une demande sans nom de compte
+          # Garde-fou de derniere ligne : le contrat et le CRD l'exigent deja,
+          # mais un playbook qui creerait un compte vide est pire qu'un echec.
+          ansible.builtin.assert:
+            that: account_name | length > 0
+            fail_msg: "account_name est vide — demande refusee"
+
+        - name: Compte de service
+          ansible.builtin.user:
+            name: "{{ account_name }}"
+            shell: /bin/sh
+            create_home: true
+            comment: "compte de service - gere par la plateforme"
+            state: "{{ 'present' if account_state == 'present' else 'absent' }}"
+            remove: "{{ account_state != 'present' }}"
+
+        - name: Repertoire des cles
+          ansible.builtin.file:
+            path: "/home/{{ account_name }}/.ssh"
+            state: directory
+            owner: "{{ account_name }}"
+            mode: "0700"
+          when: account_state == "present"
+
+        - name: Cle publique autorisee
+          ansible.builtin.copy:
+            dest: "/home/{{ account_name }}/.ssh/authorized_keys"
+            content: "{{ ssh_public_key }}\n"
+            owner: "{{ account_name }}"
+            mode: "0600"
+          when: account_state == "present" and ssh_public_key | length > 0
+
+        - name: Droit sudo limite a UNE commande
+          # Le principe du moindre privilege, ecrit dans le fichier : pas de
+          # « ALL », une seule commande, et visudo VALIDE avant d'ecrire — un
+          # sudoers casse rend la machine inadministrable.
+          ansible.builtin.copy:
+            dest: "/etc/sudoers.d/{{ account_name }}"
+            content: "{{ account_name }} ALL=(ALL) NOPASSWD: {{ sudo_command }}\n"
+            mode: "0440"
+            validate: "visudo -cf %s"
+          when: account_state == "present" and sudo_command | length > 0
+
+        - name: Retrait du droit sudo
+          # Joue AUSSI au provisionnement quand le demandeur n'a pas demande de
+          # sudo : retirer une demande de sudo doit retirer le droit, pas le laisser.
+          ansible.builtin.file:
+            path: "/etc/sudoers.d/{{ account_name }}"
+            state: absent
+          when: account_state != "present" or sudo_command | length == 0
+
+        - name: Etat constate sur la cible
+          ansible.builtin.command: "id {{ account_name }}"
+          register: constat
+          failed_when: false
+          changed_when: false
+
+        - name: Resultat
+          ansible.builtin.debug:
+            msg: >-
+              compte {{ account_name }} :
+              {{ 'PRESENT' if constat.rc == 0 else 'ABSENT' }} sur {{ inventory_hostname }}
+              {{ '(sudo : ' ~ sudo_command ~ ')' if (account_state == 'present' and sudo_command | length > 0) else '' }}
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -132,7 +233,7 @@ spec:
       annotations:
         # Incrémenter à chaque modification du playbook ci-dessus : ArgoCD ne
         # redémarre pas un pod parce qu'une ConfigMap a changé.
-        playbooks-revision: "2"
+        playbooks-revision: "3"
     spec:
       priorityClassName: platform-high
       volumes:
