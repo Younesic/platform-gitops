@@ -41,7 +41,12 @@ persistence:
   size: 5Gi
 
 resources:
-  requests: { cpu: 400m, memory: 2Gi }
+  # La RÉSERVATION seule est abaissée (2Gi -> 512Mi) : elle ne sert qu'au placement.
+  # Le PLAFOND reste 4Gi -> SonarQube peut toujours monter autant qu'avant, donc
+  # aucun risque d'OOM nouveau. Motif : à 2Gi réservés, plus aucun nœud n'avait un
+  # bloc libre de cette taille (0,55 / 0,10 / 0,77 Gio) depuis l'arrivée d'AWX et
+  # d'iTop -> pod Pending. Usage RÉEL des nœuds au moment du changement : 67/68/69 %.
+  requests: { cpu: 400m, memory: 512Mi }
   limits:   { cpu: "1",  memory: 4Gi }
 
 ingress:
