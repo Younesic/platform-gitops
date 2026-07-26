@@ -17,7 +17,7 @@ spec:
     metadata:
       labels: { app: legacy-operator }
       annotations:
-        roles-revision: "2"
+        roles-revision: "3"
     spec:
       serviceAccountName: legacy-operator
       priorityClassName: platform-high

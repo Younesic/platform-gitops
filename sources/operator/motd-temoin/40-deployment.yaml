@@ -17,7 +17,7 @@ spec:
     metadata:
       labels: { app: motd-operator }
       annotations:
-        roles-revision: "2"
+        roles-revision: "3"
     spec:
       serviceAccountName: motd-operator
       priorityClassName: platform-high

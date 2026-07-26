@@ -170,12 +170,16 @@ data:
     # Le `spec` de la demande devient les variables du job. Convention (celle de
     # l'operateur ansible lui-meme) : camelCase -> snake_case. Aucune connaissance
     # metier ici : on transporte ce que le contrat de la CRD a laisse passer.
+    #
+    # /!\ La reference arriere s'ecrit '\1' et NON '\\1' : dans un scalaire replie
+    # (>-), YAML ne traite pas les echappements, et '\\1' produit le texte litteral
+    # « \1 » (verifie : monChamp -> mon_\1hamp). Ne pas "corriger".
     - name: Traduire le spec de la demande en variables de job
       ansible.builtin.set_fact:
         vars_du_job: >-
           {{ dict(
                (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
-               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\\1') | map('lower') | list
+               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\1') | map('lower') | list
                | zip(
                  (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
                  | map(attribute='value') | list)
@@ -315,7 +319,7 @@ data:
         vars_du_job: >-
           {{ dict(
                (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
-               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\\1') | map('lower') | list
+               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\1') | map('lower') | list
                | zip(
                  (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
                  | map(attribute='value') | list)
