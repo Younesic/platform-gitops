@@ -82,6 +82,17 @@ data:
         # C'EST ICI QUE SE RÈGLE LE DOSAGE (IT3). Le même code sert les trois
         # niveaux ; seule la requête change :
         NormalChange:
+          # ⚠️ LE MODÈLE DE DONNÉES VARIE, et le code ne doit pas le connaître.
+          # `service_id` est porté par UserRequest et Incident, PAS par Change
+          # (vérifié dans le modèle 3.2.3-1) : le poser sur un NormalChange fait
+          # échouer la création — « Unknown attribute service_id from class
+          # NormalChange ». D'où `serviceField` : la CLASSE dit quel attribut
+          # porte le service, ou n'en déclare aucun. Le service reste cité dans
+          # le corps du ticket : l'information n'est jamais perdue.
+          # `createFields` = les champs OBLIGATOIRES de la classe chez CE client
+          # (iTop refuse un Ticket sans org_id : « Null not allowed »).
+          createFields:
+            org_id: { name: Plateforme }
           # CAB : le changement n'est vert qu'APRÈS `ev_approve`. `plannedscheduled`
           # est volontairement EXCLU — dans le cycle ITIL il PRÉCÈDE l'approbation
           # (new → validated → assigned → plannedscheduled → approved). L'inclure
@@ -90,6 +101,8 @@ data:
             SELECT Change WHERE ref = :ref
             AND status IN ('approved','implemented','monitored','closed')
         RoutineChange:
+          createFields:
+            org_id: { name: Plateforme }
           # Changement standard PRÉ-APPROUVÉ : son cycle de vie ne passe même pas
           # par l'état `approved` (new → assigned → plannedscheduled → implemented).
           # Le feu vert, ici, c'est la prise en charge. Aucun code ne le sait :
@@ -98,9 +111,21 @@ data:
             SELECT Change WHERE ref = :ref
             AND status IN ('assigned','plannedscheduled','implemented','monitored','closed')
         UserRequest:
+          # Celle-ci SAIT porter un service.
+          serviceField: service_id
+          createFields:
+            org_id: { name: Plateforme }
           approvedWhen: >-
             SELECT UserRequest WHERE ref = :ref
             AND status IN ('approved','assigned','resolved','closed')
+        Incident:
+          # Classe du contrôle DÉTECTIF (IT6). Elle déclare ses champs
+          # obligatoires ICI : une seule carte du modèle client, pas deux.
+          serviceField: service_id
+          createFields:
+            org_id: { name: Plateforme }
+          approvedWhen: >-
+            SELECT Incident WHERE ref = :ref AND status IN ('resolved','closed')
       # IT5 — LE PORTIER. Sans `repos`, il est INACTIF : la plateforme se comporte
       # exactement comme avant. Le `context` est le nom du contrôle qui apparaît
       # sur la demande — c'est LUI qu'exigera la protection de branche.
@@ -123,11 +148,6 @@ data:
         # pas s'appliquer, un merge non approuvé doit au moins se VOIR.
         incidentClass: Incident
         mergeLookbackDays: 7
-        # Champs OBLIGATOIRES de la classe d'incident — ils varient d'un client à
-        # l'autre (constaté : iTop refuse un Incident sans org_id). Ils viennent
-        # donc de la configuration, jamais du code.
-        incidentFields:
-          org_id: { name: Plateforme }
         # Ne rien signaler AVANT l'activation du contrôle : les fusions
         # antérieures n'avaient aucun moyen d'être au vert. Les signaler serait un
         # faux positif de masse — et un contrôle qui crie pour rien est un contrôle
