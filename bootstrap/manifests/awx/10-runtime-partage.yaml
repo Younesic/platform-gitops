@@ -54,6 +54,7 @@ data:
         jt_suppression: "{{ lookup('env', 'AWX_JOB_TEMPLATE_DELETE') | default('', true) | trim }}"
         var_etat: "{{ lookup('env', 'AWX_STATE_VAR') | default('', true) | trim }}"
         valeur_absent: "{{ lookup('env', 'AWX_STATE_ABSENT') | default('absent', true) | trim }}"
+        valeur_present: "{{ lookup('env', 'AWX_STATE_PRESENT') | default('present', true) | trim }}"
         cibles_autorisees: >-
           {{ (lookup('env', 'AWX_ALLOWED_LIMITS') | default('', true)).split(',')
              | map('trim') | reject('equalto', '') | list }}
@@ -184,6 +185,12 @@ data:
                  (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
                  | map(attribute='value') | list)
              ) }}
+
+    # Un sondage AWX peut declarer sa variable d'etat REQUISE : il faut donc
+    # l'envoyer meme au provisionnement, pas seulement au retrait.
+    - name: Declarer l'etat attendu, si le produit en a un
+      ansible.builtin.set_fact:
+        etat_demande: "{{ {var_etat: valeur_present} if (var_etat | length > 0) else {} }}"
 
     - name: Lancer l'automatisation declaree
       ansible.builtin.uri:

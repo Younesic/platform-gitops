@@ -17,7 +17,7 @@ spec:
     metadata:
       labels: { app: legacy-operator }
       annotations:
-        roles-revision: "3"
+        roles-revision: "4"
     spec:
       serviceAccountName: legacy-operator
       priorityClassName: platform-high
@@ -49,7 +49,8 @@ spec:
             - { name: AWX_URL, value: "http://awx-service.awx.svc.cluster.local" }
             - { name: AWX_JOB_TEMPLATE, value: "legacy-service" }   # le SEUL autorisé
             - { name: AWX_STATE_VAR,    value: "marker_state" }     # comment on dé-provisionne
-            - { name: AWX_STATE_ABSENT, value: "absent" }
+            - { name: AWX_STATE_PRESENT, value: "present" }
+            - { name: AWX_STATE_ABSENT,  value: "absent" }
             - { name: AWX_ALLOWED_LIMITS, value: "" }               # le produit FIXE sa cible
             - { name: AWX_TIMEOUT_SECONDS, value: "600" }
             - name: AWX_TOKEN
