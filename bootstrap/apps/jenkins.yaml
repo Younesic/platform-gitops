@@ -1,6 +1,12 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-metadata: { name: jenkins, namespace: argocd }
+metadata:
+  name: jenkins
+  namespace: argocd
+  # cascade : sans ce finalizer, retirer l'app du Git supprime l'objet ArgoCD
+  # et LAISSE les ressources tourner (rien n'est libéré).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   sources:
