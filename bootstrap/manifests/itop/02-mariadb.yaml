@@ -92,10 +92,18 @@ spec:
         - name: config
           configMap: { name: itop-db-config }
   volumeClaimTemplates:
-    - metadata: { name: data }
+    # apiVersion / kind / volumeMode sont DÉCLARÉS ici bien qu'implicites :
+    # l'API server les injecte dans les volumeClaimTemplates, et ArgoCD ne les
+    # normalise pas → OutOfSync perpétuel. On préfère aligner Git sur la réalité
+    # plutôt que d'apprendre à ArgoCD à détourner le regard. Seul `status` reste
+    # dans ignoreDifferences (bootstrap/apps/itop.yaml) : un statut ne se déclare pas.
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata: { name: data }
       spec:
         accessModes: [ ReadWriteOnce ]
         storageClassName: sbs-default
+        volumeMode: Filesystem
         resources: { requests: { storage: 10Gi } }
 ---
 apiVersion: policy/v1
