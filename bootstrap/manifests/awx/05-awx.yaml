@@ -44,6 +44,19 @@ spec:
     - setting: CSRF_TRUSTED_ORIGINS
       value: "['https://awx.212-47-226-56.nip.io']"
 
+  # ── Défaut fermé ────────────────────────────────────────────────────────────
+  # L'awx-operator livre ses sondes DÉSACTIVÉES (`web_readiness_period: 0` dans ses
+  # valeurs par défaut) : un pod web dont la base est injoignable resterait Ready et
+  # l'ingress continuerait de servir des erreurs 500. On active la sonde de
+  # disponibilité — elle interroge /api/v2/ping/, qui touche la base : base absente
+  # → pod hors service → plus aucun point de terminaison derrière l'ingress.
+  # (L'autre garde est dans AWX lui-même : tant que le schéma n'est pas migré, il
+  # redirige TOUT vers /migrations_notran/ — jamais une page ouverte.)
+  web_readiness_initial_delay: 20
+  web_readiness_period: 10
+  web_readiness_timeout: 5
+  web_readiness_failure_threshold: 3
+
   # ── Ordonnancement et taille ────────────────────────────────────────────────
   control_plane_priority_class: platform-high
   # Les nœuds sont déjà réservés à ~90 % en mémoire : on dimensionne pour de vrai.
