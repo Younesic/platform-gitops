@@ -33,12 +33,12 @@ metadata:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom","omit"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom","omit"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -76,16 +76,29 @@ spec:
                   message: 'type operator : source.url (repo git des manifestes de l''opérateur) et source.version (tag ou SHA) sont requis (pin de gouvernance)'
                 - rule: self.type != 'compound' || (has(self.source) && has(self.source.url) && has(self.source.version)) || (has(self.recipe) && has(self.recipe.children))
                   message: 'type compound : soit source.url+version (recette compound.yaml dans git), soit recipe inline (composer du portail)'
+                # ansible : le dépôt du rôle ET l'autorisation. La CIBLE est requise —
+                # verrouiller le playbook sans verrouiller la machine ne verrouille rien :
+                # soit le produit la FIXE (inventory), soit il ouvre le choix dans une
+                # liste déclarée (allowedLimits), jamais un hôte libre au demandeur.
+                - rule: self.type != 'ansible' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
+                  message: 'type ansible : source.url (repo du rôle), source.version (tag ou SHA) et source.path (chemin du rôle) sont requis (pin de gouvernance)'
+                - rule: self.type != 'ansible' || (has(self.automation) && has(self.automation.jobTemplate))
+                  message: 'type ansible : automation.jobTemplate est requis — c''est le SEUL job template que le produit pourra lancer'
+                - rule: self.type != 'ansible' || (has(self.automation) && (has(self.automation.inventory) || (has(self.automation.allowedLimits) && size(self.automation.allowedLimits) > 0)))
+                  message: 'type ansible : la cible doit être déclarée — automation.inventory (le produit la fixe) OU automation.allowedLimits (le produit ouvre le choix, dans cette liste et elle seule)'
+                - rule: self.type != 'ansible' || (has(self.automation) && has(self.automation.awxTokenSecret))
+                  message: 'type ansible : automation.awxTokenSecret est requis — le credential AWX est celui du FOURNISSEUR, jamais un jeton commun à la plateforme'
                 properties:
                   type:
                     type: string
-                    description: Moteur de la future promesse (helm, crossplane, operator et compound implémentés ; terraform = slot)
+                    description: Moteur de la future promesse (helm, crossplane, operator, compound et ansible implémentés ; terraform = slot)
                     enum:
                     - helm
                     - crossplane
                     - terraform
                     - operator
                     - compound
+                    - ansible
                     default: helm
                   kind:
                     type: string
@@ -127,6 +140,35 @@ spec:
                           type: string
                           pattern: ^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$
                         description: 'operator : champs du spec à RETIRER de l''API portail (curation d''une CRD tierce obèse — ex. override, dont les required imbriqués rendent le formulaire soumis-bloquant). BR5 : chemins POINTÉS admis (override.statefulSet = retrait NESTED via l''officiel update api --property a.b- ; le reste du parent et son required restent cohérents). Un champ retiré n''est jamais posé sur le CR → les défauts de l''opérande s''appliquent.'
+                  automation:
+                    type: object
+                    description: 'ansible : ce que le produit DÉCLARE de son automatisation. Ces valeurs partent dans l''ENVIRONNEMENT du contrôleur — donc hors de portée du spec d''une demande. Ce qui est permis est déclaré, jamais déduit.'
+                    properties:
+                      jobTemplate:
+                        type: string
+                        description: Le SEUL job template AAP que ce produit pourra lancer.
+                        minLength: 1
+                      jobTemplateDelete:
+                        type: string
+                        description: 'Job template de décommissionnement (sinon stateVar : le job template nominal est rejoué avec sa variable d''état à « absent »).'
+                      inventory:
+                        type: string
+                        description: 'Le produit FIXE sa cible : l''inventaire déclaré. Le demandeur n''a rien à dire.'
+                      allowedLimits:
+                        type: array
+                        items:
+                          type: string
+                        description: 'Le produit OUVRE le choix : la demande peut désigner une cible DANS cette liste, et seulement elle. Hors liste ou nom d''hôte libre → refusé.'
+                      awxTokenSecret:
+                        type: string
+                        description: 'Secret portant le jeton AWX DU FOURNISSEUR (clé : token). Un jeton commun ferait s''arrêter la lignée du fournisseur à la frontière d''AAP.'
+                        pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                      stateVar:
+                        type: string
+                        description: 'Variable d''état du job template (défaut : marker_state), utilisée quand il n''y a pas de job template de retrait.'
+                      entrypoint:
+                        type: string
+                        description: 'Point d''entrée du rôle dont on dérive le contrat (défaut : main).'
                   placement:
                     type: string
                     pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
