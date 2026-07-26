@@ -1,0 +1,151 @@
+# ── UN CREDENTIAL AWX PAR FOURNISSEUR ────────────────────────────────────────
+# Un jeton unique pour toute la plateforme ferait s'arrêter la lignée `provider` —
+# bâtie partout ailleurs — à la frontière d'AAP. Chaque fournisseur a donc SON
+# utilisateur AWX, SON jeton, et l'accès au SEUL job template qu'il exploite.
+#
+# C'est le deuxième verrou de l'autorisation, et le plus solide : même si le rôle
+# générique était trompé, AWX refuserait (403). Le premier verrou (le job template
+# déclaré dans l'environnement du Deployment, hors de portée d'un demandeur) reste
+# la barrière de conception ; celui-ci est la barrière d'exécution.
+#
+# Rejouable : chaque objet est cherché par son nom avant d'être créé.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: awx-seed-fournisseurs
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    metadata: { labels: { app: awx-seed-fournisseurs } }
+    spec:
+      restartPolicy: Never
+      serviceAccountName: awx-seed
+      priorityClassName: platform-high
+      volumes:
+        - name: admin
+          secret:
+            secretName: awx-admin-password
+            items: [{ key: password, path: admin-password }]
+      containers:
+        - name: seed
+          image: alpine/k8s@sha256:097aa60cbef561146757c7494468e9d7b04d843597ad1a1515ed09d0708c8014 # alpine/k8s:1.35.3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits:   { cpu: 500m, memory: 384Mi }
+          volumeMounts:
+            - { name: admin, mountPath: /creds, readOnly: true }
+          env:
+            - { name: AWX_HOST, value: "http://awx-service.awx.svc.cluster.local" }
+            # « fournisseur:job-template:secret » — data-driven : ajouter un
+            # fournisseur, c'est ajouter une ligne, jamais du code.
+            - { name: FOURNISSEURS, value: "cloud:legacy-service:awx-token-cloud indus:legacy-motd:awx-token-indus" }
+          command: [/bin/sh, -c]
+          args:
+            - |
+              set -eu
+              API="$AWX_HOST/api/v2"
+              AUTH="admin:$(cat /creds/admin-password)"
+              find_id() { curl -sS -u "$AUTH" -G --data-urlencode "$3=$2" "$API/$1/" | jq -r '.results[0].id // empty'; }
+              gen() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c 32 || true; }
+
+              echo "== attente de l'API AWX =="
+              i=0
+              until curl -sf "$API/ping/" 2>/dev/null | jq -e '.version' >/dev/null 2>&1; do
+                i=$((i+1)); [ "$i" -lt 90 ] || { echo "ERREUR: AWX injoignable"; exit 1; }
+                sleep 10
+              done
+
+              ORG=$(find_id organizations "Plateforme" name)
+              PRJ=$(find_id projects "Playbooks legacy" name)
+              INV=$(find_id inventories "Parc legacy" name)
+              [ -n "$ORG" ] && [ -n "$PRJ" ] && [ -n "$INV" ] || { echo "ERREUR: le jeu d'essai d'AN1 n'est pas passe"; exit 1; }
+
+              # ── Le job template du SECOND produit ─────────────────────────────
+              echo "== job template du second produit =="
+              JT2=$(find_id job_templates "legacy-motd" name)
+              if [ -z "$JT2" ]; then
+                # Le projet doit avoir vu le playbook : on force une synchronisation
+                # et on attend, sinon AWX refuse « Playbook not found for project ».
+                curl -sS -u "$AUTH" -X POST "$API/projects/$PRJ/update/" >/dev/null
+                i=0
+                until curl -sS -u "$AUTH" "$API/projects/$PRJ/playbooks/" | jq -e 'index("legacy-motd.yml")' >/dev/null 2>&1; do
+                  i=$((i+1)); [ "$i" -lt 60 ] || { echo "ERREUR: legacy-motd.yml absent du projet apres 5 min"; curl -sS -u "$AUTH" "$API/projects/$PRJ/playbooks/"; exit 1; }
+                  sleep 5
+                done
+                JT2=$(curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --argjson i "$INV" --argjson p "$PRJ" '{name:"legacy-motd", job_type:"run", inventory:$i, project:$p, playbook:"legacy-motd.yml", ask_variables_on_launch:true, verbosity:1, description:"Banniere de connexion sur une cible legacy"}')" \
+                  "$API/job_templates/" | jq -r '.id // empty')
+                [ -n "$JT2" ] || { echo "ERREUR: creation du job template legacy-motd"; exit 1; }
+                CRED=$(find_id credentials "legacy-vm-ssh" name)
+                curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' -d "{\"id\":$CRED}" "$API/job_templates/$JT2/credentials/" >/dev/null || true
+                cat > /tmp/survey.json <<'SURVEY'
+              {"name":"Parametres de la banniere","description":"Ce que le demandeur choisit",
+               "spec":[{"question_name":"Texte de la banniere","variable":"banner_text","type":"text","required":true,"default":"Acces reserve - plateforme","min":1,"max":200},
+                       {"question_name":"Etat attendu","variable":"marker_state","type":"multiplechoice","required":true,"default":"present","choices":"present\nabsent"}]}
+              SURVEY
+                curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/survey.json "$API/job_templates/$JT2/survey_spec/" >/dev/null
+                curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' -d '{"survey_enabled":true}' "$API/job_templates/$JT2/" >/dev/null
+                rm -f /tmp/survey.json
+              fi
+              echo "job template legacy-motd = $JT2"
+
+              # ── Un utilisateur, un jeton, un SEUL job template par fournisseur ─
+              for F in $FOURNISSEURS; do
+                NOM=$(printf '%s' "$F" | cut -d: -f1)
+                JTN=$(printf '%s' "$F" | cut -d: -f2)
+                SEC=$(printf '%s' "$F" | cut -d: -f3)
+                USER="prov-$NOM"
+                echo "== fournisseur $NOM (job template $JTN, secret $SEC) =="
+
+                JTID=$(find_id job_templates "$JTN" name)
+                [ -n "$JTID" ] || { echo "ERREUR: job template $JTN introuvable"; exit 1; }
+
+                # Le mot de passe ne sert qu'ici, une fois, pour que l'utilisateur
+                # cree SON propre jeton. Il n'est ni affiche ni conserve.
+                MDP=$(gen)
+                UID_=$(find_id users "$USER" username)
+                if [ -z "$UID_" ]; then
+                  UID_=$(curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' \
+                    -d "$(jq -nc --arg u "$USER" --arg p "$MDP" --arg n "$NOM" '{username:$u, password:$p, first_name:"Fournisseur", last_name:$n, is_superuser:false}')" \
+                    "$API/organizations/$ORG/users/" | jq -r '.id // empty')
+                  [ -n "$UID_" ] || { echo "ERREUR: creation de l'utilisateur $USER"; exit 1; }
+                else
+                  # Rejeu : on repositionne le mot de passe pour pouvoir renouveler
+                  # le jeton si besoin. La valeur reste dans ce conteneur.
+                  curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                    -d "$(jq -nc --arg p "$MDP" '{password:$p}')" "$API/users/$UID_/" >/dev/null
+                fi
+
+                # Le SEUL droit accorde : executer SON job template. Rien d'autre.
+                ROLE=$(curl -sS -u "$AUTH" "$API/job_templates/$JTID/object_roles/" | jq -r '.results[] | select(.name=="Execute") | .id')
+                [ -n "$ROLE" ] || { echo "ERREUR: role Execute introuvable sur $JTN"; exit 1; }
+                curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' -d "{\"id\":$ROLE}" "$API/users/$UID_/roles/" >/dev/null || true
+
+                # Jeton valide ? On le garde. Sinon on en cree un AVEC L'IDENTITE
+                # du fournisseur (jamais celle de l'administrateur).
+                BESOIN=1
+                if kubectl -n awx get secret "$SEC" >/dev/null 2>&1; then
+                  T=$(kubectl -n awx get secret "$SEC" -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
+                  if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
+                    echo "  jeton existant valide -> inchange (idempotent)"; BESOIN=0
+                  fi
+                  unset T
+                fi
+                if [ "$BESOIN" -eq 1 ]; then
+                  curl -sS -u "$USER:$MDP" -X POST -H 'Content-Type: application/json' \
+                    -d '{"description":"operateur ansible du fournisseur","scope":"write"}' \
+                    "$API/tokens/" | jq -j '.token // empty' > /tmp/token
+                  [ -s /tmp/token ] || { echo "ERREUR: creation du jeton pour $USER"; exit 1; }
+                  kubectl -n awx create secret generic "$SEC" --from-file=token=/tmp/token \
+                    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                  rm -f /tmp/token
+                  echo "  $SEC cree/renouvele (valeur jamais affichee)"
+                fi
+                unset MDP
+              done
+              echo "== fournisseurs prets =="

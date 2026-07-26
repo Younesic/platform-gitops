@@ -73,6 +73,46 @@ data:
         - name: Resultat
           ansible.builtin.debug:
             msg: "{{ service_name }} : fichier {{ 'PRESENT' if marker.stat.exists else 'ABSENT' }} sur {{ inventory_hostname }}"
+  legacy-motd.yml: |
+    ---
+    # Second produit du parc legacy : la banniere de connexion (/etc/motd).
+    # Meme forme que legacy-marker (parametre, idempotent, reversible) mais un
+    # AUTRE job template, un AUTRE fournisseur : c'est ce qui permet de prouver
+    # qu'un produit ne peut pas lancer l'automatisation d'un autre.
+    - name: Banniere de connexion sur cible sans API declarative
+      hosts: all
+      gather_facts: false
+      vars:
+        banner_text: "Acces reserve - plateforme"
+        marker_state: present
+      tasks:
+        - name: Amorcer l'interpreteur Python (cible legacy)
+          ansible.builtin.raw: command -v python3 >/dev/null || apk add --no-cache python3
+          changed_when: false
+
+        - name: Poser la banniere
+          ansible.builtin.copy:
+            dest: /opt/legacy/motd
+            mode: "0644"
+            content: |
+              {{ banner_text }}
+          when: marker_state == "present"
+
+        - name: Retirer la banniere (de-provisionnement)
+          ansible.builtin.file:
+            path: /opt/legacy/motd
+            state: absent
+          when: marker_state == "absent"
+
+        - name: Etat constate
+          ansible.builtin.stat:
+            path: /opt/legacy/motd
+          register: motd
+
+        - name: Resultat
+          ansible.builtin.debug:
+            msg: "banniere {{ 'PRESENTE' if motd.stat.exists else 'ABSENTE' }} sur {{ inventory_hostname }}"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -92,7 +132,7 @@ spec:
       annotations:
         # Incrémenter à chaque modification du playbook ci-dessus : ArgoCD ne
         # redémarre pas un pod parce qu'une ConfigMap a changé.
-        playbooks-revision: "1"
+        playbooks-revision: "2"
     spec:
       priorityClassName: platform-high
       volumes:

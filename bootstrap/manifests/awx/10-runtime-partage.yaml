@@ -1,0 +1,366 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LE RUNTIME ANSIBLE PARTAGÉ — N produits, un seul jeu de rôles.
+#
+# Le levier revendiqué du projet : ZÉRO image par promesse. Le précédent exact est
+# le `compound-renderer` (sa recette vit dans une variable d'environnement, jamais
+# dans l'image). Ici on va plus loin : il n'y a même pas d'image à construire.
+# L'image du contrôleur est celle, PUBLIQUE et épinglée par empreinte,
+# d'operator-sdk ; les rôles génériques sont montés depuis CETTE ConfigMap,
+# identique pour tous les produits.
+#
+# Par produit il ne reste que : une CRD (le contrat), un watches.yaml (un seul
+# fichier), un Deployment et du RBAC. Aucune image.
+#
+# ⚠️ NE PAS ÉDITER ICI. Source de vérité :
+#      new-cluster/native/_shared/ansible-operator/roles/
+#    Régénérer avec le script du même dossier après toute modification, et
+#    incrémenter `roles-revision` dans les Deployments des produits.
+#
+# Le Dockerfile de la variante « rôles dans l'image » est livré à côté de la
+# source : il n'apporte que du conditionnement (un montage de moins), pas
+# d'architecture. Sa construction est un geste réservé (identifiants Harbor).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ansible-operator-roles
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  awx-contrat.yml: |
+    ---
+    # ─────────────────────────────────────────────────────────────────────────────
+    # RÔLE GÉNÉRIQUE — il ne connaît AUCUN produit.
+    #
+    # Tout ce qui varie vient d'ailleurs :
+    #   · le CONTRAT (quel job template, quelle cible, quel dé-provisionnement) vient
+    #     de l'ENVIRONNEMENT du conteneur, posé par le Deployment du produit ;
+    #   · les VALEURS viennent du `spec` de la ressource demandée.
+    #
+    # Pourquoi l'environnement et pas les `vars` du watches.yaml : les variables d'un
+    # watches sont écrasables par le `spec` de la ressource. L'environnement d'un
+    # conteneur, non. Le job template autorisé DOIT être hors de portée du demandeur,
+    # sinon le verrou ne verrouille rien.
+    #
+    # Défaut fermé : aucun chemin de ce rôle ne produit un succès sans un résultat AWX
+    # lu ET positif.
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    - name: Lire le contrat d'execution (environnement du conteneur, hors de portee du demandeur)
+      ansible.builtin.set_fact:
+        awx_url: "{{ lookup('env', 'AWX_URL') | trim }}"
+        awx_token: "{{ lookup('env', 'AWX_TOKEN') | trim }}"
+        jt_autorise: "{{ lookup('env', 'AWX_JOB_TEMPLATE') | trim }}"
+        jt_suppression: "{{ lookup('env', 'AWX_JOB_TEMPLATE_DELETE') | default('', true) | trim }}"
+        var_etat: "{{ lookup('env', 'AWX_STATE_VAR') | default('', true) | trim }}"
+        valeur_absent: "{{ lookup('env', 'AWX_STATE_ABSENT') | default('absent', true) | trim }}"
+        cibles_autorisees: >-
+          {{ (lookup('env', 'AWX_ALLOWED_LIMITS') | default('', true)).split(',')
+             | map('trim') | reject('equalto', '') | list }}
+        delai_max: "{{ (lookup('env', 'AWX_TIMEOUT_SECONDS') | default('600', true)) | int }}"
+        operande_group: "{{ lookup('env', 'OPERAND_GROUP') | trim }}"
+        operande_version: "{{ lookup('env', 'OPERAND_VERSION') | default('v1alpha1', true) | trim }}"
+        operande_plural: "{{ lookup('env', 'OPERAND_PLURAL') | trim }}"
+        claim_api_version: "{{ lookup('env', 'CLAIM_API_VERSION') | default('', true) | trim }}"
+        claim_plural: "{{ lookup('env', 'CLAIM_PLURAL') | default('', true) | trim }}"
+        k8s_api: https://kubernetes.default.svc
+        k8s_ca: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        k8s_token: "{{ lookup('file', '/var/run/secrets/kubernetes.io/serviceaccount/token') }}"
+        # Ce qu'un demandeur ne peut JAMAIS décider. `target` fait exception : il est
+        # accepté, mais uniquement contre la liste déclarée (voir plus bas).
+        cles_reservees:
+          - jobTemplate
+          - awxJobTemplate
+          - job_template
+          - awx_job_template
+          - limit
+          - awxLimit
+          - inventory
+          - awxInventory
+          - extraVars
+          - extra_vars
+          - credential
+          - awxCredential
+
+    - name: Le contrat d'execution est-il complet
+      ansible.builtin.assert:
+        that:
+          - awx_url | length > 0
+          - awx_token | length > 0
+          - jt_autorise | length > 0
+          - operande_group | length > 0
+          - operande_plural | length > 0
+        fail_msg: >-
+          Contrat d'execution incomplet. AWX_URL, AWX_TOKEN, AWX_JOB_TEMPLATE,
+          OPERAND_GROUP et OPERAND_PLURAL sont requis : sans eux le controleur ne peut
+          RIEN executer, et ne doit surtout pas se declarer sain.
+
+    # Un produit qui ne declare PAS comment il se de-provisionne laisserait des traces
+    # sur la machine a la suppression. On refuse a l'installation, pas au moment ou
+    # c'est trop tard.
+    - name: Le de-provisionnement est-il declare
+      ansible.builtin.assert:
+        that:
+          - (jt_suppression | length > 0) or (var_etat | length > 0)
+        fail_msg: >-
+          Aucun de-provisionnement declare : il faut AWX_JOB_TEMPLATE_DELETE (un job
+          template de retrait) OU AWX_STATE_VAR (la variable d'etat du job template
+          nominal). Sans l'un des deux, supprimer la demande laisserait la
+          configuration en place sur la machine.
+
+    - name: Lire la ressource demandee
+      ansible.builtin.uri:
+        url: "{{ k8s_api }}/apis/{{ operande_group }}/{{ operande_version }}/namespaces/{{ ansible_operator_meta.namespace }}/{{ operande_plural }}/{{ ansible_operator_meta.name }}"
+        ca_path: "{{ k8s_ca }}"
+        headers: { Authorization: "Bearer {{ k8s_token }}" }
+      register: operande
+      no_log: true
+
+    # ── AUTORISATION ────────────────────────────────────────────────────────────
+    # Ce qui est permis est DÉCLARÉ, jamais déduit. Deux verrous, tous deux fermés :
+    # le job template, et la cible.
+    - name: Aucune cle reservee ne doit venir de la demande
+      ansible.builtin.assert:
+        that:
+          - (operande.json.spec | default({}) | dict2items | map(attribute='key') | select('in', cles_reservees) | list | length) == 0
+        fail_msg: >-
+          Demande REFUSEE : elle porte une cle reservee
+          ({{ operande.json.spec | default({}) | dict2items | map(attribute='key') | select('in', cles_reservees) | list | join(', ') }}).
+          Le job template, l'inventaire et les identifiants sont declares par le
+          produit, jamais choisis par le demandeur.
+
+    - name: La cible demandee est-elle dans la liste declaree
+      ansible.builtin.assert:
+        that:
+          - (cibles_autorisees | length > 0) and (operande.json.spec.target in cibles_autorisees)
+        fail_msg: >-
+          Demande REFUSEE : cible « {{ operande.json.spec.target }} »
+          {{ 'hors de la liste declaree (' + (cibles_autorisees | join(', ')) + ')'
+             if (cibles_autorisees | length > 0)
+             else 'alors que ce produit fixe sa cible et n en laisse pas le choix' }}.
+      when: operande.json.spec.target is defined
+
+    # ── EXÉCUTION ───────────────────────────────────────────────────────────────
+  awx-runner.yml: |
+    ---
+    # Le rôle nominal : imposer l'état déclaré. Il ne connaît aucun produit — le
+    # contrat (quel job template, quelle cible, quel délai) est lu par `awx-contrat`
+    # depuis l'environnement du conteneur, hors de portée du demandeur.
+    - name: Lire et verifier le contrat d'execution
+      ansible.builtin.include_role:
+        name: awx-contrat
+
+    - name: Resoudre le SEUL job template autorise
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/?name={{ jt_autorise | urlencode }}"
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        status_code: [200]
+      register: jt
+      no_log: true
+
+    - name: Le job template autorise existe-t-il, et un seul
+      ansible.builtin.assert:
+        that:
+          - (jt.json.results | default([])) | length == 1
+        fail_msg: >-
+          Job template « {{ jt_autorise }} » introuvable (ou ambigu) pour ce
+          fournisseur : {{ (jt.json.results | default([])) | length }} resultat(s).
+          Le jeton de ce produit ne donne peut-etre pas acces a ce job template.
+
+    # Le `spec` de la demande devient les variables du job. Convention (celle de
+    # l'operateur ansible lui-meme) : camelCase -> snake_case. Aucune connaissance
+    # metier ici : on transporte ce que le contrat de la CRD a laisse passer.
+    - name: Traduire le spec de la demande en variables de job
+      ansible.builtin.set_fact:
+        vars_du_job: >-
+          {{ dict(
+               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\\1') | map('lower') | list
+               | zip(
+                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+                 | map(attribute='value') | list)
+             ) }}
+
+    - name: Lancer l'automatisation declaree
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/{{ jt.json.results[0].id }}/launch/"
+        method: POST
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        body_format: json
+        # Une SEULE expression Jinja : sinon les valeurs partent en chaines de
+        # caracteres et l'API refuse les entiers et les booleens.
+        body: >-
+          {{ {'extra_vars': (vars_du_job | combine(etat_demande | default({})))}
+             | combine({'limit': operande.json.spec.target} if (operande.json.spec.target is defined) else {}) }}
+        status_code: [201]
+        timeout: 60
+      register: lancement
+      no_log: true
+
+    - name: Attendre le resultat, sans depasser le delai declare
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/jobs/{{ lancement.json.id }}/"
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        status_code: [200]
+        timeout: 30
+      register: job
+      until: job.json.status in ['successful', 'failed', 'error', 'canceled']
+      retries: "{{ (delai_max | int / 5) | int }}"
+      delay: 5
+      no_log: true
+      # Delai depasse, AWX injoignable, reponse illisible : la tache echoue, et le
+      # bloc appelant transforme cet echec en condition lisible. Jamais un succes.
+
+    - name: Publier l'etat sur la ressource
+      ansible.builtin.uri:
+        url: "{{ k8s_api }}/apis/{{ operande_group }}/{{ operande_version }}/namespaces/{{ ansible_operator_meta.namespace }}/{{ operande_plural }}/{{ ansible_operator_meta.name }}/status"
+        method: PATCH
+        ca_path: "{{ k8s_ca }}"
+        headers:
+          Authorization: "Bearer {{ k8s_token }}"
+          Content-Type: application/merge-patch+json
+        body_format: json
+        body: >-
+          {{ {'status': {
+               'awxJobId': (lancement.json.id | int),
+               'awxJobStatus': job.json.status,
+               'lastRunAt': (job.json.finished | default('')),
+               'serviceState': ('configure' if job.json.status == 'successful' else 'en echec')
+             }} }}
+        status_code: [200]
+      no_log: true
+
+    - name: Retrouver la demande Kratix (aucun nom de promesse en dur)
+      ansible.builtin.uri:
+        url: "{{ k8s_api }}/apis/{{ claim_api_version }}/namespaces/{{ ansible_operator_meta.namespace }}/{{ claim_plural }}/{{ ansible_operator_meta.name }}"
+        ca_path: "{{ k8s_ca }}"
+        headers: { Authorization: "Bearer {{ k8s_token }}" }
+        status_code: [200, 404]
+      register: demande
+      no_log: true
+      when: claim_plural | length > 0
+
+    - name: Publier la sante du produit
+      ansible.builtin.uri:
+        url: "{{ k8s_api }}/apis/platform.kratix.io/v1alpha1/namespaces/{{ ansible_operator_meta.namespace }}/healthrecords/ansible-runtime-{{ ansible_operator_meta.name }}?fieldManager=ansible-operator&force=true"
+        method: PATCH
+        ca_path: "{{ k8s_ca }}"
+        headers:
+          Authorization: "Bearer {{ k8s_token }}"
+          Content-Type: application/apply-patch+yaml
+        body_format: json
+        body: >-
+          {{ {'apiVersion': 'platform.kratix.io/v1alpha1', 'kind': 'HealthRecord',
+              'metadata': {'name': 'ansible-runtime-' + ansible_operator_meta.name,
+                           'namespace': ansible_operator_meta.namespace},
+              'data': {
+                'promiseRef': {'name': demande.json.metadata.labels['kratix.io/promise-name']},
+                'resourceRef': {'name': ansible_operator_meta.name,
+                                'namespace': ansible_operator_meta.namespace,
+                                'generation': (demande.json.metadata.generation | int)},
+                'state': ('healthy' if job.json.status == 'successful' else 'unhealthy'),
+                'lastRun': (lookup('pipe', 'date +%s') | int),
+                'details': {'source': 'ansible-operator', 'check': 'job-awx',
+                            'reason': 'job AWX ' + (lancement.json.id | string) + ' termine en '
+                                      + job.json.status}
+              }} }}
+        status_code: [200, 201]
+      no_log: true
+      when:
+        - claim_plural | length > 0
+        - demande.status | default(0) == 200
+
+    # En DERNIER : l'etat et la sante sont publies AVANT d'echouer, sinon un echec ne
+    # laisserait aucune trace lisible.
+    - name: Echouer si l'automatisation a echoue
+      ansible.builtin.fail:
+        msg: "job AWX {{ lancement.json.id }} termine en {{ job.json.status }}"
+      when: job.json.status != 'successful'
+  awx-remover.yml: |
+    ---
+    # Le rôle de DÉ-PROVISIONNEMENT, joué par le finalizer à la suppression.
+    # C'est ce qui manque à un playbook lancé dans un pipeline : là, supprimer la
+    # demande ne ferait rien du tout sur la machine.
+    #
+    # Deux façons pour un produit de déclarer son retrait, au choix de l'auteur :
+    #   · AWX_JOB_TEMPLATE_DELETE — un job template de décommissionnement dédié ;
+    #   · AWX_STATE_VAR (+ AWX_STATE_ABSENT) — le job template nominal, rejoué avec
+    #     sa variable d'état à « absent ».
+    # `awx-contrat` refuse le démarrage si aucune des deux n'est déclarée.
+    - name: Lire et verifier le contrat d'execution
+      ansible.builtin.include_role:
+        name: awx-contrat
+
+    - name: Choisir le chemin de retrait declare par le produit
+      ansible.builtin.set_fact:
+        jt_retrait: "{{ jt_suppression if (jt_suppression | length > 0) else jt_autorise }}"
+        etat_demande: "{{ {} if (jt_suppression | length > 0) else {var_etat: valeur_absent} }}"
+
+    - name: Resoudre le job template de retrait
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/?name={{ jt_retrait | urlencode }}"
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        status_code: [200]
+      register: jt
+      no_log: true
+
+    - name: Le job template de retrait existe-t-il, et un seul
+      ansible.builtin.assert:
+        that:
+          - (jt.json.results | default([])) | length == 1
+        fail_msg: "Job template de retrait « {{ jt_retrait }} » introuvable (ou ambigu) pour ce fournisseur."
+
+    - name: Traduire le spec de la demande en variables de job
+      ansible.builtin.set_fact:
+        vars_du_job: >-
+          {{ dict(
+               (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+               | map(attribute='key') | map('regex_replace', '([A-Z])', '_\\1') | map('lower') | list
+               | zip(
+                 (operande.json.spec | default({}) | dict2items | rejectattr('key', 'equalto', 'target') | list)
+                 | map(attribute='value') | list)
+             ) }}
+
+    - name: Demander le retrait sur la cible
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/job_templates/{{ jt.json.results[0].id }}/launch/"
+        method: POST
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        body_format: json
+        # Le spec est renvoyé EN ENTIER : un sondage AWX aux variables requises refuse
+        # un lancement incomplet (400), même pour un retrait où elles ne servent à rien.
+        body: >-
+          {{ {'extra_vars': (vars_du_job | combine(etat_demande))}
+             | combine({'limit': operande.json.spec.target} if (operande.json.spec.target is defined) else {}) }}
+        status_code: [201]
+        timeout: 60
+      register: lancement
+      no_log: true
+
+    - name: Attendre le resultat du retrait
+      ansible.builtin.uri:
+        url: "{{ awx_url }}/api/v2/jobs/{{ lancement.json.id }}/"
+        headers: { Authorization: "Bearer {{ awx_token }}" }
+        status_code: [200]
+        timeout: 30
+      register: job
+      until: job.json.status in ['successful', 'failed', 'error', 'canceled']
+      retries: "{{ (delai_max | int / 5) | int }}"
+      delay: 5
+      no_log: true
+
+    # Si le retrait echoue, on ECHOUE : le finalizer n'est pas retire, la ressource ne
+    # disparait pas, et personne ne croit a une suppression propre.
+    - name: Echouer si le retrait a echoue
+      ansible.builtin.fail:
+        msg: "de-provisionnement : job AWX {{ lancement.json.id }} termine en {{ job.json.status }}"
+      when: job.json.status != 'successful'
+
+    - name: Retirer la sante publiee
+      ansible.builtin.uri:
+        url: "{{ k8s_api }}/apis/platform.kratix.io/v1alpha1/namespaces/{{ ansible_operator_meta.namespace }}/healthrecords/ansible-runtime-{{ ansible_operator_meta.name }}"
+        method: DELETE
+        ca_path: "{{ k8s_ca }}"
+        headers: { Authorization: "Bearer {{ k8s_token }}" }
+        status_code: [200, 202, 404]
+      no_log: true
