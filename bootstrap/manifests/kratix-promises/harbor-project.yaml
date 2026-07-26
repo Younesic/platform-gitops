@@ -7,11 +7,6 @@ metadata:
   annotations:
     backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","storageQuotaGb","users","team","*"]}'
     platform.kratix.io/provider: indus
-    # IT3 — PILOTE : l'annotation posée ici prouve la chaîne promesse -> fiche
-    # SANS attendre les merges. La déclaration DURABLE est au CLAIM
-    # (portal-templates PR #95, curation.approval) : à la prochaine
-    # regeneration par la factory, c'est ELLE qui produira cette ligne.
-    platform.kratix.io/approval: '{"class":"NormalChange","service":"Plateforme interne","gate":"standard"}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -80,7 +75,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:bbdf295e256d33af06a03898b13bdf90e6b49a25a70687471e17a210d01cfe1a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             name: backstage
             env:
             - name: UI_SCHEMA_REV
@@ -118,7 +113,7 @@ spec:
                 \ harbor-${spec.project}\n    users: ${spec.users}\n"
             - name: COMPOUND_STAGE
               value: emit
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:bbdf295e256d33af06a03898b13bdf90e6b49a25a70687471e17a210d01cfe1a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             name: backstage
           jobOptions: {}
           rbac: {}
