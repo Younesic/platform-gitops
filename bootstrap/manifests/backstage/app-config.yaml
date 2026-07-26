@@ -101,6 +101,23 @@ data:
           approvedWhen: >-
             SELECT UserRequest WHERE ref = :ref
             AND status IN ('approved','assigned','resolved','closed')
+      # IT5 — LE PORTIER. Sans `repos`, il est INACTIF : la plateforme se comporte
+      # exactement comme avant. Le `context` est le nom du contrôle qui apparaît
+      # sur la demande — c'est LUI qu'exigera la protection de branche.
+      gate:
+        context: itop
+        frequencyMinutes: 5
+        repos:
+          - Younesic/portal-templates
+        # 1er groupe = l'OFFRE (on y lit sa politique), 2e = le nom de la demande.
+        claimPathPattern: '^requests/([^/]+)/([^/]+)/claim\.ya?ml$'
+        refAnnotation: platform.kratix.io/itop-ref
+        # IT6 — contrôle DÉTECTIF : classe iTop des incidents ouverts quand une
+        # demande a été fusionnée SANS contrôle au vert. Vide = contrôle inactif.
+        # Contrepartie assumée du mur : tant que la protection de branche ne peut
+        # pas s'appliquer, un merge non approuvé doit au moins se VOIR.
+        incidentClass: Incident
+        mergeLookbackDays: 7
 
     backend:
       baseUrl: https://backstage.212-47-226-56.nip.io
