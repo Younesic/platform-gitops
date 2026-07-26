@@ -267,7 +267,7 @@ spec:
               echo "== jeton d'API =="
               NEED_TOKEN=1
               if kubectl -n awx get secret awx-api-token >/dev/null 2>&1; then
-                T=$(kubectl -n awx get secret awx-api-token -o jsonpath='{.data.token}' | base64 -d)
+                T=$(kubectl -n awx get secret awx-api-token -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
                 if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
                   echo "jeton existant valide -> inchange (idempotent)."; NEED_TOKEN=0
                 else
@@ -276,7 +276,11 @@ spec:
                 unset T
               fi
               if [ "$NEED_TOKEN" -eq 1 ]; then
-                post /tokens/ '{"description":"platform-ansible-operator","scope":"write"}' | jq -r '.token // empty' > /tmp/token
+                # `jq -j` (et non -r) : PAS de saut de ligne final. Un jeton qui en
+                # porte un produit un en-tête HTTP invalide chez TOUS ses
+                # consommateurs (« Invalid header value b'Bearer …\n' » — vécu,
+                # débusqué par l'opérateur Ansible d'AN2).
+                post /tokens/ '{"description":"platform-ansible-operator","scope":"write"}' | jq -j '.token // empty' > /tmp/token
                 [ -s /tmp/token ] || { echo "ERREUR: creation du jeton d'API"; exit 1; }
                 kubectl -n awx create secret generic awx-api-token --from-file=token=/tmp/token \
                   --dry-run=client -o yaml | kubectl apply -f - > /dev/null
