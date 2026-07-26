@@ -6,7 +6,13 @@ apiServer:
     className: sbs-default
     size: 5Gi
   resources:
-    requests: { cpu: 500m, memory: 2Gi }
+    # La RÉSERVATION ne sert qu'au PLACEMENT ; le plafond, lui, ne bouge pas.
+    # Mesure : ce serveur consomme ~900 Mio en régime, pour 2 Gio réservés —
+    # 1,1 Gio de rembourrage qui empêchait des pods de 128 Mio de se poser
+    # (nœuds à 99 % de RÉSERVÉ mais seulement 63-79 % de mémoire RÉELLE).
+    # 1 Gio laisse une marge confortable au-dessus du régime observé, et le
+    # plafond à 4 Gio est INCHANGÉ : aucun risque d'OOM neuf.
+    requests: { cpu: 500m, memory: 1Gi }
     limits: { memory: 4Gi }
   extraEnv:
     # --- Base PostgreSQL externe (CloudNativePG) ---
