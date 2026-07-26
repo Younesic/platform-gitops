@@ -1,0 +1,144 @@
+# Jeton AWX du PORTAIL — lecture seule.
+#
+# Pourquoi : le wizard Ansible du Studio doit proposer les job templates et les
+# inventaires plutôt que de les faire taper de mémoire. Pour cela le portail lit
+# l'API d'AWX à travers son proxy /awx-api, qui exige un jeton.
+#
+# Le principe du moindre privilège, comme pour les fournisseurs (11-seed-*) :
+#   · un utilisateur DÉDIÉ (`portail-lecture`), jamais l'administrateur ;
+#   · `is_system_auditor` = il voit tout, il ne peut RIEN modifier ni lancer ;
+#   · un jeton de portée `read` créé AVEC L'IDENTITÉ de cet utilisateur ;
+#   · le proxy n'autorise que GET (voir app-config.yaml) — deuxième verrou.
+#
+# Aucun secret n'est affiché ni écrit dans Git : le mot de passe ne sert qu'une
+# fois, dans ce conteneur, pour que l'utilisateur crée SON jeton.
+#
+# ⚠️ Le Secret est posé en SERVER-SIDE APPLY : un `kubectl apply` classique
+# recopierait le jeton EN CLAIR dans l'annotation last-applied-configuration
+# (défaut constaté sur awx-api-token). Server-side n'écrit pas cette annotation.
+---
+# Le compte du seed vit dans `awx` ; ce jeton doit atterrir dans `backstage`.
+# On ouvre donc le strict nécessaire, DANS backstage, sur CE secret :
+#   · `create` ne peut pas être restreint par nom (on ne nomme pas un objet qui
+#     n'existe pas encore — limite de Kubernetes, pas un relâchement volontaire) ;
+#   · get/patch/update, eux, sont limités au seul `awx-portal-token`.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: awx-jeton-portail
+  namespace: backstage
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [awx-portal-token]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-jeton-portail
+  namespace: backstage
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: awx-jeton-portail }
+subjects:
+  - { kind: ServiceAccount, name: awx-seed, namespace: awx }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: awx-jeton-portail
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: awx-seed
+      volumes:
+        - name: admin
+          secret:
+            secretName: awx-admin-password
+      containers:
+        - name: jeton
+          image: alpine/k8s@sha256:097aa60cbef561146757c7494468e9d7b04d843597ad1a1515ed09d0708c8014 # alpine/k8s:1.35.3
+          volumeMounts:
+            - { name: admin, mountPath: /creds, readOnly: true }
+          env:
+            - { name: AWX_HOST, value: "http://awx-service.awx.svc.cluster.local" }
+            - { name: USER, value: "portail-lecture" }
+            - { name: SECRET_NS, value: "backstage" }
+            - { name: SECRET_NOM, value: "awx-portal-token" }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              API="$AWX_HOST/api/v2"
+              AUTH="admin:$(cat /creds/password)"
+              gen() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24; }
+              find_id() { curl -sS -u "$AUTH" -G --data-urlencode "$3=$2" "$API/$1/" | jq -r '.results[0].id // empty'; }
+
+              i=0
+              until curl -sf "$API/ping/" 2>/dev/null | jq -e '.version' >/dev/null 2>&1; do
+                i=$((i+1)); [ "$i" -lt 60 ] || { echo "ERREUR: AWX ne repond pas apres 5 min"; exit 1; }
+                sleep 5
+              done
+
+              # Le jeton en place est-il encore valide ? Si oui on ne touche a rien.
+              if kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" >/dev/null 2>&1; then
+                T=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
+                if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
+                  echo "jeton existant valide -> inchange (idempotent)"; exit 0
+                fi
+                unset T
+              fi
+
+              ORG=$(find_id organizations Default name)
+              [ -n "$ORG" ] || { echo "ERREUR: organisation Default introuvable"; exit 1; }
+
+              MDP=$(gen)
+              UID_=$(find_id users "$USER" username)
+              if [ -z "$UID_" ]; then
+                UID_=$(curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg u "$USER" --arg p "$MDP" '{username:$u, password:$p, first_name:"Portail", last_name:"lecture", is_superuser:false}')" \
+                  "$API/organizations/$ORG/users/" | jq -r '.id // empty')
+                [ -n "$UID_" ] || { echo "ERREUR: creation de l'utilisateur $USER"; exit 1; }
+              else
+                curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg p "$MDP" '{password:$p}')" "$API/users/$UID_/" >/dev/null
+              fi
+
+              # LECTURE SEULE sur tout AWX. Aucun droit d'execution n'est accorde.
+              curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                -d '{"is_system_auditor":true}' "$API/users/$UID_/" >/dev/null
+              curl -sS -u "$AUTH" "$API/users/$UID_/" | jq -e '.is_system_auditor == true' >/dev/null \
+                || { echo "ERREUR: le role auditeur n'a pas ete pose"; exit 1; }
+
+              # Jeton cree AVEC L'IDENTITE du lecteur (jamais celle de l'admin),
+              # portee READ : meme si le proxy laissait passer un POST, AWX refuserait.
+              curl -sS -u "$USER:$MDP" -X POST -H 'Content-Type: application/json' \
+                -d '{"description":"lecture des job templates par le portail","scope":"read"}' \
+                "$API/tokens/" | jq -j '.token // empty' > /tmp/token
+              [ -s /tmp/token ] || { echo "ERREUR: creation du jeton pour $USER"; exit 1; }
+
+              kubectl -n "$SECRET_NS" create secret generic "$SECRET_NOM" --from-file=token=/tmp/token \
+                --dry-run=client -o yaml | kubectl apply --server-side --force-conflicts -f - >/dev/null
+              rm -f /tmp/token
+
+              # Verification par l'usage, jamais par l'affichage.
+              T=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" -o jsonpath='{.data.token}' | base64 -d)
+              curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/job_templates/" \
+                || { echo "ERREUR: le jeton ne peut pas lire les job templates"; exit 1; }
+              code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $T" \
+                -H 'Content-Type: application/json' -d '{"name":"interdit"}' "$API/inventories/")
+              case "$code" in
+                40[13]) echo "verifie: lecture OK, ecriture refusee ($code)";;
+                *) echo "ERREUR: une ecriture a ete acceptee ($code) — le jeton n'est pas en lecture seule"; exit 1;;
+              esac
+              echo "jeton du portail en place dans $SECRET_NS/$SECRET_NOM"
