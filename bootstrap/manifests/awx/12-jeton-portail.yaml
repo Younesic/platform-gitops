@@ -75,6 +75,9 @@ spec:
             - { name: USER, value: "portail-lecture" }
             - { name: SECRET_NS, value: "backstage" }
             - { name: SECRET_NOM, value: "awx-portal-token" }
+            # Le nom de l'organisation est une CONVENTION du seed (09-seed-job.yaml
+            # ORG_NAME, 11-seed-fournisseurs) — la reprendre, ne pas la deviner.
+            - { name: ORG_NAME, value: "Plateforme" }
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -99,8 +102,9 @@ spec:
                 unset T
               fi
 
-              ORG=$(find_id organizations Default name)
-              [ -n "$ORG" ] || { echo "ERREUR: organisation Default introuvable"; exit 1; }
+              ORG=$(find_id organizations "$ORG_NAME" name)
+              [ -n "$ORG" ] || { echo "ERREUR: organisation $ORG_NAME introuvable — organisations presentes :"; \
+                curl -sS -u "$AUTH" "$API/organizations/" | jq -r '.results[].name'; exit 1; }
 
               MDP=$(gen)
               UID_=$(find_id users "$USER" username)
