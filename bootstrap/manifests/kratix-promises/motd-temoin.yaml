@@ -3,53 +3,50 @@ kind: Promise
 metadata:
   labels:
     kratix.io/promise-version: v0.0.1
-  name: legacy-temoin
+  name: motd-temoin
   annotations:
     platform.kratix.io/status-schema: "{\"conditions\": {\"path\": \".status.conditions\"\
       , \"label\": \"Conditions \xE9crites par le runtime \xE0 chaque r\xE9conciliation.\"\
       , \"type\": \"array\"}, \"awxJobId\": {\"path\": \".status.awxJobId\", \"label\"\
       : \"Identifiant du job AWX de la derni\xE8re ex\xE9cution.\", \"type\": \"integer\"\
       }, \"awxJobStatus\": {\"path\": \".status.awxJobStatus\", \"label\": \"Statut\
-      \ du dernier job AWX (successful, failed\u2026).\", \"type\": \"string\"}, \"\
-      lastRunAt\": {\"path\": \".status.lastRunAt\", \"label\": \"Horodatage de fin\
-      \ de la derni\xE8re ex\xE9cution.\", \"type\": \"string\"}, \"serviceState\"\
-      : {\"path\": \".status.serviceState\", \"label\": \"\xC9tat constat\xE9 du service\
-      \ sur la machine cible.\", \"type\": \"string\"}}"
+      \ du dernier job AWX.\", \"type\": \"string\"}, \"lastRunAt\": {\"path\": \"\
+      .status.lastRunAt\", \"label\": \"Horodatage de fin de la derni\xE8re ex\xE9\
+      cution.\", \"type\": \"string\"}, \"serviceState\": {\"path\": \".status.serviceState\"\
+      , \"label\": \"\xC9tat constat\xE9 sur la machine cible.\", \"type\": \"string\"\
+      }}"
     platform.kratix.io/operator-group: temoin.ansible.example.io
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
     metadata:
-      name: legacyservicetemoins.platform.example.io
+      name: motdtemoins.platform.example.io
       namespace: default
     spec:
       group: platform.example.io
       names:
-        kind: LegacyServiceTemoin
-        plural: legacyservicetemoins
-        singular: legacyservicetemoin
+        kind: MotdTemoin
+        plural: motdtemoins
+        singular: motdtemoin
       scope: Namespaced
       versions:
       - additionalPrinterColumns:
-        - jsonPath: .spec.serviceName
-          name: Service
-          type: string
         - jsonPath: .status.awxJobId
           name: Job AWX
           type: integer
         - jsonPath: .status.awxJobStatus
-          name: "Dernier \xE9tat"
+          name: Dernier etat
           type: string
         - jsonPath: .metadata.creationTimestamp
-          name: "\xC2ge"
+          name: Age
           type: date
         name: v1alpha1
         schema:
           openAPIV3Schema:
-            description: "Un service configur\xE9 sur une machine du parc legacy \u2014\
-              \ une cible qui n'a aucune API d\xE9clarative et qu'on n'atteint qu'en\
-              \ SSH. Kubernetes r\xE9concilie, Ansible (AWX) ex\xE9cute."
+            description: "La banni\xE8re de connexion d'une machine du parc legacy\
+              \ \u2014 une cible sans API d\xE9clarative, atteinte en SSH. Kubernetes\
+              \ r\xE9concilie, Ansible ex\xE9cute."
             properties:
               apiVersion:
                 enum:
@@ -57,24 +54,23 @@ spec:
                 type: string
               kind:
                 enum:
-                - LegacyServiceTemoin
+                - MotdTemoin
                 type: string
               metadata:
                 type: object
               spec:
                 properties:
-                  message:
-                    default: gere par la plateforme
-                    description: Message inscrit dans le fichier de configuration
-                      du service.
+                  bannerText:
+                    description: "Texte affich\xE9 \xE0 la connexion sur la machine."
                     maxLength: 200
                     type: string
-                  serviceName:
-                    description: Nom technique du service sur la machine cible.
-                    pattern: ^[a-z][a-z0-9-]{2,30}$
+                  jobTemplate:
+                    description: "NE PAS UTILISER \u2014 champ pi\xE8ge de la d\xE9\
+                      monstration d'autorisation. Une demande qui le renseigne est\
+                      \ refus\xE9e par le runtime."
                     type: string
                 required:
-                - serviceName
+                - bannerText
                 type: object
               status:
                 properties:
@@ -83,8 +79,7 @@ spec:
                       cution."
                     type: integer
                   awxJobStatus:
-                    description: "Statut du dernier job AWX (successful, failed\u2026\
-                      )."
+                    description: Statut du dernier job AWX.
                     type: string
                   conditions:
                     description: "Conditions \xE9crites par le runtime \xE0 chaque\
@@ -110,7 +105,7 @@ spec:
                     description: "Horodatage de fin de la derni\xE8re ex\xE9cution."
                     type: string
                   serviceState:
-                    description: "\xC9tat constat\xE9 du service sur la machine cible."
+                    description: "\xC9tat constat\xE9 sur la machine cible."
                     type: string
                 type: object
             type: object
@@ -128,36 +123,33 @@ spec:
   - apiVersion: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
     metadata:
-      name: legacyservices.temoin.ansible.example.io
+      name: motds.temoin.ansible.example.io
       namespace: default
     spec:
       group: temoin.ansible.example.io
       names:
-        kind: LegacyService
-        listKind: LegacyServiceList
-        plural: legacyservices
-        singular: legacyservice
+        kind: Motd
+        listKind: MotdList
+        plural: motds
+        singular: motd
       scope: Namespaced
       versions:
       - additionalPrinterColumns:
-        - jsonPath: .spec.serviceName
-          name: Service
-          type: string
         - jsonPath: .status.awxJobId
           name: Job AWX
           type: integer
         - jsonPath: .status.awxJobStatus
-          name: "Dernier \xE9tat"
+          name: Dernier etat
           type: string
         - jsonPath: .metadata.creationTimestamp
-          name: "\xC2ge"
+          name: Age
           type: date
         name: v1alpha1
         schema:
           openAPIV3Schema:
-            description: "Un service configur\xE9 sur une machine du parc legacy \u2014\
-              \ une cible qui n'a aucune API d\xE9clarative et qu'on n'atteint qu'en\
-              \ SSH. Kubernetes r\xE9concilie, Ansible (AWX) ex\xE9cute."
+            description: "La banni\xE8re de connexion d'une machine du parc legacy\
+              \ \u2014 une cible sans API d\xE9clarative, atteinte en SSH. Kubernetes\
+              \ r\xE9concilie, Ansible ex\xE9cute."
             properties:
               apiVersion:
                 type: string
@@ -167,18 +159,17 @@ spec:
                 type: object
               spec:
                 properties:
-                  message:
-                    default: gere par la plateforme
-                    description: Message inscrit dans le fichier de configuration
-                      du service.
+                  bannerText:
+                    description: "Texte affich\xE9 \xE0 la connexion sur la machine."
                     maxLength: 200
                     type: string
-                  serviceName:
-                    description: Nom technique du service sur la machine cible.
-                    pattern: ^[a-z][a-z0-9-]{2,30}$
+                  jobTemplate:
+                    description: "NE PAS UTILISER \u2014 champ pi\xE8ge de la d\xE9\
+                      monstration d'autorisation. Une demande qui le renseigne est\
+                      \ refus\xE9e par le runtime."
                     type: string
                 required:
-                - serviceName
+                - bannerText
                 type: object
               status:
                 properties:
@@ -187,8 +178,7 @@ spec:
                       cution."
                     type: integer
                   awxJobStatus:
-                    description: "Statut du dernier job AWX (successful, failed\u2026\
-                      )."
+                    description: Statut du dernier job AWX.
                     type: string
                   conditions:
                     description: "Conditions \xE9crites par le runtime \xE0 chaque\
@@ -214,7 +204,7 @@ spec:
                     description: "Horodatage de fin de la derni\xE8re ex\xE9cution."
                     type: string
                   serviceState:
-                    description: "\xC9tat constat\xE9 du service sur la machine cible."
+                    description: "\xC9tat constat\xE9 sur la machine cible."
                     type: string
                 type: object
             type: object
@@ -225,12 +215,12 @@ spec:
   - apiVersion: v1
     kind: ServiceAccount
     metadata:
-      name: legacy-operator
+      name: motd-operator
       namespace: awx
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
     metadata:
-      name: legacy-operator-leader-election
+      name: motd-operator-leader-election
       namespace: awx
     rules:
     - apiGroups:
@@ -260,28 +250,28 @@ spec:
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
     metadata:
-      name: legacy-operator-leader-election
+      name: motd-operator-leader-election
       namespace: awx
     roleRef:
       apiGroup: rbac.authorization.k8s.io
       kind: Role
-      name: legacy-operator-leader-election
+      name: motd-operator-leader-election
     subjects:
     - kind: ServiceAccount
-      name: legacy-operator
+      name: motd-operator
       namespace: awx
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRole
     metadata:
-      name: legacy-operator
+      name: motd-operator
       namespace: default
     rules:
     - apiGroups:
       - temoin.ansible.example.io
       resources:
-      - legacyservices
-      - legacyservices/status
-      - legacyservices/finalizers
+      - motds
+      - motds/status
+      - motds/finalizers
       verbs:
       - get
       - list
@@ -311,7 +301,7 @@ spec:
     - apiGroups:
       - platform.example.io
       resources:
-      - legacyservicetemoins
+      - motdtemoins
       verbs:
       - get
       - list
@@ -319,52 +309,52 @@ spec:
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRoleBinding
     metadata:
-      name: legacy-operator
+      name: motd-operator
       namespace: default
     roleRef:
       apiGroup: rbac.authorization.k8s.io
       kind: ClusterRole
-      name: legacy-operator
+      name: motd-operator
     subjects:
     - kind: ServiceAccount
-      name: legacy-operator
+      name: motd-operator
       namespace: awx
   - apiVersion: v1
     data:
       watches.yaml: "---\n- version: v1alpha1\n  group: temoin.ansible.example.io\n\
-        \  kind: LegacyService\n  role: /opt/ansible/roles/awx-runner\n  # Ce qui\
-        \ distingue cette architecture d'un playbook lanc\xE9 une fois : l'\xE9tat\n\
-        \  # d\xE9clar\xE9 est r\xE9-impos\xE9 \xE0 la machine \xE0 chaque \xE9ch\xE9\
-        ance.\n  reconcilePeriod: 120s\n  finalizer:\n    name: temoin.ansible.example.io/deprovision\n\
+        \  kind: Motd\n  role: /opt/ansible/roles/awx-runner\n  # Ce qui distingue\
+        \ cette architecture d'un playbook lanc\xE9 une fois : l'\xE9tat\n  # d\xE9\
+        clar\xE9 est r\xE9-impos\xE9 \xE0 la machine \xE0 chaque \xE9ch\xE9ance.\n\
+        \  reconcilePeriod: 120s\n  finalizer:\n    name: temoin.ansible.example.io/deprovision\n\
         \    role: /opt/ansible/roles/awx-remover\n"
     kind: ConfigMap
     metadata:
-      name: legacy-temoin-watches
+      name: motd-temoin-watches
       namespace: awx
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
       labels:
-        app: legacy-operator
-      name: legacy-operator
+        app: motd-operator
+      name: motd-operator
       namespace: awx
     spec:
       replicas: 1
       selector:
         matchLabels:
-          app: legacy-operator
+          app: motd-operator
       template:
         metadata:
           annotations:
             roles-revision: '1'
           labels:
-            app: legacy-operator
+            app: motd-operator
         spec:
           containers:
           - args:
             - run
             - --watches-file=/opt/ansible/produit/watches.yaml
-            - --leader-election-id=legacy-operator
+            - --leader-election-id=motd-operator
             command:
             - ansible-operator
             env:
@@ -379,7 +369,7 @@ spec:
             - name: AWX_URL
               value: http://awx-service.awx.svc.cluster.local
             - name: AWX_JOB_TEMPLATE
-              value: legacy-service
+              value: legacy-motd
             - name: AWX_STATE_VAR
               value: marker_state
             - name: AWX_STATE_ABSENT
@@ -392,17 +382,17 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: token
-                  name: awx-token-cloud
+                  name: awx-token-indus
             - name: OPERAND_GROUP
               value: temoin.ansible.example.io
             - name: OPERAND_VERSION
               value: v1alpha1
             - name: OPERAND_PLURAL
-              value: legacyservices
+              value: motds
             - name: CLAIM_API_VERSION
               value: platform.example.io/v1alpha1
             - name: CLAIM_PLURAL
-              value: legacyservicetemoins
+              value: motdtemoins
             image: quay.io/operator-framework/ansible-operator@sha256:96053ae3e045c4eb57350cbf1995dece22bf7d3bfe4cf875a20d8853963a3731
             livenessProbe:
               httpGet:
@@ -434,7 +424,7 @@ spec:
             - mountPath: /tmp
               name: runner
           priorityClassName: platform-high
-          serviceAccountName: legacy-operator
+          serviceAccountName: motd-operator
           volumes:
           - configMap:
               items:
@@ -447,7 +437,7 @@ spec:
               name: ansible-operator-roles
             name: roles
           - configMap:
-              name: legacy-temoin-watches
+              name: motd-temoin-watches
             name: produit
           - emptyDir: {}
             name: runner
@@ -480,7 +470,7 @@ spec:
             - name: OPERATOR_VERSION
               value: v1alpha1
             - name: OPERATOR_KIND
-              value: LegacyService
+              value: Motd
             image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
             name: from-api-to-operator
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
