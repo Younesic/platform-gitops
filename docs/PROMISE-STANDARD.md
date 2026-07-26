@@ -294,6 +294,19 @@ ne disparaît pas, et personne ne croit à une suppression propre.
 - **L'exécution dépend d'AAP.** Si AAP est indisponible, la réconciliation **échoue** —
   condition `Failure` sur le CR et `healthStatus: unhealthy` sur la demande. C'est
   visible, ce n'est jamais silencieux.
+- **⚠️ La lignée CONSOMMATEUR ne se pose pas toute seule.** La lignée *provider* tient
+  (la promesse porte `platform.kratix.io/provider`). Mais la fiche d'une instance n'est
+  ownée par la squad demandeuse que si le contrat expose un champ `team` : c'est la
+  condition qui accroche `RequesterTeamPicker` au formulaire
+  (`backstage-component/scripts/scaffolder.py`), et la première branche de la chaîne
+  d'owner (`catalog.py`). Or le contrat d'un produit ansible est **dérivé de
+  `meta/argument_specs.yml`**, où un rôle n'a aucune raison de déclarer `team` — la
+  fiche retombe alors sur `team-platform`. **Contournement** : poser le label
+  `platform.example.io/component-of-owner: <squad>` sur la demande (2ᵉ branche de la
+  chaîne). **Cure**, deux lignes, au backlog : le plugin ajoute `team` au contrat
+  dérivé, et `awx-runner` l'exclut des variables du job — exactement comme il exclut
+  déjà `target`. Sans cette exclusion, `team` partirait dans le sondage AWX et le job
+  serait **refusé** (leçon d'AN3 : le contrat du produit EST le contrat du sondage).
 - **La santé ne remonte PAS par l'agent AD3** : son parcours en profondeur ne descend
   que dans les groupes `platform.example.io`, or l'opérande d'un produit ansible vit
   dans un groupe tiers. C'est **le runtime lui-même** qui publie son `HealthRecord`,
