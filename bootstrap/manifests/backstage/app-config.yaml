@@ -38,6 +38,13 @@ data:
           label: GitHub · kratix-state
           host: github.com
           repo: Younesic/kratix-state
+      # IT3 — classes de tickets ITSM qu'une offre peut déclarer dans sa politique
+      # d'approbation. MIROIR des clés de `itop.classes` (plus bas) : proposer ici
+      # une classe non déclarée là-bas produirait un refus à l'exécution.
+      approvalClasses:
+        - NormalChange
+        - RoutineChange
+        - UserRequest
 
     kratixMarketplace:
       logo:
