@@ -185,6 +185,135 @@ l'opérateur revient (destination re-sync).
 
 ---
 
+## 9bis. Promesses ANSIBLE (moteur 5 — le parc SANS API Kubernetes)
+
+Les quatre autres moteurs visent des objets dotés d'une API déclarative. Dans une
+banque, c'est la **minorité** du parc : VM, middleware, bases sur VM, appliances,
+réseau, Windows, legacy. Ces cibles ont un SSH ou une API, mais **aucun contrôleur
+qui converge**. Le moteur `ansible` fait passer le contrat de self-service de
+l'autre côté de cette frontière.
+
+**Le client possède déjà AWX / AAP.** On ne lui vend pas un outil de plus : on donne
+un portail, une gouvernance et une piste d'audit à ce qu'il fait déjà.
+
+### Le modèle : authoring dédié → forme opérateur → runtime operator
+
+```
+rôle Ansible + meta/argument_specs.yml + job template AAP
+        ↓  kratix new-ansible-promise
+CRD dérivée + watches.yaml + Deployment (runtime PARTAGÉ) + RBAC
+        ↓  délégation à kratix new-operator-promise --src (moteur 4, inchangé)
+promesse → claim → CR → l'opérateur réconcilie → AWX exécute → conditions de statut
+```
+
+La séparation est entre ce que l'auteur **déclare** et ce qui **tourne**. Ce qui
+tourne est intégralement le chemin operator déjà prouvé — renderer
+`from-api-to-operator`, CR nommé d'après le claim, fiche, graphe, onglet live,
+santé. Ce qui est neuf, c'est uniquement la **fabrication** de la promesse.
+
+### Ce que l'auteur fournit — et rien d'autre
+
+| Il écrit | Il n'écrit PAS |
+|---|---|
+| un rôle avec `meta/argument_specs.yml` | la CRD (elle se dérive) |
+| le nom du job template AAP autorisé | un opérateur |
+| la cible autorisée (inventaire, ou liste de groupes) | une image, un Dockerfile |
+| le Secret du jeton AWX de SON équipe | le RBAC, le watches, le Deployment |
+
+`meta/argument_specs.yml` est le mécanisme **natif** d'Ansible : il valide déjà le
+rôle à l'exécution. Le dériver supprime la double écriture — exactement ce que
+`values.schema.json` a fait pour helm. **Un rôle sans spécification d'arguments
+n'est pas dérivable** ; le message d'erreur donne l'exemple minimal à écrire.
+
+⚠️ Les noms de variables du rôle et ceux du **sondage du job template** doivent être
+les mêmes. AWX exige **toutes** les variables requises d'un sondage, *même celles qui
+ont une valeur par défaut* : un champ inventé côté CRD rend le produit inutilisable —
+et, pire, **indestructible** (son finalizer échoue en boucle). C'est précisément la
+raison d'être de la dérivation.
+
+### Le runtime est PARTAGÉ — aucune image par produit
+
+L'image du contrôleur est celle, **publique et épinglée par empreinte**,
+d'operator-sdk ; les trois rôles génériques (`awx-contrat`, `awx-runner`,
+`awx-remover`) et leurs deux enveloppes sont montés depuis **une ConfigMap de
+plateforme** (`ansible-operator-roles`). Par produit il ne reste qu'une CRD, un
+`watches.yaml`, un Deployment et du RBAC. Le levier « zéro image par promesse » est
+donc préservé — et même dépassé : il n'y a **aucune** image à construire.
+
+⚠️ Fait vérifié : l'image d'operator-sdk n'embarque **aucune collection Ansible**
+(ni `kubernetes.core`, ni `operator_sdk.util`). Les rôles n'utilisent donc que
+`ansible.builtin` et parlent à l'API Kubernetes avec le jeton de compte de service
+du pod. C'est ce qui permet de les monter au lieu de les cuire dans une image.
+
+### L'autorisation : le job template ET la cible se déclarent
+
+Avec un jeton AWX, un opérateur pourrait lancer **n'importe quelle** automatisation,
+y compris celle d'une autre équipe. Deux verrous ferment cela :
+
+1. **À la conception** — le job template autorisé et la cible vivent dans
+   l'**environnement du contrôleur**, posé par le Deployment du produit. Ils sont
+   donc hors de portée du `spec` d'une demande. Une demande qui porte une clé
+   réservée (`jobTemplate`, `inventory`, `limit`, `extraVars`…) est **refusée** avec
+   un motif lisible, **avant** tout lancement.
+2. **À l'exécution** — chaque fournisseur a **son** utilisateur AWX, dont le seul
+   droit est d'exécuter **son** job template. Un lancement croisé renvoie **403**.
+
+La cible obéit à la même règle : verrouiller le playbook sans verrouiller la machine
+ne verrouille rien. Le produit **fixe** sa cible (un inventaire), ou **ouvre le
+choix dans une liste déclarée** de groupes d'hôtes. **Jamais un nom d'hôte libre
+laissé au demandeur.**
+
+### La frontière avec AAP
+
+La plateforme ne détient qu'**un jeton d'API par fournisseur**. Les **inventaires**
+et les **credentials machine (SSH)** restent chez AWX/AAP. L'opérateur désigne une
+cible **par son nom** ; il ne porte jamais un accès à une machine.
+
+### Le dé-provisionnement se déclare, sinon rien ne démarre
+
+Un produit doit dire comment il se retire : soit un **job template de
+décommissionnement** (`jobTemplateDelete`), soit la **variable d'état** du job
+template nominal (`stateVar`, rejouée à « absent »). Sans l'un des deux, le
+contrôleur **refuse de démarrer** — plutôt qu'une suppression qui ne ferait rien
+sur la machine. Si le retrait échoue, le finalizer n'est pas relâché : la ressource
+ne disparaît pas, et personne ne croit à une suppression propre.
+
+### Les limites — sans les adoucir
+
+- **Le graphe et l'onglet live montrent le CR SEUL.** La machine n'est pas un objet
+  Kubernetes ; c'est la fiche du CR qui la représente. Limite structurelle, partagée
+  avec le moteur operator.
+- **Un produit = un Deployment d'opérateur.** L'image et les rôles sont partagés, mais
+  il y a un pod par produit : ≈ **100–130 Mio** mesurés au repos, réservation déclarée
+  50 m / 128 Mio. Le passage à l'échelle se tranche sur ce chiffre, pas sur une intuition.
+- **Un rôle sans `meta/argument_specs.yml` n'est pas dérivable.** Charge assumée pour
+  l'auteur, la même que `values.schema.json` côté helm.
+- **Les validations croisées d'Ansible** (`mutually_exclusive`, `required_together`…)
+  ne s'expriment pas dans une CRD : elles sont signalées à la dérivation et restent
+  vérifiées par le rôle **à l'exécution**, pas par le formulaire.
+- **L'exécution dépend d'AAP.** Si AAP est indisponible, la réconciliation **échoue** —
+  condition `Failure` sur le CR et `healthStatus: unhealthy` sur la demande. C'est
+  visible, ce n'est jamais silencieux.
+- **La santé ne remonte PAS par l'agent AD3** : son parcours en profondeur ne descend
+  que dans les groupes `platform.example.io`, or l'opérande d'un produit ansible vit
+  dans un groupe tiers. C'est **le runtime lui-même** qui publie son `HealthRecord`,
+  mécanisme natif de Kratix dont l'agent n'est qu'un producteur parmi d'autres. Pour
+  un produit dont la vérité est sur une machine et non dans un objet Kubernetes,
+  c'est la bonne réponse.
+
+### La cascade — dans l'ORDRE, par GitOps
+
+⚠️ **Règle d'or déjà payée sur ce projet** : supprimer une promesse alors que des
+claims vivent encore **gèle la suppression** (le finalizer supprime les
+`PromiseRevision` avant que les claims aient fini → boucle infinie). **Toujours :
+les demandes d'abord, on attend, la promesse ensuite.** Le remède — révision de
+secours + réveil des claims par annotation — est décrit dans le gotcha
+« DEADLOCK à la suppression d'une promesse » ; le citer, pas le réinventer.
+
+Retirer une promesse ansible retire **son** opérateur, **sa** CRD et **son**
+watches. Cela ne touche ni le runtime partagé (ConfigMap de plateforme) ni AWX :
+le job template, l'inventaire et les identifiants machine restent chez le client.
+
 ## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
 
 **Règle d'or : un champ dont UNE SEULE valeur est valide dans le contexte d'usage ne

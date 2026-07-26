@@ -281,6 +281,81 @@ picker repo/tag/dossier + Select « CRD contrat » alimenté par l'aperçu deriv
 
 ---
 
+## 10. Variante ansible — le rôle EST le contrat (parc SANS API Kubernetes)
+
+Pour tout ce que Kubernetes ne sait pas décrire : VM, middleware, appliances,
+Windows, legacy. **AAP exécute, Kubernetes réconcilie.**
+
+```bash
+kratix new-ansible-promise sauvegarde \
+    --repo-url git@github.com:Younesic/platform-gitops.git \
+    --ref v0.14.0 --path sources/ansible-roles/legacy-service \
+    --job-template legacy-service \
+    --inventory 'Parc legacy' \
+    --awx-token-secret awx-token-cloud \
+    --kind Sauvegarde [--plural sauvegardes] [--deploy]
+```
+
+Ce que le plugin fait : clone à la ref **pinnée** → dérive la CRD depuis
+`meta/argument_specs.yml` → assemble les **quatre** fichiers du produit (CRD,
+watches, Deployment sur le runtime partagé, RBAC) → **délègue à
+`kratix new-operator-promise --src`**. Le chemin d'exécution est donc, à la ligne
+près, celui du moteur operator.
+
+### Ce qu'il faut écrire, côté équipe source
+
+```yaml
+# roles/<mon-role>/meta/argument_specs.yml — LE contrat, écrit UNE fois
+argument_specs:
+  main:
+    short_description: Ce que fait le rôle
+    options:
+      service_name:
+        type: str
+        required: true
+        description: Nom technique du service sur la machine cible.
+      marker_state:
+        type: str
+        choices: [present, absent]
+        default: present
+        x-kratix-internal: true     # piloté par le runtime, pas par le demandeur
+```
+
+`str/int/float/bool/list/dict` → types OpenAPI ; `choices` → `enum` ; `required`,
+`default` et `description` sont repris tels quels. Une option marquée
+`x-kratix-internal: true` **n'est pas exposée** au demandeur.
+
+Aperçu avant de publier :
+```bash
+python3 new-cluster/native/scaffold/argspec-to-crd.py <role> \
+    --group temoin.ansible.example.io --kind LegacyService -o crd.yaml
+```
+
+### Par le portail
+
+`spec.type: ansible` avec `source` (url/version/path) **et** un bloc `automation` :
+`jobTemplate` (le seul autorisé), `inventory` **ou** `allowedLimits`, et
+`awxTokenSecret` (le jeton du fournisseur). Les quatre règles CEL de la
+méta-promesse refusent à l'admission un claim incomplet — **dont celui qui ne
+déclare pas sa cible**.
+
+### Les pièges rencontrés (payés une fois, pas deux)
+
+| Piège | Ce qu'il faut faire |
+|---|---|
+| Les noms du rôle ≠ les variables du **sondage** AWX | AWX exige TOUTES les variables requises d'un sondage, **même celles qui ont un défaut** (400 « value missing »). Le contrat dérivé et le sondage doivent être le même contrat, nom pour nom. Un écart rend le produit inutilisable **et indestructible**. |
+| `role:` dans un `watches.yaml` | ansible-operator v1.42 le lit comme un **fichier** (« is a directory »). Passer par `playbook:` — les deux enveloppes partagées sont là pour ça. |
+| Référence arrière d'un regex en scalaire replié | `'_\1'` et **non** `'_\\1'` : la seconde forme produit le texte littéral, et le job part avec un nom de variable cassé. Un test le verrouille. |
+| Corps de requête écrit champ par champ en Jinja | Il produit des **chaînes** : l'API refuse (422 « must be of type integer »). Le corps doit être **une seule** expression Jinja pour rendre un vrai dictionnaire typé. |
+| Jeton rangé avec un saut de ligne final | En-tête HTTP invalide chez **tous** les consommateurs. `jq -j`, jamais `jq -r`. |
+| L'image d'operator-sdk | Elle n'embarque **aucune collection** : ni `kubernetes.core`, ni `operator_sdk.util`. N'utiliser que `ansible.builtin` + le jeton de compte de service. |
+
+### Supprimer
+
+Les **demandes d'abord**, on attend qu'elles soient parties, **la promesse
+ensuite** — la règle d'or du projet (cf. PROMISE-STANDARD §9bis). Retirer une
+promesse ansible ne touche ni le runtime partagé ni AWX.
+
 ## Vérifier
 ```bash
 kubectl get promises                          # Available
