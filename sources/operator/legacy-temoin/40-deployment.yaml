@@ -1,0 +1,75 @@
+# Le contrôleur lui-même : l'image PUBLIQUE d'operator-sdk, épinglée par empreinte,
+# à laquelle on ne fait que MONTER le contenu Ansible (ConfigMap).
+#
+# C'est le cœur de la démonstration : **aucune image n'est construite pour ce
+# produit**. Ce qui change d'un produit à l'autre, c'est une CRD, un watches.yaml,
+# un Deployment et du RBAC — quatre fichiers de données.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-operator
+  namespace: awx
+  labels: { app: legacy-operator }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: legacy-operator }
+  template:
+    metadata:
+      labels: { app: legacy-operator }
+      annotations:
+        # À incrémenter quand le contenu Ansible (30-content.yaml) change.
+        content-revision: "5"
+    spec:
+      serviceAccountName: legacy-operator
+      priorityClassName: platform-high
+      volumes:
+        - name: content
+          configMap: { name: legacy-operator-content }
+        # ansible-runner écrit ses artefacts d'exécution : sans volume inscriptible,
+        # chaque réconciliation échouerait sur un système de fichiers en lecture seule.
+        - name: runner
+          emptyDir: {}
+      containers:
+        - name: operator
+          image: quay.io/operator-framework/ansible-operator@sha256:96053ae3e045c4eb57350cbf1995dece22bf7d3bfe4cf875a20d8853963a3731 # v1.42.3
+          command: [ansible-operator]
+          args: [run, --watches-file=/opt/ansible/temoin/watches.yaml, --leader-election-id=legacy-operator]
+          env:
+            # Namespace observé : VIDE = tous. Le renderer officiel pose toujours le
+            # CR dans `default`, pas ici.
+            - { name: WATCH_NAMESPACE, value: "" }
+            - { name: ANSIBLE_ROLES_PATH, value: /opt/ansible/roles }
+            - { name: ANSIBLE_LOCAL_TEMP, value: /tmp/ansible }
+            - { name: ANSIBLE_REMOTE_TEMP, value: /tmp/ansible }
+            # ── Ce que l'auteur DÉCLARE : quel AWX, quel job template ───────────
+            # Le job template est DÉCLARÉ ici, et le contrôleur ne lance que
+            # celui-là : sans ça, un jeton AWX permettrait de lancer
+            # l'automatisation d'une autre équipe.
+            - { name: AWX_URL, value: "http://awx-service.awx.svc.cluster.local" }
+            - { name: AWX_JOB_TEMPLATE, value: "legacy-service" }
+            - name: AWX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  # Jeton d'API AWX de portée « write », créé par le jeu d'essai
+                  # d'AN1 et jamais affiché. Absent → le pod ne démarre pas.
+                  name: awx-api-token
+                  key: token
+            # De quoi retrouver la DEMANDE Kratix pour publier la santé au bon
+            # endroit (aucun nom de promesse en dur : il est lu sur son étiquette).
+            - { name: CLAIM_API_VERSION, value: "platform.example.io/v1alpha1" }
+            - { name: CLAIM_PLURAL, value: "legacyservicetemoins" }
+          volumeMounts:
+            - { name: content, mountPath: /opt/ansible/temoin, readOnly: true }
+            - { name: runner, mountPath: /tmp }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 6789 }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /readyz, port: 6789 }
+            initialDelaySeconds: 10
+            periodSeconds: 15

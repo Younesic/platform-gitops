@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LE CONTRAT DU PRODUIT TÉMOIN — une CRD ordinaire.
+#
+# C'est elle que `kratix new-operator-promise` copiera TELLE QUELLE dans l'API de
+# la promesse (spec ET status). Groupe DÉDIÉ au témoin, jamais un groupe plateforme :
+# ce témoin est jetable, il ne doit pas polluer les familles de la plateforme.
+#
+# Le `status` est DÉCLARÉ, avec des descriptions : sans lui, le sélecteur de sorties
+# étiquetées (V4-1/V4-2) n'aurait rien à lire, et un compound ne pourrait rien
+# consommer de ce produit.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: legacyservices.temoin.ansible.example.io
+spec:
+  group: temoin.ansible.example.io
+  names:
+    kind: LegacyService
+    listKind: LegacyServiceList
+    plural: legacyservices
+    singular: legacyservice
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      # Le status est un SOUS-RESSOURCE : sans ça, le runtime ne peut pas écrire
+      # son état (k8s_status patche /status).
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - { name: Service, type: string, jsonPath: .spec.serviceName }
+        - { name: Job AWX, type: integer, jsonPath: .status.awxJobId }
+        - { name: Dernier état, type: string, jsonPath: .status.awxJobStatus }
+        - { name: Âge, type: date, jsonPath: .metadata.creationTimestamp }
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            Un service configuré sur une machine du parc legacy — une cible qui n'a
+            aucune API déclarative et qu'on n'atteint qu'en SSH. Kubernetes réconcilie,
+            Ansible (AWX) exécute.
+          properties:
+            apiVersion: { type: string }
+            kind: { type: string }
+            metadata: { type: object }
+            spec:
+              type: object
+              required: [serviceName]
+              properties:
+                serviceName:
+                  type: string
+                  description: Nom technique du service sur la machine cible.
+                  pattern: "^[a-z][a-z0-9-]{2,30}$"
+                message:
+                  type: string
+                  description: Message inscrit dans le fichier de configuration du service.
+                  maxLength: 200
+                  default: gere par la plateforme
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  description: Conditions écrites par le runtime à chaque réconciliation.
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      status: { type: string }
+                      reason: { type: string }
+                      message: { type: string }
+                      lastTransitionTime: { type: string }
+                      ansibleResult:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                awxJobId:
+                  type: integer
+                  description: Identifiant du job AWX de la dernière exécution.
+                awxJobStatus:
+                  type: string
+                  description: Statut du dernier job AWX (successful, failed…).
+                lastRunAt:
+                  type: string
+                  description: Horodatage de fin de la dernière exécution.
+                serviceState:
+                  type: string
+                  description: État constaté du service sur la machine cible.
