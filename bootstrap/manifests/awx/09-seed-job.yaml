@@ -108,22 +108,36 @@ spec:
               # ratée (défaut fermé). Le corps de la réponse est affiché pour le
               # diagnostic — l'API AWX ne renvoie jamais de secret en clair.
               must_id() {
-                out=$(cat); id=$(printf '%s' "$out" | jq -r '.id // empty')
-                if [ -z "$id" ]; then echo "ERREUR creation $1 :" >&2; printf '%s\n' "$out" | head -c 1500 >&2; exit 1; fi
+                out=$(cat)
+                id=$(printf '%s' "$out" | jq -r '.id // empty' 2>/dev/null || true)
+                if [ -z "$id" ]; then
+                  echo "ERREUR creation $1 :" >&2
+                  if [ -z "$out" ]; then echo "  (reponse VIDE - AWX ne sert pas encore ?)" >&2; else printf '%s\n' "$out" | head -c 1500 >&2; fi
+                  exit 1
+                fi
                 printf '%s' "$id"
               }
               find_id() { curl -sS -u "$AUTH" -G --data-urlencode "name=$2" "$API/$1/" | jq -r '.results[0].id // empty'; }
               post() { curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' --data-binary "$2" "$API$1"; }
               patch() { curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' --data-binary "$2" "$API$1"; }
 
-              # ── 0. attendre qu'AWX réponde ────────────────────────────────────
-              echo "== attente de l'API AWX =="
+              # ── 0. attendre qu'AWX réponde VRAIMENT ───────────────────────────
+              # Piège vérifié sur ce cluster : tant que les migrations de schéma ne
+              # sont pas passées, AWX répond « 302 → /migrations_notran/ » — et un
+              # `curl -f` réussit sur une redirection, avec un corps VIDE. On exige
+              # donc du JSON contenant une version : c'est le seul état où l'API
+              # sert quelque chose (défaut fermé).
+              echo "== attente de l'API AWX (schema migre) =="
               i=0
-              until curl -sf -o /dev/null "$API/ping/"; do
-                i=$((i+1)); [ "$i" -lt 120 ] || { echo "ERREUR: API AWX injoignable apres 20 min"; exit 1; }
+              until curl -sf "$API/ping/" 2>/dev/null | jq -e '.version' >/dev/null 2>&1; do
+                i=$((i+1)); [ "$i" -lt 180 ] || { echo "ERREUR: API AWX toujours pas servie apres 30 min"; curl -sS -o /dev/null -w 'dernier code: %{http_code}, redirection: %{redirect_url}\n' "$API/ping/"; exit 1; }
                 sleep 10
               done
               curl -sS "$API/ping/" | jq -c '{version, active_node, ha}'
+              # Les identifiants administrateur fonctionnent-ils ? Si le Secret et la
+              # base ont divergé, autant le savoir ici plutôt qu'au premier POST.
+              curl -sf -u "$AUTH" "$API/me/" | jq -e '.count == 1' >/dev/null \
+                || { echo "ERREUR: authentification administrateur refusee par l'API"; exit 1; }
 
               # ── 1. authentification OIDC Keycloak ─────────────────────────────
               # Le secret du client est produit par Crossplane (06). On l'attend :
