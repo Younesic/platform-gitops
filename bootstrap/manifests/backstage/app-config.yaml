@@ -118,11 +118,27 @@ data:
         UserRequest:
           # Celle-ci SAIT porter un service.
           serviceField: service_id
+          # `caller_id` est OBLIGATOIRE à la création d'une UserRequest (état
+          # `new`). Pour le POC on désigne une personne du jeu d'essai ; chez le
+          # client, elle se résoudra depuis l'identité du demandeur (le vrai
+          # demandeur est de toute façon cité dans la description du ticket).
           createFields:
             org_id: { name: Plateforme }
+            caller_id: { email: jdupont@platform.local }
+          # LE CHEMIN LE PLUS COURT, et le plus PARLANT : le cycle de vie d'une
+          # UserRequest nomme littéralement l'approbation —
+          #   new --ev_wait_for_approval--> waiting_for_approval --ev_approve--> approved
+          #                                        └--ev_reject--> rejected
+          # Deux gestes, un seul champ (l'approbateur), et le refus existe.
+          #
+          # `assigned` est volontairement EXCLU : il est atteignable DIRECTEMENT
+          # depuis `new`, sans passer par l'approbation — l'inclure ouvrirait un
+          # contournement. Défaut fermé.
+          # Si le processus du client déplace une demande approuvée vers
+          # `assigned`, il ajoute ce mot ICI. Pas une ligne de code.
           approvedWhen: >-
             SELECT UserRequest WHERE ref = :ref
-            AND status IN ('approved','assigned','resolved','closed')
+            AND status IN ('approved','resolved','closed')
         Incident:
           # Classe du contrôle DÉTECTIF (IT6). Elle déclare ses champs
           # obligatoires ICI : une seule carte du modèle client, pas deux.
