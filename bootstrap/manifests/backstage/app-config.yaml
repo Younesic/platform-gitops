@@ -109,6 +109,11 @@ data:
         frequencyMinutes: 5
         repos:
           - Younesic/portal-templates
+          # Dépôt TÉMOIN public : la protection de branche y est disponible (elle
+          # ne l'est pas sur un dépôt privé d'un plan gratuit — cf. §6 du brief).
+          # Il ne contient aucune donnée réelle ; il sert à prouver que le contrôle
+          # VERROUILLE vraiment le merge.
+          - Younesic/itop-gate-demo
         # 1er groupe = l'OFFRE (on y lit sa politique), 2e = le nom de la demande.
         claimPathPattern: '^requests/([^/]+)/([^/]+)/claim\.ya?ml$'
         refAnnotation: platform.kratix.io/itop-ref
@@ -118,6 +123,16 @@ data:
         # pas s'appliquer, un merge non approuvé doit au moins se VOIR.
         incidentClass: Incident
         mergeLookbackDays: 7
+        # Champs OBLIGATOIRES de la classe d'incident — ils varient d'un client à
+        # l'autre (constaté : iTop refuse un Incident sans org_id). Ils viennent
+        # donc de la configuration, jamais du code.
+        incidentFields:
+          org_id: { name: Plateforme }
+        # Ne rien signaler AVANT l'activation du contrôle : les fusions
+        # antérieures n'avaient aucun moyen d'être au vert. Les signaler serait un
+        # faux positif de masse — et un contrôle qui crie pour rien est un contrôle
+        # mort au bout d'une semaine.
+        detectiveSince: '2026-07-26T17:00:00Z'
 
     backend:
       baseUrl: https://backstage.212-47-226-56.nip.io

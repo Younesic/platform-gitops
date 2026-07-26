@@ -12,13 +12,13 @@ spec:
       labels: { app: backstage }
       annotations:
         # redéploie quand l'app-config change (hash injecté par ArgoCD via le ConfigMap)
-        configmap-revision: v20
+        configmap-revision: v21
     spec:
       serviceAccountName: backstage
       priorityClassName: platform-high
       containers:
         - name: backstage
-          image: harbor.212-47-226-56.nip.io/platform/backstage:20260726-0003@sha256:8a4ca06ebf3b10bb80a5e01ccba6235a10874de714de2be0e8ed3eb452f7bee0
+          image: harbor.212-47-226-56.nip.io/platform/backstage:20260726-0004@sha256:11690ab25afca4061609bad8d275a0bf9cef9c191c6326fafbbbd1519af7f0ff
           imagePullPolicy: IfNotPresent
           command: ["node", "packages/backend"]
           # 2e fichier = config DYNAMIQUE (customResources générés par le CronJob
