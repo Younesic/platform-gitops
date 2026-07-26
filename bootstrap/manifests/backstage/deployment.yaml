@@ -52,6 +52,15 @@ spec:
               valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientId } }
             - name: HTTP_ENTITIES_KC_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: backstage-http-entities, key: clientSecret } }
+            # --- iTop (couche d'approbation ITSM) ---
+            # Le compte est svc-portal : MOINDRE PRIVILÈGE (REST Services User +
+            # Service Desk Agent + Change Supervisor), jamais l'administrateur.
+            # Son mot de passe est recopié depuis le namespace itop par le hook
+            # PreSync backstage-itop-credentials — il ne transite jamais par Git.
+            - { name: ITOP_BASE_URL, value: "http://itop.itop.svc.cluster.local" }
+            - { name: ITOP_USER,     value: "svc-portal" }
+            - name: ITOP_PASSWORD
+              valueFrom: { secretKeyRef: { name: itop-portal, key: ITOP_PASSWORD } }
             - { name: NODE_OPTIONS, value: --no-node-snapshot }
           resources:
             requests: { cpu: 250m, memory: 512Mi }

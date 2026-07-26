@@ -45,6 +45,56 @@ data:
         allowedHosts:
           - harbor.212-47-226-56.nip.io
 
+    # === iTop — LE SEUL ENDROIT OÙ DES ÉTATS ITOP ONT LE DROIT D'EXISTER ======
+    # La question « est-ce approuvé ? » n'est PAS un test d'égalité écrit dans le
+    # code : c'est cette requête OQL. Les clients personnalisent lourdement leurs
+    # cycles de vie — chez eux, on change la requête, pas notre code.
+    # `packages/backend/src/modules/itop.ts` ne contient AUCUN nom d'état (vérifiable
+    # par grep) et refuse toute requête qui ne cite pas :ref (sinon elle renverrait
+    # des tickets étrangers, donc du vert imméritè).
+    itop:
+      baseUrl: ${ITOP_BASE_URL}
+      auth:
+        user: ${ITOP_USER}
+        password: ${ITOP_PASSWORD}
+      # La référence est INTERPOLÉE dans l'OQL (l'API REST d'iTop n'a pas de
+      # requête préparée) : ce motif est le rempart, appliqué AVANT tout appel réseau.
+      # Références natives iTop : Change C-000123 · UserRequest R-000123 · Incident I-000123.
+      refPattern: '^[A-Z]{1,4}-\d{4,10}$'
+      apiVersion: '1.3'
+      timeoutMs: 10000
+      classes:
+        # ⚠️ En mode ITIL, `Change` est ABSTRAITE : on CRÉE un NormalChange ou un
+        # RoutineChange, mais on INTERROGE `Change` (la requête renvoie la sous-classe).
+        # États réels de cette instance (lus dans le modèle de données 3.2.3-1) :
+        #   new, validated, rejected, assigned, plannedscheduled, approved,
+        #   notapproved, implemented, monitored, closed
+        # Noter « plannedscheduled » et NON « planned » : exactement l'écart qui
+        # condamnerait un code qui coderait les états en dur.
+        #
+        # C'EST ICI QUE SE RÈGLE LE DOSAGE (IT3). Le même code sert les trois
+        # niveaux ; seule la requête change :
+        NormalChange:
+          # CAB : le changement n'est vert qu'APRÈS `ev_approve`. `plannedscheduled`
+          # est volontairement EXCLU — dans le cycle ITIL il PRÉCÈDE l'approbation
+          # (new → validated → assigned → plannedscheduled → approved). L'inclure
+          # laisserait passer un changement planifié mais non encore approuvé.
+          approvedWhen: >-
+            SELECT Change WHERE ref = :ref
+            AND status IN ('approved','implemented','monitored','closed')
+        RoutineChange:
+          # Changement standard PRÉ-APPROUVÉ : son cycle de vie ne passe même pas
+          # par l'état `approved` (new → assigned → plannedscheduled → implemented).
+          # Le feu vert, ici, c'est la prise en charge. Aucun code ne le sait :
+          # c'est cette requête qui le dit.
+          approvedWhen: >-
+            SELECT Change WHERE ref = :ref
+            AND status IN ('assigned','plannedscheduled','implemented','monitored','closed')
+        UserRequest:
+          approvedWhen: >-
+            SELECT UserRequest WHERE ref = :ref
+            AND status IN ('approved','assigned','resolved','closed')
+
     backend:
       baseUrl: https://backstage.212-47-226-56.nip.io
       listen:

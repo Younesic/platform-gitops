@@ -1,0 +1,29 @@
+# iTop accorde au PORTAIL le droit de lire l'identifiant de son compte de service.
+#
+# Symétrique exact de bootstrap/manifests/ldap/rbac-itop-bind.yaml : celui qui
+# DÉTIENT le secret accorde le droit, le plus étroitement possible — `get`, sur
+# CE seul secret, pour CE seul compte de service. Aucun verbe d'écriture, aucun
+# joker de nom.
+#
+# Le compte concerné est `svc-portal` : REST Services User + Service Desk Agent
+# + Change Supervisor. Il peut ouvrir et lire des demandes et des changements ;
+# il ne peut ni administrer iTop, ni toucher aux comptes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: itop-portal-reader
+  namespace: itop
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [itop-credentials]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: itop-portal-reader
+  namespace: itop
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: itop-portal-reader }
+subjects:
+  - { kind: ServiceAccount, name: backstage-itop-bootstrap, namespace: backstage }

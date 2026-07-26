@@ -95,6 +95,15 @@ spec:
                 '{"name":"Martin","first_name":"Marie","org_id":{"name":"Plateforme"},"email":"mmartin@platform.local"}' \
                 "personne Marie Martin" >/dev/null
 
+              # --- Équipe -----------------------------------------------------
+              # Le cycle de vie ITIL d'un changement exige une équipe et des
+              # personnes (team_id, supervisor_group_id, manager_group_id,
+              # agent_id…) AVANT de pouvoir être approuvé. Sans elles, aucune
+              # approbation n'est possible : ce n'est pas du décor.
+              ensure Team "SELECT Team WHERE name='Equipe changement'" \
+                '{"name":"Equipe changement","org_id":{"name":"Plateforme"}}' \
+                "équipe changement" >/dev/null
+
               # --- Catalogue de services -------------------------------------
               ensure ServiceFamily "SELECT ServiceFamily WHERE name='Plateforme'" \
                 '{"name":"Plateforme"}' "famille de services" >/dev/null
