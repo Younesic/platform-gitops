@@ -11,10 +11,10 @@ data:
     - version: v1alpha1
       group: temoin.ansible.example.io
       kind: Motd
-      role: /opt/ansible/roles/awx-runner
+      playbook: /opt/ansible/generic/provision.yml
       # Ce qui distingue cette architecture d'un playbook lancé une fois : l'état
       # déclaré est ré-imposé à la machine à chaque échéance.
       reconcilePeriod: 120s
       finalizer:
         name: temoin.ansible.example.io/deprovision
-        role: /opt/ansible/roles/awx-remover
+        playbook: /opt/ansible/generic/deprovision.yml

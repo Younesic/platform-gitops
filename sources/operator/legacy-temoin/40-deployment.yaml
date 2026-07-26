@@ -17,7 +17,7 @@ spec:
     metadata:
       labels: { app: legacy-operator }
       annotations:
-        roles-revision: "1"
+        roles-revision: "2"
     spec:
       serviceAccountName: legacy-operator
       priorityClassName: platform-high
@@ -27,6 +27,10 @@ spec:
             { key: awx-contrat.yml, path: awx-contrat/tasks/main.yml },
             { key: awx-runner.yml,  path: awx-runner/tasks/main.yml },
             { key: awx-remover.yml, path: awx-remover/tasks/main.yml } ] }
+        - name: generic
+          configMap: { name: ansible-operator-roles, items: [
+            { key: provision.yml,   path: provision.yml },
+            { key: deprovision.yml, path: deprovision.yml } ] }
         - name: produit
           configMap: { name: legacy-temoin-watches }
         - name: runner
@@ -63,6 +67,7 @@ spec:
             - { name: CLAIM_PLURAL,      value: "legacyservicetemoins" }
           volumeMounts:
             - { name: roles,   mountPath: /opt/ansible/roles,   readOnly: true }
+            - { name: generic, mountPath: /opt/ansible/generic, readOnly: true }
             - { name: produit, mountPath: /opt/ansible/produit, readOnly: true }
             - { name: runner,  mountPath: /tmp }
           resources:

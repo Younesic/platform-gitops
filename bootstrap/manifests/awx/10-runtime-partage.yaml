@@ -364,3 +364,27 @@ data:
         headers: { Authorization: "Bearer {{ k8s_token }}" }
         status_code: [200, 202, 404]
       no_log: true
+  provision.yml: |
+    ---
+    # Enveloppe générique — elle ne fait qu'appeler le rôle nominal.
+    #
+    # Pourquoi une enveloppe plutôt que `role:` directement dans le watches.yaml :
+    # ansible-operator v1.42.3 lit la valeur de `role:` comme un FICHIER
+    # (« read /opt/ansible/roles/awx-runner: is a directory » — vérifié sur ce
+    # cluster). Le chemin `playbook:` est celui qui marche, et il est de toute façon
+    # plus explicite. Cette enveloppe est PARTAGÉE : elle ne connaît aucun produit.
+    - name: Reconcilier un produit du parc non-Kubernetes
+      hosts: localhost
+      connection: local
+      gather_facts: false
+      roles:
+        - awx-runner
+  deprovision.yml: |
+    ---
+    # Enveloppe générique du dé-provisionnement, jouée par le finalizer.
+    - name: De-provisionner un produit du parc non-Kubernetes
+      hosts: localhost
+      connection: local
+      gather_facts: false
+      roles:
+        - awx-remover
