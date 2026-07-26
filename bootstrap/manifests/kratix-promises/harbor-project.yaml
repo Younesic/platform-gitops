@@ -7,6 +7,12 @@ metadata:
   annotations:
     backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","storageQuotaGb","users","team","*"]}'
     platform.kratix.io/provider: indus
+    # IT3 — PILOTE reposé : la branche promise/harbor-project REGÉNÉRÉE porte
+    # désormais cette même ligne (dérivée de curation.approval du claim, PR #95
+    # mergée). Le manifeste précédemment mergé venait d'une régénération
+    # ANTÉRIEURE à la déclaration — d'où sa disparition. Le merge de la branche
+    # rend la ligne durable ; ce pilote ne fait que la devancer.
+    platform.kratix.io/approval: '{"class":"NormalChange","service":"Plateforme interne","gate":"standard"}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
