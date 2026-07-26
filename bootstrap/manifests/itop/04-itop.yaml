@@ -18,11 +18,13 @@ data:
   ITOP_LDAP_PORT: "389"
   ITOP_LDAP_BASE_DN: ou=users,dc=platform,dc=local
   ITOP_LDAP_USER_QUERY: (uid=%1$s)
-  # Liaison de recherche laissée vide = liaison anonyme (comportement documenté
-  # par Combodo, et l'OpenLDAP du projet autorise la lecture anonyme).
-  # Chez un client qui l'interdit : renseigner un DN ici et le mot de passe par
-  # un Secret monté en variable ITOP_LDAP_BIND_PWD.
-  ITOP_LDAP_BIND_DN: ""
+  # CONSTATÉ (pas supposé) : cet OpenLDAP REFUSE la lecture anonyme — une
+  # recherche anonyme reçoit « No such object » là où la même recherche liée
+  # renvoie l'entrée. iTop doit donc se lier pour CHERCHER l'utilisateur, avant
+  # de vérifier son mot de passe auprès de l'annuaire.
+  # Le mot de passe correspondant arrive par le Secret itop-ldap-bind, recopié
+  # depuis le namespace ldap par le hook d'amorçage.
+  ITOP_LDAP_BIND_DN: cn=admin,dc=platform,dc=local
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -96,6 +98,7 @@ spec:
           envFrom:
             - configMapRef: { name: itop-env }
             - secretRef:    { name: itop-credentials }
+            - secretRef:    { name: itop-ldap-bind }   # ITOP_LDAP_BIND_PWD
           volumeMounts:
             - { name: data,    mountPath: /var/www/html }
             - { name: scripts, mountPath: /scripts, readOnly: true }

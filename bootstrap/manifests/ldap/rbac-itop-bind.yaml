@@ -1,0 +1,35 @@
+# L'ANNUAIRE accorde à iTop le droit de lire SON identifiant de liaison.
+#
+# Pourquoi c'est nécessaire (constaté, pas supposé) : cet OpenLDAP REFUSE la
+# lecture anonyme — une recherche anonyme reçoit « No such object » alors que la
+# même recherche liée en admin renvoie l'entrée. iTop doit donc se lier pour
+# chercher l'utilisateur avant d'en vérifier le mot de passe.
+#
+# Le droit est le plus étroit possible : `get`, sur CE seul secret, pour CE seul
+# compte de service. Même règle anti-escalade que le RBAC des secrets de
+# connexion Crossplane ailleurs dans ce dépôt : on n'accorde jamais un verbe
+# d'écriture ni un joker de nom.
+#
+# ⚠️ Limite assumée, à corriger chez le client : iTop se lie ici avec le compte
+# ADMINISTRATEUR de l'annuaire. En production il faut un compte de service en
+# LECTURE SEULE dédié (osixia : LDAP_READONLY_USER) — ce qui, sur cet annuaire,
+# ne se pose qu'au tout premier démarrage.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: itop-bind-reader
+  namespace: ldap
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [openldap-admin]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: itop-bind-reader
+  namespace: ldap
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: itop-bind-reader }
+subjects:
+  - { kind: ServiceAccount, name: itop-bootstrap, namespace: itop }
