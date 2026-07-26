@@ -67,6 +67,12 @@ spec:
                   serviceName:
                     description: Nom technique du service sur la machine cible.
                     type: string
+                  team:
+                    description: "Squad propri\xE9taire de la demande. Renseign\xE9\
+                      e automatiquement depuis l'identit\xE9 du demandeur ; jamais\
+                      \ transmise \xE0 AWX."
+                    pattern: ^[a-z][a-z0-9-]*$
+                    type: string
                 required:
                 - markerContent
                 - serviceName
@@ -164,6 +170,12 @@ spec:
                     type: string
                   serviceName:
                     description: Nom technique du service sur la machine cible.
+                    type: string
+                  team:
+                    description: "Squad propri\xE9taire de la demande. Renseign\xE9\
+                      e automatiquement depuis l'identit\xE9 du demandeur ; jamais\
+                      \ transmise \xE0 AWX."
+                    pattern: ^[a-z][a-z0-9-]*$
                     type: string
                 required:
                 - markerContent
@@ -465,7 +477,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:bbdf295e256d33af06a03898b13bdf90e6b49a25a70687471e17a210d01cfe1a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             name: backstage
             env:
             - name: CURATION_REV
@@ -487,7 +499,7 @@ spec:
               value: ServiceLegacy
             image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
             name: from-api-to-operator
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:bbdf295e256d33af06a03898b13bdf90e6b49a25a70687471e17a210d01cfe1a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
             name: backstage
           jobOptions: {}
           rbac: {}
