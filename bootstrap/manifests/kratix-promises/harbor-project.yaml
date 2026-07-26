@@ -6,7 +6,6 @@ metadata:
   name: harbor-project
   annotations:
     backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","storageQuotaGb","users","team","*"]}'
-    platform.kratix.io/approval: '{"class":"NormalChange","service":"Plateforme interne","gate":"standard"}'
     platform.kratix.io/provider: indus
 spec:
   api:
