@@ -6,20 +6,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: legacy-operator
+  name: motd-operator
   namespace: awx
-  labels: { app: legacy-operator }
+  labels: { app: motd-operator }
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: legacy-operator }
+    matchLabels: { app: motd-operator }
   template:
     metadata:
-      labels: { app: legacy-operator }
+      labels: { app: motd-operator }
       annotations:
         roles-revision: "1"
     spec:
-      serviceAccountName: legacy-operator
+      serviceAccountName: motd-operator
       priorityClassName: platform-high
       volumes:
         - name: roles
@@ -28,14 +28,14 @@ spec:
             { key: awx-runner.yml,  path: awx-runner/tasks/main.yml },
             { key: awx-remover.yml, path: awx-remover/tasks/main.yml } ] }
         - name: produit
-          configMap: { name: legacy-temoin-watches }
+          configMap: { name: motd-temoin-watches }
         - name: runner
           emptyDir: {}
       containers:
         - name: operator
           image: quay.io/operator-framework/ansible-operator@sha256:96053ae3e045c4eb57350cbf1995dece22bf7d3bfe4cf875a20d8853963a3731 # v1.42.3
           command: [ansible-operator]
-          args: [run, --watches-file=/opt/ansible/produit/watches.yaml, --leader-election-id=legacy-operator]
+          args: [run, --watches-file=/opt/ansible/produit/watches.yaml, --leader-election-id=motd-operator]
           env:
             - { name: WATCH_NAMESPACE, value: "" }
             - { name: ANSIBLE_ROLES_PATH, value: /opt/ansible/roles }
@@ -43,7 +43,7 @@ spec:
             - { name: ANSIBLE_REMOTE_TEMP, value: /tmp/ansible }
             # ── Le CONTRAT D'EXÉCUTION du produit ────────────────────────────
             - { name: AWX_URL, value: "http://awx-service.awx.svc.cluster.local" }
-            - { name: AWX_JOB_TEMPLATE, value: "legacy-service" }   # le SEUL autorisé
+            - { name: AWX_JOB_TEMPLATE, value: "legacy-motd" }      # le SEUL autorisé
             - { name: AWX_STATE_VAR,    value: "marker_state" }     # comment on dé-provisionne
             - { name: AWX_STATE_ABSENT, value: "absent" }
             - { name: AWX_ALLOWED_LIMITS, value: "" }               # le produit FIXE sa cible
@@ -51,16 +51,16 @@ spec:
             - name: AWX_TOKEN
               valueFrom:
                 secretKeyRef:
-                  # Le credential du fournisseur « cloud » : son utilisateur AWX
-                  # n'a le droit d'exécuter QUE legacy-service.
-                  name: awx-token-cloud
+                  # Le credential du fournisseur « indus » : son utilisateur AWX
+                  # n'a le droit d'exécuter QUE legacy-motd.
+                  name: awx-token-indus
                   key: token
             # ── De quoi être générique : l'opérande et la demande ─────────────
             - { name: OPERAND_GROUP,   value: "temoin.ansible.example.io" }
             - { name: OPERAND_VERSION, value: "v1alpha1" }
-            - { name: OPERAND_PLURAL,  value: "legacyservices" }
+            - { name: OPERAND_PLURAL,  value: "motds" }
             - { name: CLAIM_API_VERSION, value: "platform.example.io/v1alpha1" }
-            - { name: CLAIM_PLURAL,      value: "legacyservicetemoins" }
+            - { name: CLAIM_PLURAL,      value: "motdtemoins" }
           volumeMounts:
             - { name: roles,   mountPath: /opt/ansible/roles,   readOnly: true }
             - { name: produit, mountPath: /opt/ansible/produit, readOnly: true }

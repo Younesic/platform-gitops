@@ -1,0 +1,20 @@
+# LE SEUL FICHIER PROPRE AU PRODUIT, côté runtime : la carte GVK → rôle générique.
+# Les rôles, eux, sont partagés (ConfigMap ansible-operator-roles, plateforme).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: legacy-temoin-watches
+  namespace: awx
+data:
+  watches.yaml: |
+    ---
+    - version: v1alpha1
+      group: temoin.ansible.example.io
+      kind: LegacyService
+      role: /opt/ansible/roles/awx-runner
+      # Ce qui distingue cette architecture d'un playbook lancé une fois : l'état
+      # déclaré est ré-imposé à la machine à chaque échéance.
+      reconcilePeriod: 120s
+      finalizer:
+        name: temoin.ansible.example.io/deprovision
+        role: /opt/ansible/roles/awx-remover

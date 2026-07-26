@@ -1,0 +1,66 @@
+# Droits du contrôleur témoin.
+#
+# Il vit dans le namespace `awx` pour lire le jeton d'API à la source (aucune copie
+# de secret d'un namespace à l'autre), mais il OBSERVE tous les namespaces : le
+# renderer officiel `from-api-to-operator` pose toujours le CR dans `default`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: motd-operator
+  namespace: awx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: motd-operator-leader-election
+  namespace: awx
+rules:
+  # Élection de chef, dans SON namespace uniquement.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [configmaps, events]
+    verbs: [get, list, watch, create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: motd-operator-leader-election
+  namespace: awx
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: motd-operator-leader-election }
+subjects:
+  - { kind: ServiceAccount, name: motd-operator, namespace: awx }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: motd-operator
+rules:
+  # Son propre produit : le CR, son statut, son finalizer.
+  - apiGroups: ["temoin.ansible.example.io"]
+    resources: [motds, motds/status, motds/finalizers]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Les événements, pour que `kubectl describe` raconte quelque chose.
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  # LA SANTÉ : le runtime publie son propre HealthRecord, que Kratix agrège dans
+  # `status.healthStatus` de la demande. C'est le mécanisme natif de la plateforme —
+  # l'agent AD3 n'est qu'un producteur parmi d'autres.
+  - apiGroups: ["platform.kratix.io"]
+    resources: [healthrecords]
+    verbs: [get, list, create, update, patch, delete]
+  # Lecture SEULE de la demande Kratix, pour lier le HealthRecord à la bonne
+  # génération et retrouver le nom de la promesse (jamais écrit en dur).
+  - apiGroups: ["platform.example.io"]
+    resources: [motdtemoins]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: motd-operator
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: motd-operator }
+subjects:
+  - { kind: ServiceAccount, name: motd-operator, namespace: awx }

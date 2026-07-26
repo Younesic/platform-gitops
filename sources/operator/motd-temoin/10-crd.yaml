@@ -1,0 +1,66 @@
+# Le contrat du SECOND produit : une bannière de connexion sur la même machine.
+# Autre CRD, autre job template, autre fournisseur — même runtime.
+#
+# ⚠️ Le champ `jobTemplate` est ici VOLONTAIREMENT exposé : il simule un auteur
+# maladroit qui laisserait un demandeur désigner l'automatisation à lancer. Le
+# rôle générique doit REFUSER une telle demande (clé réservée), et c'est ce que
+# prouve la DoD (c) d'AN3. Aucun produit réel ne devrait exposer ce champ.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: motds.temoin.ansible.example.io
+spec:
+  group: temoin.ansible.example.io
+  names: { kind: Motd, listKind: MotdList, plural: motds, singular: motd }
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources: { status: {} }
+      additionalPrinterColumns:
+        - { name: Job AWX, type: integer, jsonPath: .status.awxJobId }
+        - { name: Dernier etat, type: string, jsonPath: .status.awxJobStatus }
+        - { name: Age, type: date, jsonPath: .metadata.creationTimestamp }
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >-
+            La bannière de connexion d'une machine du parc legacy — une cible sans
+            API déclarative, atteinte en SSH. Kubernetes réconcilie, Ansible exécute.
+          properties:
+            apiVersion: { type: string }
+            kind: { type: string }
+            metadata: { type: object }
+            spec:
+              type: object
+              required: [bannerText]
+              properties:
+                bannerText:
+                  type: string
+                  description: Texte affiché à la connexion sur la machine.
+                  maxLength: 200
+                jobTemplate:
+                  type: string
+                  description: >-
+                    NE PAS UTILISER — champ piège de la démonstration d'autorisation.
+                    Une demande qui le renseigne est refusée par le runtime.
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  description: Conditions écrites par le runtime à chaque réconciliation.
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string }
+                      status: { type: string }
+                      reason: { type: string }
+                      message: { type: string }
+                      lastTransitionTime: { type: string }
+                      ansibleResult: { type: object, x-kubernetes-preserve-unknown-fields: true }
+                awxJobId: { type: integer, description: Identifiant du job AWX de la dernière exécution. }
+                awxJobStatus: { type: string, description: Statut du dernier job AWX. }
+                lastRunAt: { type: string, description: Horodatage de fin de la dernière exécution. }
+                serviceState: { type: string, description: État constaté sur la machine cible. }
