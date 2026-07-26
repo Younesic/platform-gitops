@@ -61,6 +61,11 @@ data:
     # des tickets étrangers, donc du vert imméritè).
     itop:
       baseUrl: ${ITOP_BASE_URL}
+      # Le SERVEUR appelle iTop par le service interne du cluster ; un HUMAIN,
+      # lui, ne peut pas ouvrir http://itop.itop.svc… — les liens des tickets
+      # doivent donc pointer sur l'URL publique. Sans cette ligne, ils retombent
+      # sur baseUrl et sont inutilisables (vécu).
+      publicUrl: https://itop.212-47-226-56.nip.io
       auth:
         user: ${ITOP_USER}
         password: ${ITOP_PASSWORD}
