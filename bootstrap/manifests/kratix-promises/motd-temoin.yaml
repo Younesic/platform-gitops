@@ -346,7 +346,7 @@ spec:
       template:
         metadata:
           annotations:
-            roles-revision: '2'
+            roles-revision: '3'
           labels:
             app: motd-operator
         spec:
