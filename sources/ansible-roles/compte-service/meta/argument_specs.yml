@@ -35,6 +35,7 @@ argument_specs:
         required: true
         description:
           - Clé publique SSH autorisée à ouvrir une session sur ce compte.
+          - Le contenu d'un fichier .pub — commence par ssh-ed25519, ssh-rsa, ecdsa-sha2-…
           - La clé PRIVÉE reste chez le demandeur — la plateforme ne la voit jamais.
       sudo_command:
         type: str
@@ -42,5 +43,7 @@ argument_specs:
         default: ""
         description:
           - Commande unique que le compte peut exécuter en sudo, sans mot de passe.
+          - CHEMIN ABSOLU obligatoire — « /bin/ls -a », jamais « ls -a ».
+          - "Sinon le PATH du compte déciderait quel binaire tourne : sudo le refuse."
           - Laisser vide pour n'accorder aucun droit d'élévation (le cas par défaut).
           - Le fichier sudoers est validé par visudo avant d'être posé.
