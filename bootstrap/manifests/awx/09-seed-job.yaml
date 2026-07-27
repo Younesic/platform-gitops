@@ -179,15 +179,28 @@ spec:
               [ -n "$INV" ] || INV=$(post /inventories/ "$(jq -nc --arg n "$INV_NAME" --argjson o "$ORG" '{name:$n, organization:$o, description:"Cibles sans API Kubernetes"}')" | must_id inventaire)
               echo "inventaire=$INV"
 
+              # ⚠️ PRÉCÉDENCE VÉCUE : une variable d'hôte `ansible_user` ÉCRASE
+              # l'identifiant du credential AWX. Poser `root` ici annulait donc en
+              # silence le compte de service — la connexion repartait en root alors
+              # que le credential disait `svc-ansible`. On ne fige plus l'utilisateur
+              # dans l'inventaire : c'est le credential qui le porte, à un seul
+              # endroit, et il reste changeable sans toucher au parc.
               HOSTVARS=$(jq -nc '{
                 ansible_host:"legacy-vm.awx.svc.cluster.local",
-                ansible_user:"root",
                 ansible_port:22,
                 ansible_python_interpreter:"/usr/bin/python3",
                 ansible_ssh_common_args:"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
               }')
               HST=$(find_id hosts "$HOST_NAME")
-              [ -n "$HST" ] || HST=$(post /hosts/ "$(jq -nc --arg n "$HOST_NAME" --argjson i "$INV" --arg v "$HOSTVARS" '{name:$n, inventory:$i, variables:$v, description:"Serveur legacy temoin - joignable uniquement en SSH"}')" | must_id hote)
+              if [ -z "$HST" ]; then
+                HST=$(post /hosts/ "$(jq -nc --arg n "$HOST_NAME" --argjson i "$INV" --arg v "$HOSTVARS" '{name:$n, inventory:$i, variables:$v, description:"Serveur legacy temoin - joignable uniquement en SSH"}')" | must_id hote)
+              else
+                # Reconvergence : un hôte déjà créé garde ses anciennes variables
+                # (dont le `ansible_user: root` d'avant). On les réaligne.
+                curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg v "$HOSTVARS" '{variables:$v}')" "$API/hosts/$HST/" >/dev/null \
+                  && echo "  variables de l'hote realignees (plus de ansible_user fige)"
+              fi
               echo "hote=$HST"
 
               # ── 2bis. groupes d'hôtes ────────────────────────────────────────
