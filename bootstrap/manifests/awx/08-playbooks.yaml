@@ -292,6 +292,10 @@ spec:
           volumeMounts:
             - { name: src, mountPath: /src, readOnly: true }
             - { name: www, mountPath: /www }
+          # MÊME valeur que l'annotation `playbooks-revision` du modèle de pod :
+          # elle redémarre le pod ET nomme l'archive. Un seul chiffre à bouger.
+          env:
+            - { name: REVISION, value: "5" }
           command: [/bin/sh, -c]
           args:
             - |
@@ -300,9 +304,18 @@ spec:
               # de liens symboliques vers ..data/, `tar .` embarquerait ces
               # répertoires internes.
               mkdir -p /work && cp -L /src/*.yml /work/
-              tar czf /www/legacy-playbooks.tar.gz -C /work .
-              echo "archive: $(wc -c < /www/legacy-playbooks.tar.gz) octets, contenu:"
-              tar tzf /www/legacy-playbooks.tar.gz
+              # ⚠️ VÉCU : servir une archive qui CHANGE sous un nom FIXE ne suffit
+              # pas. AWX a bien re-téléchargé la nouvelle archive, mais n'a PAS
+              # ré-extrait : les playbooks sur disque restaient ceux de la veille,
+              # et une correction poussée ne changeait rien à ce qui tournait —
+              # sans une ligne d'erreur nulle part. Le nom porte donc la révision :
+              # une URL neuve, AWX n'a plus le choix.
+              tar czf "/www/legacy-playbooks-${REVISION}.tar.gz" -C /work .
+              # Le nom fixe reste servi : la sonde de disponibilité s'y appuie, et
+              # un projet AWX pas encore réaligné continue de trouver quelque chose.
+              cp "/www/legacy-playbooks-${REVISION}.tar.gz" /www/legacy-playbooks.tar.gz
+              echo "archive revision ${REVISION}: $(wc -c < /www/legacy-playbooks-${REVISION}.tar.gz) octets, contenu:"
+              tar tzf "/www/legacy-playbooks-${REVISION}.tar.gz"
       containers:
         - name: nginx
           image: nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 # nginx:1.27-alpine

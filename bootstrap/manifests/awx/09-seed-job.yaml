@@ -94,6 +94,9 @@ spec:
             - { name: HOST_NAME,     value: "legacy-vm-01" }
             - { name: CRED_NAME,     value: "legacy-vm-ssh" }
             - { name: PROJECT_NAME,  value: "Playbooks legacy" }
+            # MÊME valeur que `playbooks-revision` (08-playbooks.yaml) : elle
+            # nomme l'archive servie et l'URL que suit le projet AWX.
+            - { name: PLAYBOOKS_REVISION, value: "5" }
             - { name: JT_NAME,       value: "legacy-service" }
             - { name: EE_NAME,       value: "AWX EE 24.6.1" }
           command: [/bin/sh, -c]
@@ -252,10 +255,26 @@ spec:
 
               # ── 4. projet (archive HTTP) ──────────────────────────────────────
               echo "== projet =="
+              # ⚠️ L'URL PORTE LA RÉVISION. Sous un nom fixe, AWX re-télécharge
+              # l'archive mais ne la ré-extrait pas : une correction poussée ne
+              # change alors RIEN à ce qui tourne, sans un message d'erreur (vécu).
+              # Une URL neuve ne lui laisse pas le choix.
+              ARCHIVE_URL="http://awx-playbooks.awx.svc.cluster.local/legacy-playbooks-${PLAYBOOKS_REVISION}.tar.gz"
               PRJ=$(find_id projects "$PROJECT_NAME")
-              [ -n "$PRJ" ] || PRJ=$(post /projects/ "$(jq -nc --arg n "$PROJECT_NAME" --argjson o "$ORG" \
-                    '{name:$n, organization:$o, scm_type:"archive", scm_url:"http://awx-playbooks.awx.svc.cluster.local/legacy-playbooks.tar.gz", scm_update_on_launch:true, description:"Playbooks du parc legacy, distribues par archive HTTP"}')" | must_id projet)
-              echo "projet=$PRJ"
+              if [ -z "$PRJ" ]; then
+                PRJ=$(post /projects/ "$(jq -nc --arg n "$PROJECT_NAME" --argjson o "$ORG" --arg u "$ARCHIVE_URL" \
+                      '{name:$n, organization:$o, scm_type:"archive", scm_url:$u, scm_update_on_launch:true, description:"Playbooks du parc legacy, distribues par archive HTTP"}')" | must_id projet)
+              else
+                # Reconvergence : un projet déjà créé pointe l'ancienne révision.
+                ACT=$(curl -sS -u "$AUTH" "$API/projects/$PRJ/" | jq -r '.scm_url')
+                if [ "$ACT" != "$ARCHIVE_URL" ]; then
+                  curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                    -d "$(jq -nc --arg u "$ARCHIVE_URL" '{scm_url:$u}')" "$API/projects/$PRJ/" >/dev/null
+                  curl -sS -u "$AUTH" -X POST "$API/projects/$PRJ/update/" >/dev/null
+                  echo "  projet realigne sur la revision ${PLAYBOOKS_REVISION}"
+                fi
+              fi
+              echo "projet=$PRJ (revision ${PLAYBOOKS_REVISION})"
               # Le job template refuse un playbook que le projet n'a pas encore vu :
               # on attend la fin de la synchronisation.
               i=0
