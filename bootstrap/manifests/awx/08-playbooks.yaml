@@ -169,6 +169,36 @@ data:
             that: account_name | length > 0
             fail_msg: "account_name est vide — demande refusee"
 
+        # ── Dire NON tot, et le dire en francais ──────────────────────────────
+        # Ces deux verifications existaient de fait, mais TROP TARD et TROP BAS :
+        # sudo refusait la commande par un vidage de visudo au milieu du journal,
+        # et une cle bidon passait SANS BRONCHER. Vecu : « ls -a » (au lieu de
+        # /bin/ls -a) a fait echouer la ressource avec « expected a
+        # fully-qualified path name » — exact, mais illisible pour le demandeur.
+        - name: Refuser une commande sudo qui n'est pas un chemin absolu
+          # sudo EXIGE un chemin absolu : « ls -a » ne veut rien dire pour lui,
+          # car le PATH du compte deciderait quel binaire tourne — c'est
+          # precisement le trou qu'un droit sudo etroit cherche a fermer.
+          ansible.builtin.assert:
+            that: sudo_command is match('^/')
+            fail_msg: >-
+              la commande sudo doit etre un CHEMIN ABSOLU (recu : « {{ sudo_command }} »).
+              Exemple : « /bin/ls -a » et non « ls -a ». sudo refuse un nom court,
+              car le PATH du compte deciderait alors quel binaire est execute.
+          when: account_state == "present" and sudo_command | length > 0
+
+        - name: Refuser une cle publique qui n'en est pas une
+          # Une cle invalide s'ecrivait sans erreur : le compte paraissait
+          # correct, et PERSONNE ne pouvait s'y connecter. Un echec franc vaut
+          # mieux qu'un succes qui ment.
+          ansible.builtin.assert:
+            that: ssh_public_key is match('^(ssh-(rsa|dss|ed25519)|ecdsa-sha2-|sk-)')
+            fail_msg: >-
+              la cle publique ne ressemble pas a une cle SSH (recu : « {{ ssh_public_key[:20] }}… »).
+              Elle doit commencer par ssh-rsa, ssh-ed25519, ecdsa-sha2-… — c'est le
+              contenu d'un fichier .pub, jamais une cle privee.
+          when: account_state == "present" and ssh_public_key | length > 0
+
         - name: Compte de service
           ansible.builtin.user:
             name: "{{ account_name }}"
@@ -245,7 +275,7 @@ spec:
       annotations:
         # Incrémenter à chaque modification du playbook ci-dessus : ArgoCD ne
         # redémarre pas un pod parce qu'une ConfigMap a changé.
-        playbooks-revision: "4"
+        playbooks-revision: "5"
     spec:
       priorityClassName: platform-high
       volumes:
