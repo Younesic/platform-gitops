@@ -190,6 +190,25 @@ spec:
               [ -n "$HST" ] || HST=$(post /hosts/ "$(jq -nc --arg n "$HOST_NAME" --argjson i "$INV" --arg v "$HOSTVARS" '{name:$n, inventory:$i, variables:$v, description:"Serveur legacy temoin - joignable uniquement en SSH"}')" | must_id hote)
               echo "hote=$HST"
 
+              # ── 2bis. groupes d'hôtes ────────────────────────────────────────
+              # Un vrai parc est RANGÉ : prod, préprod, middleware… C'est dans ces
+              # groupes qu'une offre peut ouvrir un choix au demandeur, sans jamais
+              # lui laisser saisir un nom de machine. Sans groupes, l'inventory est
+              # tout-ou-rien et le Studio n'a rien à proposer — le décor mentirait
+              # sur ce que le client a réellement.
+              for G in prod preprod; do
+                GID=$(find_id groups "$G")
+                if [ -z "$GID" ]; then
+                  GID=$(post /groups/ "$(jq -nc --arg n "$G" --argjson i "$INV" '{name:$n, inventory:$i, description:("Parc legacy - " + $n)}')" | must_id "groupe $G")
+                fi
+                echo "groupe $G=$GID"
+              done
+              # La cible témoin vit en prod : c'est ce qui rend la démonstration
+              # d'un accès approuvé crédible.
+              GPROD=$(find_id groups "prod")
+              curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' \
+                -d "$(jq -nc --argjson h "$HST" '{id:$h}')" "$API/groups/$GPROD/hosts/" >/dev/null || true
+
               # ── 3. identifiant machine (clé SSH) ──────────────────────────────
               echo "== identifiant machine =="
               CT=$(find_id credential_types "Machine")
