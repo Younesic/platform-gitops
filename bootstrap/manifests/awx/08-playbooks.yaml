@@ -29,6 +29,10 @@ data:
     # disparaître l'effet, au lieu de laisser un objet orphelin sur la cible.
     - name: Service legacy sur cible sans API declarative
       hosts: all
+      # L'automate entre sous un compte de service : les gestes système
+      # (compte, sudoers, /opt) passent donc par sudo. Le cadrage n'est pas ici,
+      # il est au-dessus : quel job template, sur quel inventaire, avec quel jeton.
+      become: true
       gather_facts: false
       vars:
         service_name: legacy-app
@@ -81,6 +85,10 @@ data:
     # qu'un produit ne peut pas lancer l'automatisation d'un autre.
     - name: Banniere de connexion sur cible sans API declarative
       hosts: all
+      # L'automate entre sous un compte de service : les gestes système
+      # (compte, sudoers, /opt) passent donc par sudo. Le cadrage n'est pas ici,
+      # il est au-dessus : quel job template, sur quel inventaire, avec quel jeton.
+      become: true
       gather_facts: false
       vars:
         banner_text: "Acces reserve - plateforme"
@@ -133,6 +141,10 @@ data:
     # produit inutilisable, puis INDESTRUCTIBLE (son finalizer échoue en boucle).
     - name: Compte de service applicatif sur une cible sans API declarative
       hosts: all
+      # L'automate entre sous un compte de service : les gestes système
+      # (compte, sudoers, /opt) passent donc par sudo. Le cadrage n'est pas ici,
+      # il est au-dessus : quel job template, sur quel inventaire, avec quel jeton.
+      become: true
       gather_facts: false
       vars:
         account_name: ""
@@ -233,7 +245,7 @@ spec:
       annotations:
         # Incrémenter à chaque modification du playbook ci-dessus : ArgoCD ne
         # redémarre pas un pod parce qu'une ConfigMap a changé.
-        playbooks-revision: "3"
+        playbooks-revision: "4"
     spec:
       priorityClassName: platform-high
       volumes:

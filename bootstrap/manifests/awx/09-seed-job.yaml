@@ -214,13 +214,26 @@ spec:
               CT=$(find_id credential_types "Machine")
               [ -n "$CT" ] || { echo "ERREUR: type d'identifiant Machine introuvable"; exit 1; }
               CRED=$(find_id credentials "$CRED_NAME")
+              # L'automate se connecte sous un COMPTE DE SERVICE, jamais en root,
+              # et escalade par sudo (become). Une clé qui ouvre root contredirait
+              # ce que la plateforme vend.
               if [ -z "$CRED" ]; then
                 # --rawfile conserve le saut de ligne final : AWX refuse une clé
                 # privée qui n'en a pas.
                 jq -n --arg n "$CRED_NAME" --argjson o "$ORG" --argjson t "$CT" --rawfile k /sshkey/ssh-privatekey \
-                  '{name:$n, organization:$o, credential_type:$t, inputs:{username:"root", ssh_key_data:$k}}' > /tmp/cred.json
+                  '{name:$n, organization:$o, credential_type:$t, inputs:{username:"svc-ansible", become_method:"sudo", ssh_key_data:$k}}' > /tmp/cred.json
                 CRED=$(post /credentials/ "@/tmp/cred.json" | must_id identifiant)
                 rm -f /tmp/cred.json
+              else
+                # Rejeu : on RECONVERGE un identifiant existant (il pointait root
+                # avant). `inputs` se remplace en bloc — la clé est donc renvoyée
+                # avec, sinon AWX la perdrait.
+                jq -n --rawfile k /sshkey/ssh-privatekey \
+                  '{inputs:{username:"svc-ansible", become_method:"sudo", ssh_key_data:$k}}' > /tmp/cred.json
+                curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                  --data-binary @/tmp/cred.json "$API/credentials/$CRED/" >/dev/null
+                rm -f /tmp/cred.json
+                echo "  identifiant realigne sur svc-ansible"
               fi
               echo "identifiant=$CRED"
 

@@ -77,14 +77,34 @@ spec:
               # modules par un interpréteur sur la CIBLE. Dépendance d'egress vers
               # le miroir Alpine, assumée et BRUYANTE : si elle tombe, le pod ne
               # démarre pas (jamais un demi-serveur qui répond).
-              apk add --no-cache openssh-server python3 >/dev/null
+              apk add --no-cache openssh-server python3 shadow sudo >/dev/null
               ssh-keygen -A
-              mkdir -p /root/.ssh
-              install -m 600 /keys/authorized_keys /root/.ssh/authorized_keys
-              chmod 700 /root/.ssh
+
+              # ── L'automate n'entre PAS en root ────────────────────────────────
+              # Une clé qui ouvre directement le compte root contredit ce que la
+              # plateforme vend : des accès nominatifs, à privilège étroit. Ansible
+              # se connecte donc sous un compte de service dédié, puis escalade par
+              # sudo — c'est le motif standard en production.
+              #
+              # ⚠️ Le sudo de CE compte est large (NOPASSWD: ALL) et ce n'est pas un
+              # relâchement : Ansible exécute des modules arbitraires, un sudo
+              # restreint à quelques commandes le casserait. Le cadrage ne se fait
+              # pas ici — il se fait au-dessus : quel job template a le droit de
+              # tourner, sur quel inventaire, avec quel jeton. C'est exactement ce
+              # que déclare la promesse.
+              id svc-ansible >/dev/null 2>&1 || useradd -m -s /bin/sh -c "compte de service Ansible" svc-ansible
+              mkdir -p /home/svc-ansible/.ssh
+              install -m 600 -o svc-ansible -g svc-ansible /keys/authorized_keys /home/svc-ansible/.ssh/authorized_keys
+              chmod 700 /home/svc-ansible/.ssh
+              chown svc-ansible:svc-ansible /home/svc-ansible/.ssh
+              printf 'svc-ansible ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/svc-ansible
+              chmod 440 /etc/sudoers.d/svc-ansible
+              visudo -cf /etc/sudoers.d/svc-ansible >/dev/null
+
               echo "cible legacy prête : $(python3 -V 2>&1), $(/usr/sbin/sshd -V 2>&1 | head -1)"
+              echo "accès : svc-ansible (sudo), root REFUSÉ en SSH"
               exec /usr/sbin/sshd -D -e \
-                -o PermitRootLogin=prohibit-password \
+                -o PermitRootLogin=no \
                 -o PasswordAuthentication=no \
                 -o PubkeyAuthentication=yes \
                 -o UseDNS=no
