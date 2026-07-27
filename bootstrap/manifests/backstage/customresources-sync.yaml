@@ -103,7 +103,12 @@ spec:
               image: alpine/k8s:1.35.3
               resources:
                 requests: { cpu: 20m, memory: 64Mi }
-                limits: { cpu: 200m, memory: 192Mi }
+                # 192 Mio suffisaient jusqu'à l'arrivée des produits ansible : le
+                # pod a été OOMKilled dès que la liste des CRD a grossi (le tick
+                # suivant repassait, puis re-tuait — panne intermittente, donc
+                # difficile à voir). Le coût réel reste quelques dizaines de Mio ;
+                # cette marge évite d'y revenir au prochain moteur.
+                limits: { cpu: 200m, memory: 384Mi }
               command: [/bin/sh, -c]
               args:
                 - |
