@@ -92,7 +92,12 @@ spec:
               # pas ici — il se fait au-dessus : quel job template a le droit de
               # tourner, sur quel inventaire, avec quel jeton. C'est exactement ce
               # que déclare la promesse.
+              # ⚠️ `useradd` sans mot de passe écrit « ! » dans /etc/shadow, et sshd
+              # lit ça comme un compte VERROUILLÉ : il refuse la connexion avant même
+              # de regarder la clé (« account is locked »). Le « * » dit la bonne
+              # chose : aucun mot de passe n'ouvre ce compte — SEULE la clé le peut.
               id svc-ansible >/dev/null 2>&1 || useradd -m -s /bin/sh -c "compte de service Ansible" svc-ansible
+              usermod -p '*' svc-ansible
               mkdir -p /home/svc-ansible/.ssh
               install -m 600 -o svc-ansible -g svc-ansible /keys/authorized_keys /home/svc-ansible/.ssh/authorized_keys
               chmod 700 /home/svc-ansible/.ssh
