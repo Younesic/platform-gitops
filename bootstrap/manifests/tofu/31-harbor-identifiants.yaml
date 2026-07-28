@@ -1,0 +1,177 @@
+# LES IDENTIFIANTS HARBOR POUR LE RUNNER TERRAFORM.
+#
+# POURQUOI CE FICHIER EXISTE. Un module terraform ne doit pas connaître les identifiants :
+# une variable terraform atterrit dans l'ÉTAT et dans le PLAN, et `sensitive` masque
+# l'affichage, pas le stockage. On les injecte donc par l'ENVIRONNEMENT du pod runner
+# (`spec.runnerPodTemplate.spec.envFrom`), que le provider harbor lit tout seul.
+#
+# C'est l'exact équivalent du `ClusterProviderConfig` de la voie crossplane, qui injecte
+# le mot de passe dans un fichier lu par le bloc provider.
+#
+# ⚠️ Un envFrom ne peut lire qu'un Secret de SON namespace. Le mot de passe vit dans le
+# namespace `harbor` — d'où cette recopie, faite DANS le cluster par un compte dont le
+# droit de lecture est nominatif (`get` sur CE seul secret). Rien n'est affiché.
+#
+# ⚠️ PARITÉ ASSUMÉE, PAS RECOMMANDATION : on emploie le compte admin, exactement comme la
+# voie crossplane, pour que TN8 compare deux moteurs et non deux niveaux de privilège.
+# Un robot Harbor à portée réduite serait mieux — c'est un point à porter en TN8.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: harbor-identifiants
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harbor-identifiants-lecture
+  namespace: harbor
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [harbor-admin]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harbor-identifiants-lecture
+  namespace: harbor
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: harbor-identifiants-lecture }
+subjects:
+  - { kind: ServiceAccount, name: harbor-identifiants, namespace: flux-system }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harbor-identifiants-ecriture
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [harbor-identifiants]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harbor-identifiants-ecriture
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: harbor-identifiants-ecriture }
+subjects:
+  - { kind: ServiceAccount, name: harbor-identifiants, namespace: flux-system }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-identifiants
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  recopie.py: |
+    """Recopie le mot de passe admin Harbor dans la forme que le provider harbor lit
+    tout seul dans l'environnement. Rien n'est affiché."""
+    import base64, json, os, pathlib, subprocess, sys
+
+    SA  = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    NS  = (SA / "namespace").read_text().strip()
+    NOM = os.environ["SECRET_NAME"].strip()
+    JETON = (SA / "token").read_text().strip()
+    BASE  = (f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}"
+             f":{os.environ.get('KUBERNETES_SERVICE_PORT','443')}")
+
+    def api(methode, url, corps=None, ctype="application/json"):
+        cmd = ["curl", "-sS", "--cacert", str(SA / "ca.crt"), "-X", methode,
+               "-H", f"Authorization: Bearer {JETON}", "-H", f"Content-Type: {ctype}",
+               "-w", "\n%{http_code}"]
+        if corps is not None:
+            cmd += ["--data-binary", "@-"]
+        cmd.append(url)
+        r = subprocess.run(cmd, input=corps, capture_output=True, text=True, timeout=45)
+        b = r.stdout.rsplit("\n", 1)
+        return (int(b[-1]) if b[-1].isdigit() else 0), b[0]
+
+    code, brut = api("GET", f"{BASE}/api/v1/namespaces/{os.environ['SOURCE_NAMESPACE']}"
+                            f"/secrets/{os.environ['SOURCE_SECRET']}")
+    if code != 200:
+        sys.exit(f"lecture du secret source refusée ({code})")
+    src = json.loads(brut).get("data", {})
+    cle = os.environ["SOURCE_KEY"]
+    if cle not in src:
+        sys.exit(f"clé « {cle} » absente — clés présentes : {sorted(src)}")
+
+    charge = json.dumps({
+        "apiVersion": "v1", "kind": "Secret",
+        "metadata": {"name": NOM, "namespace": NS},
+        "type": "Opaque",
+        "data": {
+            "HARBOR_URL":      base64.b64encode(os.environ["HARBOR_URL"].encode()).decode(),
+            "HARBOR_USERNAME": base64.b64encode(os.environ["HARBOR_USERNAME"].encode()).decode(),
+            "HARBOR_PASSWORD": src[cle],   # déjà encodé — il n'est jamais décodé ici
+        },
+    })
+
+    url = f"{BASE}/api/v1/namespaces/{NS}/secrets/{NOM}"
+    code, _ = api("PATCH", url, charge, "application/merge-patch+json")
+    if code == 404:
+        code, _ = api("POST", f"{BASE}/api/v1/namespaces/{NS}/secrets", charge)
+    if code not in (200, 201):
+        sys.exit(f"écriture refusée ({code})")
+    print(f"identifiants Harbor déposés dans {NS}/{NOM} (utilisateur {os.environ['HARBOR_USERNAME']})")
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: harbor-identifiants
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  schedule: "37 */12 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: harbor-identifiants
+          restartPolicy: Never
+          priorityClassName: platform-high
+          volumes:
+            - name: script
+              configMap: { name: harbor-identifiants }
+          containers:
+            - name: recopie
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+              command: [python, /script/recopie.py]
+              env:
+                - { name: SECRET_NAME, value: harbor-identifiants }
+                - { name: SOURCE_NAMESPACE, value: harbor }
+                - { name: SOURCE_SECRET, value: harbor-admin }
+                - { name: SOURCE_KEY, value: HARBOR_ADMIN_PASSWORD }
+                # Le service interne, en clair : même adresse que le ClusterProviderConfig.
+                - { name: HARBOR_URL, value: "http://harbor-core.harbor.svc:80" }
+                - { name: HARBOR_USERNAME, value: admin }
+              volumeMounts:
+                - { name: script, mountPath: /script, readOnly: true }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }
