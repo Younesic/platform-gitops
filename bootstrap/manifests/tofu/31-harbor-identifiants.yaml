@@ -74,6 +74,35 @@ roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: harbor-identif
 subjects:
   - { kind: ServiceAccount, name: harbor-identifiants, namespace: flux-system }
 ---
+# Les demandes atterrissent dans `default` (comme tous les autres moteurs) : le secret
+# doit y être aussi, car `envFrom` ne lit que le namespace du pod runner.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: harbor-identifiants-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [harbor-identifiants]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harbor-identifiants-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: harbor-identifiants-ecriture }
+subjects:
+  - { kind: ServiceAccount, name: harbor-identifiants, namespace: flux-system }
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -88,7 +117,9 @@ data:
     import base64, json, os, pathlib, subprocess, sys
 
     SA  = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
-    NS  = (SA / "namespace").read_text().strip()
+    # Le namespace CIBLE peut différer du nôtre : les demandes atterrissent dans
+    # `default`, comme pour tous les autres moteurs, et `envFrom` ne lit que le sien.
+    NS  = os.environ.get("TARGET_NAMESPACE") or (SA / "namespace").read_text().strip()
     NOM = os.environ["SECRET_NAME"].strip()
     JETON = (SA / "token").read_text().strip()
     BASE  = (f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}"
@@ -164,6 +195,7 @@ spec:
               command: [python, /script/recopie.py]
               env:
                 - { name: SECRET_NAME, value: harbor-identifiants }
+                - { name: TARGET_NAMESPACE, value: default }
                 - { name: SOURCE_NAMESPACE, value: harbor }
                 - { name: SOURCE_SECRET, value: harbor-admin }
                 - { name: SOURCE_KEY, value: HARBOR_ADMIN_PASSWORD }

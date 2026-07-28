@@ -1,0 +1,208 @@
+# PROMESSE TÉMOIN DU MOTEUR TERRAFORM NATIF (objectif TN3 — la 2ᵉ porte).
+#
+# ÉCRITE À LA MAIN, exprès : TN3 teste si la PLATEFORME accueille ce moteur tel quel.
+# Si l'accueillir exigeait de modifier la fabrique, un renderer ou backstage-component,
+# la porte serait fermée et il faudrait redessiner.
+#
+# ⚠️ Nom `harbor-tf` DISTINCT de `harbor-project` et `harbor-base` en production : deux
+# fiches de même nom se disputent la même entrée du catalogue (piège payé le 2026-07-22).
+#
+# ── DEUX CHOIX DE CONCEPTION, tranchés ici ──────────────────────────────────────
+#
+# 1. LA SOURCE DU MODULE EST UNE **DÉPENDANCE**, pas un objet par demande.
+#    Cent demandes du même produit pointent le même module à la même révision : en faire
+#    un objet par demande serait cent clones du même dépôt. Kratix applique les
+#    `dependencies` UNE FOIS par Destination — c'est exactement le bon mécanisme, et
+#    `sourceRef` accepte un `namespace`, donc la ressource peut la référencer d'ailleurs.
+#
+# 2. `approvePlan: auto` ICI, ET C'EST UN CHOIX ASSUMÉ.
+#    TN2 a établi que l'approbation d'un plan et l'auto-guérison sont MUTUELLEMENT
+#    EXCLUSIVES : avec un identifiant de plan figé, la dérive est détectée mais jamais
+#    corrigée. TN3 prouve la SURVEILLANCE ; l'approbation est l'objet de TN4, qui devra
+#    trancher la tension. Une offre doit choisir, et le dire.
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: harbor-tf
+  labels:
+    kratix.io/promise-version: v0.1.0
+  annotations:
+    platform.kratix.io/provider: indus
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: "true"
+spec:
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+
+  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
+  # Écrit à la main ici ; c'est exactement ce que TN5 devra DÉRIVER du `variables.tf`
+  # du module. L'écart entre les deux sera le témoin d'équivalence de TN5.
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: harbortfs.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: HarborTf
+        plural: harbortfs
+        singular: harbortf
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [project, team]
+                  properties:
+                    project:
+                      type: string
+                      pattern: ^[a-z][a-z0-9-]*$
+                      maxLength: 255
+                      description: Nom du projet Harbor (le registre du fournisseur, ex. team-paiement).
+                    team:
+                      type: string
+                      description: Équipe propriétaire de la demande.
+                    group:
+                      type: string
+                      default: ""
+                      description: >-
+                        Groupe OIDC à qui accorder project-admin. Vide = pas de mapping
+                        de groupe (le robot d'écriture suffit à publier).
+                    storageQuotaGb:
+                      type: integer
+                      default: -1
+                      description: Quota de stockage du projet en Go (-1 = illimité).
+                    public:
+                      type: boolean
+                      default: false
+                      description: Projet public (lecture anonyme des artefacts).
+
+  # ── LA SOURCE DU MODULE : installée UNE FOIS par Destination ──────────────────
+  dependencies:
+    - apiVersion: source.toolkit.fluxcd.io/v1
+      kind: GitRepository
+      metadata:
+        name: harbor-tf-module
+        namespace: flux-system
+      spec:
+        interval: 10m
+        url: https://github.com/Younesic/platform-gitops
+        ref:
+          tag: v0.17.0            # ← LE PIN DE GOUVERNANCE : une révision, pas une branche
+        provider: github          # le source-controller frappe le jeton de l'App lui-même
+        secretRef:
+          name: github-app
+        sparseCheckout:
+          - sources/terraform/harbor-project
+
+  workflows:
+    config: {}
+
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              # Pousse le Template scaffolder et la fiche de la promesse. AUCUNE
+              # adaptation terraform : c'est le conteneur partagé, tel quel.
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            containers:
+              # ── LE RENDU ─────────────────────────────────────────────────────
+              # Script en ligne, à dessein : TN3 est une PORTE, pas une industrialisation.
+              # Construire une image de rendu partagée serait du travail de TN5/TN6 ; ici
+              # on veut savoir si la plateforme accueille le résultat, pas fabriquer l'outil.
+              # L'image est celle de la fabrique — déjà pinnée, déjà présente.
+              - name: rendu-terraform
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+                env:
+                  - { name: MODULE_PATH, value: ./sources/terraform/harbor-project }
+                  - { name: SOURCE_NAME, value: harbor-tf-module }
+                  - { name: SOURCE_NAMESPACE, value: flux-system }
+                  - { name: CIBLE_NAMESPACE, value: default }
+                  - { name: CREDS_SECRET, value: harbor-identifiants }
+                  # ⚠️ L'INTERVALLE EST UNE DÉCISION STRUCTURANTE (mesure TN2 g) : chaque
+                  # tour fait naître un POD. À 2 min c'est 720 pods/jour et par demande —
+                  # le chiffre exact qui a condamné la cadence du moteur ansible. 1 h est
+                  # un compromis : la dérive est rattrapée dans l'heure, le coût reste
+                  # de 24 pods/jour et par demande.
+                  - { name: TF_INTERVAL, value: 1h }
+                  # correspondance champ du contrat → variable du module
+                  - name: VAR_MAP
+                    value: '{"project":"project","group":"group","storageQuotaGb":"storage_quota","public":"public"}'
+                command: [python, -c]
+                args:
+                  - |
+                    import json, os, pathlib, yaml
+
+                    o = yaml.safe_load(pathlib.Path("/kratix/input/object.yaml").read_text())
+                    nom  = o["metadata"]["name"]
+                    spec = o.get("spec") or {}
+
+                    # Les variables du module, dérivées du spec de la demande.
+                    # Un champ absent n'est PAS émis : le défaut du module s'applique.
+                    variables = []
+                    for champ, var in json.loads(os.environ["VAR_MAP"]).items():
+                        if champ in spec and spec[champ] is not None:
+                            variables.append({"name": var, "value": spec[champ]})
+
+                    tf = {
+                      "apiVersion": "infra.contrib.fluxcd.io/v1alpha2",
+                      "kind": "Terraform",
+                      "metadata": {"name": nom, "namespace": os.environ["CIBLE_NAMESPACE"]},
+                      "spec": {
+                        "interval": os.environ["TF_INTERVAL"],
+                        "path": os.environ["MODULE_PATH"],
+                        "sourceRef": {
+                          "kind": "GitRepository",
+                          "name": os.environ["SOURCE_NAME"],
+                          "namespace": os.environ["SOURCE_NAMESPACE"],
+                        },
+                        # cf. l'en-tête du manifeste : surveillée OU approuvée, pas les deux
+                        "approvePlan": "auto",
+                        # ⚠️ vaut FALSE par défaut (trouvaille TN1) : sans cette ligne, la
+                        # suppression d'une demande ne détruirait RIEN.
+                        "destroyResourcesOnDeletion": True,
+                        "storeReadablePlan": "human",
+                        "writeOutputsToSecret": {"name": nom + "-sorties"},
+                        "vars": variables,
+                        # Les identifiants passent par l'ENVIRONNEMENT, jamais par des
+                        # variables terraform (une variable atterrit dans l'état).
+                        "runnerPodTemplate": {
+                          "spec": {"envFrom": [{"secretRef": {"name": os.environ["CREDS_SECRET"]}}]}
+                        },
+                      },
+                    }
+
+                    sortie = pathlib.Path("/kratix/output/terraform.yaml")
+                    sortie.write_text(yaml.safe_dump(tf, sort_keys=False, allow_unicode=True))
+                    print("rendu : Terraform/" + nom + " dans " + os.environ["CIBLE_NAMESPACE"]
+                          + " (" + str(len(variables)) + " variable(s))")
+
+              # Pousse la fiche de l'instance + les entités des objets provisionnés.
+              # Pose aussi `backstage.io/kubernetes-id` et `platform.kratix.io/owner` sur
+              # TOUTE la sortie — c'est ce qui doit labelliser la ressource Terraform
+              # SANS une ligne écrite pour terraform.
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            rbac: {}
+            jobOptions: {}
