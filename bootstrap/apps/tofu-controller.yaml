@@ -1,0 +1,31 @@
+# Exécuteur terraform NATIF (TN1) — source-controller + tofu-controller, vendorisés et
+# pinnés par empreinte. Voir bootstrap/manifests/tofu/README.md.
+#
+# ⚠️ Ce n'est PAS Flux : deux contrôleurs, aucun réconciliateur git. ArgoCD reste le seul
+# moteur GitOps du cluster.
+#
+# UNE SEULE app plutôt que deux (le plan TN1 en prévoyait deux) : rien dans ce répertoire
+# n'emploie un type livré par ce répertoire — il ne DÉFINIT que des CRD, il n'en consomme
+# aucune. Le piège « un kind inconnu invalide tout le plan de sync » ne peut donc pas se
+# produire ici, et les sync-waves internes suffisent à l'ordre. Les préfixes de fichiers
+# gardent la séparation lisible si l'on veut scinder plus tard.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tofu-controller
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "1" }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/tofu
+    directory: { recurse: false, exclude: 'README.md' }
+  destination: { server: https://kubernetes.default.svc, namespace: flux-system }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    # ServerSideApply OBLIGATOIRE : la CRD Terraform pèse ~770 Ko — en application côté
+    # client, l'annotation last-applied-configuration doublerait la charge et frôlerait
+    # la limite d'un objet etcd (piège déjà payé sur la promesse operator).
+    syncOptions: [ ServerSideApply=true ]

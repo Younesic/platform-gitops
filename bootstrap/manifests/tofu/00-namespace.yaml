@@ -1,0 +1,19 @@
+# Namespace de l'exécuteur terraform natif.
+#
+# ⚠️ LE NOM `flux-system` N'ENGAGE À RIEN. On n'installe PAS Flux : uniquement deux
+# contrôleurs — `source-controller` (qui va chercher un artefact et le met en cache) et
+# `tofu-controller` (qui exécute OpenTofu). Ni kustomize-controller, ni helm-controller,
+# ni notification-controller. **ArgoCD reste le seul moteur GitOps du cluster** ; rien
+# ici ne réconcilie git vers le cluster.
+#
+# Le nom est celui que les manifestes officiels codent en dur (le Deployment de
+# tofu-controller porte `namespace: flux-system`, ses ServiceAccounts aussi). Le changer
+# obligerait à patcher l'amont à chaque montée de version, pour un gain nul.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # avant tout ce qui atterrit dedans (R-TPL-7)
+  labels:
+    app.kubernetes.io/part-of: platform-terraform-natif

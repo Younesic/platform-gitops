@@ -1,0 +1,104 @@
+# source-controller v1.9.3 — vendorisé depuis l'artefact de release officiel
+# (fluxcd/source-controller, `source-controller.deployment.yaml`).
+#
+# TROIS ÉCARTS avec l'amont, tous délibérés et signalés en ligne :
+#   1. `namespace: flux-system` explicite (l'amont s'appuie sur kustomize pour le poser) ;
+#   2. `serviceAccountName: source-controller` (l'amont ne le pose pas — il compte sur la
+#      base RBAC de Flux ; voir 11-source-controller-rbac.yaml) ;
+#   3. image **pinnée par empreinte** et servie depuis ghcr.io plutôt que Docker Hub
+#      (standard du projet : tout est pinné par digest ; et ghcr évite les quotas
+#      d'anonymat de Docker Hub, qui ont déjà bloqué des tirages ici).
+#
+# Son métier : aller chercher un dépôt/artefact et le mettre en cache. Il n'écrit RIEN
+# dans le cluster hors ses propres objets.
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-controller
+  namespace: flux-system
+  labels:
+    control-plane: controller
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector:
+    app: source-controller
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-controller
+  namespace: flux-system
+  labels:
+    control-plane: controller
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: source-controller
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/port: "8080"
+        prometheus.io/scrape: "true"
+      labels:
+        app: source-controller
+    spec:
+      # ÉCART 2 : sans lui, le pod tourne sous le compte `default` et échoue sur tout.
+      serviceAccountName: source-controller
+      priorityClassName: platform-high
+      securityContext:
+        fsGroup: 1337
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: manager
+          # ÉCART 3 : amont = `fluxcd/source-controller:v1.9.3` (Docker Hub, par tag).
+          image: ghcr.io/fluxcd/source-controller:v1.9.3@sha256:ff8f3c92f1bcb433e858c948040c3a3393fe73f5dd72048a4502bfaf0a4c26cd
+          imagePullPolicy: IfNotPresent
+          args:
+            - --watch-all-namespaces
+            - --log-level=info
+            - --log-encoding=json
+            - --enable-leader-election
+            - --storage-path=/data
+            - --storage-adv-addr=source-controller.$(RUNTIME_NAMESPACE).svc.cluster.local.
+          env:
+            - name: RUNTIME_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TUF_ROOT
+              value: /tmp/.sigstore
+          ports:
+            - { containerPort: 9090, name: http, protocol: TCP }
+            - { containerPort: 8080, name: http-prom, protocol: TCP }
+            - { containerPort: 9440, name: healthz, protocol: TCP }
+          livenessProbe:
+            httpGet: { path: /healthz, port: healthz }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 1000m, memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { mountPath: /data, name: data }
+            - { mountPath: /tmp, name: tmp }
+      volumes:
+        - { name: data, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }

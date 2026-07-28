@@ -1,0 +1,78 @@
+# RBAC du source-controller — ÉCRIT PAR NOUS, et volontairement.
+#
+# POURQUOI. L'artefact de release `source-controller.deployment.yaml` ne contient QUE le
+# Service et le Deployment : ni ServiceAccount, ni droits. En amont, ils viennent de la
+# base RBAC de Flux — que nous n'installons pas. Sans ce fichier, le contrôleur tournerait
+# sous le compte `default` du namespace et échouerait sur chaque lecture.
+#
+# On écrit donc des droits NOMINATIFS plutôt que de reprendre le `cluster-admin` que Flux
+# accorde à ses contrôleurs applicateurs : ce contrôleur-ci ne fait que LIRE des dépôts et
+# publier des artefacts. Il n'a aucune raison de pouvoir écrire dans le cluster.
+#
+# ⚠️ À ne pas confondre avec `21-tofu-controller-rbac.yaml`, qui est vendorisé tel quel et
+# accorde, LUI, `cluster-admin` (choix de l'amont — voir le README de ce répertoire).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: source-controller
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: source-controller
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  # Ses propres objets : GitRepository, OCIRepository, Bucket, HelmRepository, HelmChart.
+  - apiGroups: [source.toolkit.fluxcd.io]
+    resources: ["*"]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Les identifiants d'accès aux sources (clé de dépôt, CA, jeton) et l'identité déléguée.
+  # LECTURE SEULE : le contrôleur consomme des secrets, il n'en fabrique pas.
+  - apiGroups: [""]
+    resources: [secrets, configmaps, serviceaccounts]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [serviceaccounts/token]
+    verbs: [create]
+  # Les événements qu'il publie sur ses propres objets.
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: source-controller
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: source-controller }
+subjects:
+  - { kind: ServiceAccount, name: source-controller, namespace: flux-system }
+---
+# Élection de leader : un bail, dans SON namespace, et rien d'autre.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: source-controller-leader-election
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: source-controller-leader-election
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: source-controller-leader-election }
+subjects:
+  - { kind: ServiceAccount, name: source-controller, namespace: flux-system }
