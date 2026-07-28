@@ -30,6 +30,11 @@ metadata:
     platform.kratix.io/provider: indus
     platform.kratix.io/exposure: product
     platform.kratix.io/public: "true"
+    # La famille des objets RENDUS, pour que l'onglet Kubernetes les voie.
+    # Le CronJob BR3 dérive les familles de CETTE annotation : mécanisme conçu pour le
+    # moteur operator, qui accepte terraform SANS une ligne de code — c'est de la donnée.
+    # (Doctrine : un bloc par FAMILLE, jamais une ligne par produit.)
+    platform.kratix.io/operator-group: infra.contrib.fluxcd.io
 spec:
   destinationSelectors:
     - matchLabels:
