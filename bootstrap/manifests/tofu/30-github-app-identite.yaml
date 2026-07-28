@@ -1,0 +1,191 @@
+# L'IDENTITÉ GIT DU SOURCE-CONTROLLER — la même GitHub App que le reste de la plateforme.
+#
+# POURQUOI. Le source-controller doit cloner nos dépôts, qui sont PRIVÉS. Trois façons de
+# lui donner un accès :
+#   · une clé de déploiement par dépôt → un secret durable de plus, exactement ce qu'on
+#     vient de supprimer côté fabrique. Écarté.
+#   · un jeton d'installation recopié par un CronJob → il expire en une heure, il faudrait
+#     le rafraîchir, et un secret périmé casserait les clones sans le dire. Écarté.
+#   · `provider: github` — **le source-controller frappe le jeton LUI-MÊME et le renouvelle
+#     tout seul**, à partir des identifiants de l'App. C'est le chemin natif, et c'est
+#     celui-ci.
+#
+# Résultat : **aucun jeton ne circule et aucun jeton ne périme**. La portée reste celle de
+# l'installation de l'App — un geste que le propriétaire du dépôt fait lui-même.
+#
+# ⚠️ LA CLÉ PRIVÉE NE TRANSITE PAS PAR UN HUMAIN. Le Job ci-dessous tourne DANS le cluster,
+# lit le secret de l'App là où il vit déjà (namespace backstage) et écrit la forme attendue
+# par flux dans `flux-system`. Rien n'est affiché, rien n'est journalisé.
+# (Même geste que la recopie du mot de passe LDAP pour iTop.)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: github-app-identite
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+---
+# Lire LE secret de l'App, et lui seul, là où il vit.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-app-identite-lecture
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [backstage-github-app]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-app-identite-lecture
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-app-identite-lecture }
+subjects:
+  - { kind: ServiceAccount, name: github-app-identite, namespace: flux-system }
+---
+# Écrire LE secret d'identité, et lui seul.
+# `create` ne peut pas être restreint par nom : Kubernetes décide avant que le nom existe.
+# Le reste (get/patch) est nominatif — ce compte ne peut relire aucun autre secret d'ici.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-app-identite-ecriture
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [github-app]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-app-identite-ecriture
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-app-identite-ecriture }
+subjects:
+  - { kind: ServiceAccount, name: github-app-identite, namespace: flux-system }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: github-app-identite
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  recopie.py: |
+    """Recopie l'identité de la GitHub App dans la forme attendue par flux.
+
+    Lit  : /src/github-app-credentials.yaml  (appId + privateKey)
+    Écrit: le Secret `github-app` du namespace courant, avec les trois clés que
+           source-controller réclame pour `provider: github`.
+
+    Rien n'est affiché : ni la clé, ni un extrait, ni sa longueur exacte.
+    """
+    import base64, json, os, pathlib, subprocess, sys, yaml
+
+    SRC  = "/src/github-app-credentials.yaml"
+    NS   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read_text().strip()
+    NOM  = os.environ.get("SECRET_NAME", "github-app")
+    INST = os.environ["GITHUB_APP_INSTALLATION_ID"].strip()
+
+    creds = yaml.safe_load(pathlib.Path(SRC).read_text())
+    app_id = str(creds.get("appId") or "").strip()
+    cle    = str(creds.get("privateKey") or "")
+    if not app_id or "PRIVATE KEY" not in cle:
+        sys.exit(f"{SRC} : appId ou privateKey manquant")
+
+    b64 = lambda s: base64.b64encode(s.encode()).decode()
+    charge = json.dumps({
+        "apiVersion": "v1", "kind": "Secret",
+        "metadata": {"name": NOM, "namespace": NS},
+        "type": "Opaque",
+        "data": {
+            "githubAppID":             b64(app_id),
+            "githubAppInstallationID": b64(INST),
+            "githubAppPrivateKey":     b64(cle),
+        },
+    })
+
+    sa   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    jeton = (sa / "token").read_text().strip()
+    base = f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}:{os.environ.get('KUBERNETES_SERVICE_PORT','443')}"
+
+    def appel(methode, url, ctype):
+        r = subprocess.run(
+            ["curl", "-sS", "--cacert", str(sa / "ca.crt"), "-X", methode,
+             "-H", f"Authorization: Bearer {jeton}", "-H", f"Content-Type: {ctype}",
+             "-w", "\n%{http_code}", "--data-binary", "@-", url],
+            input=charge, capture_output=True, text=True, timeout=45)
+        bout = r.stdout.rsplit("\n", 1)
+        return (int(bout[-1]) if bout[-1].isdigit() else 0)
+
+    url = f"{base}/api/v1/namespaces/{NS}/secrets/{NOM}"
+    code = appel("PATCH", url, "application/merge-patch+json")
+    if code in (200, 201):
+        print(f"identité de l'App mise a jour dans {NS}/{NOM} (appId {app_id}, installation {INST})")
+    elif code == 404:
+        code = appel("POST", f"{base}/api/v1/namespaces/{NS}/secrets", "application/json")
+        if code not in (200, 201):
+            sys.exit(f"création refusée ({code})")
+        print(f"identité de l'App créée dans {NS}/{NOM} (appId {app_id}, installation {INST})")
+    else:
+        sys.exit(f"écriture refusée ({code})")
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: github-app-identite
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    # Hook : rejoué à chaque synchro qui l'applique, et supprimé avant recréation —
+    # sinon un Job est immuable et toute modification ferait échouer l'apply.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      serviceAccountName: github-app-identite
+      restartPolicy: Never
+      priorityClassName: platform-high
+      volumes:
+        - name: src
+          secret:
+            secretName: backstage-github-app
+            defaultMode: 0400
+        - name: script
+          configMap: { name: github-app-identite }
+      containers:
+        - name: recopie
+          # MÊME image que la fabrique : mêmes outils, un seul digest à suivre.
+          image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+          command: [python, /script/recopie.py]
+          env:
+            # L'identifiant d'installation de l'App `attijari-portal` (BR16). Ce n'est pas
+            # un secret : c'est un numéro d'ordre public côté GitHub.
+            - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
+            - { name: SECRET_NAME, value: github-app }
+          volumeMounts:
+            - { name: src, mountPath: /src, readOnly: true }
+            - { name: script, mountPath: /script, readOnly: true }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 192Mi }
