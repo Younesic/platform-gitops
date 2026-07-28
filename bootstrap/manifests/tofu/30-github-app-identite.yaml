@@ -13,9 +13,9 @@
 # Résultat : **aucun jeton ne circule et aucun jeton ne périme**. La portée reste celle de
 # l'installation de l'App — un geste que le propriétaire du dépôt fait lui-même.
 #
-# ⚠️ LA CLÉ PRIVÉE NE TRANSITE PAS PAR UN HUMAIN. Le Job ci-dessous tourne DANS le cluster,
-# lit le secret de l'App là où il vit déjà (namespace backstage) et écrit la forme attendue
-# par flux dans `flux-system`. Rien n'est affiché, rien n'est journalisé.
+# ⚠️ LA CLÉ PRIVÉE NE TRANSITE PAS PAR UN HUMAIN. La tâche ci-dessous tourne DANS le
+# cluster, lit le secret de l'App là où il vit déjà (namespace backstage) et écrit la forme
+# attendue par flux dans `flux-system`. Rien n'est affiché, rien n'est journalisé.
 # (Même geste que la recopie du mot de passe LDAP pour iTop.)
 apiVersion: v1
 kind: ServiceAccount
@@ -168,45 +168,55 @@ data:
     else:
         sys.exit(f"écriture refusée ({code})")
 ---
+# CronJob plutôt que Job, et c'est une leçon payée : un Job en hook PostSync s'est
+# retrouvé bloqué (pod en échec de montage + finalizer ArgoCD), et ArgoCD ne rejoue pas
+# un hook quand la synchro n'applique rien — il a fallu retirer le finalizer à la main.
+#
+# Un CronJob idempotent n'a aucun de ces défauts : il se rejoue tout seul, il n'est pas
+# immuable, et si la clé de l'App était un jour remplacée, le secret suivrait sans geste.
+# La cadence est lâche : cette identité ne change pas.
 apiVersion: batch/v1
-kind: Job
+kind: CronJob
 metadata:
   name: github-app-identite
   namespace: flux-system
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-    # Hook : rejoué à chaque synchro qui l'applique, et supprimé avant recréation —
-    # sinon un Job est immuable et toute modification ferait échouer l'apply.
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
-  backoffLimit: 3
-  ttlSecondsAfterFinished: 3600
-  template:
+  schedule: "17 */12 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
     spec:
-      serviceAccountName: github-app-identite
-      restartPolicy: Never
-      priorityClassName: platform-high
-      volumes:
-        # ⚠️ PAS de volume vers le secret de l'App : il vit dans un AUTRE namespace, et un
-        # volume ne peut monter que des secrets du sien. Le script le lit par l'API.
-        - name: script
-          configMap: { name: github-app-identite }
-      containers:
-        - name: recopie
-          # MÊME image que la fabrique : mêmes outils, un seul digest à suivre.
-          image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
-          command: [python, /script/recopie.py]
-          env:
-            # L'identifiant d'installation de l'App `attijari-portal` (BR16). Ce n'est pas
-            # un secret : c'est un numéro d'ordre public côté GitHub.
-            - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
-            - { name: SECRET_NAME, value: github-app }
-            - { name: SOURCE_NAMESPACE, value: backstage }
-            - { name: SOURCE_SECRET, value: backstage-github-app }
-            - { name: SOURCE_KEY, value: github-app-credentials.yaml }
-          volumeMounts:
-            - { name: script, mountPath: /script, readOnly: true }
-          resources:
-            requests: { cpu: 20m, memory: 64Mi }
-            limits: { cpu: 300m, memory: 192Mi }
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: github-app-identite
+          restartPolicy: Never
+          priorityClassName: platform-high
+          volumes:
+            # ⚠️ PAS de volume vers le secret de l'App : il vit dans un AUTRE namespace, et un
+            # volume ne peut monter que des secrets du sien. Le script le lit par l'API.
+            - name: script
+              configMap: { name: github-app-identite }
+          containers:
+            - name: recopie
+              # MÊME image que la fabrique : mêmes outils, un seul digest à suivre.
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+              command: [python, /script/recopie.py]
+              env:
+                # L'identifiant d'installation de l'App `attijari-portal` (BR16). Ce n'est pas
+                # un secret : c'est un numéro d'ordre public côté GitHub.
+                - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
+                - { name: SECRET_NAME, value: github-app }
+                - { name: SOURCE_NAMESPACE, value: backstage }
+                - { name: SOURCE_SECRET, value: backstage-github-app }
+                - { name: SOURCE_KEY, value: github-app-credentials.yaml }
+              volumeMounts:
+                - { name: script, mountPath: /script, readOnly: true }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }
