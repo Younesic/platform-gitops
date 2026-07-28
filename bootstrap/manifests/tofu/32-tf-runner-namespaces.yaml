@@ -1,0 +1,40 @@
+# LE COMPTE DE SERVICE DU RUNNER, DANS LES NAMESPACES OÙ VIVENT LES DEMANDES.
+#
+# POURQUOI (trouvaille TN3, payée en direct). Le pod runner est créé DANS le namespace de
+# la ressource `Terraform`, et il exige un compte de service nommé `tf-runner`. L'amont ne
+# le crée que dans le sien :
+#
+#   pods "…-tf-runner" is forbidden: error looking up service account
+#   default/tf-runner: serviceaccount "tf-runner" not found
+#
+# La ressource reste alors indéfiniment en `Progressing` — elle ne tombe PAS en erreur, ce
+# qui rend la panne silencieuse pour qui regarde seulement « est-ce en échec ».
+#
+# RÈGLE À RETENIR : **un namespace qui accueille des demandes terraform = un compte de
+# service `tf-runner` de plus**. C'est la même doctrine que « un bloc RBAC par famille »
+# pour l'onglet Kubernetes : une ligne par namespace, jamais une par produit.
+#
+# Le rôle, lui, est celui de l'amont (`tf-runner-role`) : on ne redéfinit pas ses droits,
+# on se contente de lui rattacher un compte de plus.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tf-runner
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tf-runner-default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tf-runner-role      # défini par le RBAC vendorisé de l'amont
+subjects:
+  - kind: ServiceAccount
+    name: tf-runner
+    namespace: default
