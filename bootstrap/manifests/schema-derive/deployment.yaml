@@ -21,13 +21,19 @@ spec:
     spec:
       containers:
         - name: schema-derive
-          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:a38e80a17accbb812aded0830900b731b8f399c01ab861c0a4ad59effdb8c748
+          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
           command: ["python", "/app/derive_server.py"]
           ports:
             - { name: http, containerPort: 8080 }
           env:
             - { name: PORT, value: "8080" }
             - { name: HOME, value: /tmp }        # helm/git écrivent dans $HOME
+            # Identifiants de REGISTRE, au format dockerconfigjson (celui de
+            # Kubernetes pour tirer une image). Posée sans condition : vérifié
+            # sur helm 3.16, un fichier absent ou ne couvrant pas l'hôte laisse
+            # le tirage anonyme intact. Seul un fichier MALFORMÉ casse tout —
+            # la sonde d'accès le détecte et le nomme.
+            - { name: HELM_REGISTRY_CONFIG, value: /kratix/secrets/registry/.dockerconfigjson }
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { cpu: "1", memory: 512Mi }
@@ -37,6 +43,7 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - { name: github-token, mountPath: /kratix/secrets/github, readOnly: true }
+            - { name: registry-creds, mountPath: /kratix/secrets/registry, readOnly: true }
       volumes:
         # LA clé SSH de déploiement a été RETIRÉE : l'identité est désormais le
         # jeton d'installation de la GitHub App, frappé toutes les 30 min et
@@ -54,6 +61,12 @@ spec:
         - name: github-token
           secret:
             secretName: github-app-token
+            optional: true
+            defaultMode: 256
+        # Optionnel : sans lui, on tire en anonyme — exactement comme avant.
+        - name: registry-creds
+          secret:
+            secretName: registry-credentials
             optional: true
             defaultMode: 256
 ---

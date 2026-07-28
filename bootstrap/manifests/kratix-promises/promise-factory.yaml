@@ -389,10 +389,28 @@ spec:
               secretName: github-app-token
               optional: true
               defaultMode: 256
+          # Identifiants de REGISTRE (dockerconfigjson), optionnels : sans eux la
+          # fabrique tire en anonyme, comme avant. Avec eux, un chart hébergé
+          # dans un projet PRIVÉ devient utilisable.
+          - name: registry-creds
+            secret:
+              secretName: registry-credentials
+              optional: true
+              defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:a38e80a17accbb812aded0830900b731b8f399c01ab861c0a4ad59effdb8c748
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+            env:
+            # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
+            # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
+            # pas l'hôte laisse le tirage anonyme intact. Seul un fichier MALFORMÉ
+            # casse tout — la sonde d'accès le détecte et le nomme.
+            - name: HELM_REGISTRY_CONFIG
+              value: /kratix/secrets/registry/.dockerconfigjson
             volumeMounts:
             - name: github-token
               mountPath: /kratix/secrets/github
+              readOnly: true
+            - name: registry-creds
+              mountPath: /kratix/secrets/registry
               readOnly: true
