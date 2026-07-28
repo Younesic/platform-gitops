@@ -2,8 +2,9 @@
 # création de promesse (le composer de présentation doit connaître les champs
 # AVANT génération). Réutilise l'image de la factory (helm + git + scaffold) avec
 # un entrypoint alternatif ; lecture seule, aucun effet de bord.
-# ns `default` : y monter le secret promise-factory-git (clone SSH des sources
-# crossplane privées, comme le pipeline factory). helm pull Harbor = anonyme.
+# ns `default` : le clone des sources privées se fait avec le JETON d'installation
+# de la GitHub App (secret `github-app-token`, frappé toutes les 30 min, valable
+# une heure) — plus avec une clé SSH durable. helm pull Harbor = anonyme.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,17 +36,21 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           volumeMounts:
-            - { name: git-creds, mountPath: /kratix/secrets/git, readOnly: true }
             - { name: github-token, mountPath: /kratix/secrets/github, readOnly: true }
       volumes:
-        - name: git-creds
-          secret:
-            secretName: promise-factory-git
-            defaultMode: 256
-        # Le jeton d'installation de la GitHub App, frappé toutes les 30 min.
-        # ⚠️ OPTIONNEL, et ce n'est pas un détail : sans ce mot, un secret pas
-        # encore frappé EMPÊCHERAIT le pod de démarrer. Absent = on retombe sur
-        # la clé SSH (git_acces), et le service continue de répondre.
+        # LA clé SSH de déploiement a été RETIRÉE : l'identité est désormais le
+        # jeton d'installation de la GitHub App, frappé toutes les 30 min et
+        # valable une heure.
+        #
+        # ⚠️ Pourquoi retirer le repli plutôt que le garder « au cas où » : un
+        # repli SILENCIEUX masque exactement la panne qu'il faut voir. Si la
+        # frappe s'arrêtait, tout aurait continué de marcher sur la clé, personne
+        # n'aurait rien su — et le jour du retrait, tout serait tombé d'un coup.
+        # Le secret `promise-factory-git` reste dans le cluster : revenir en
+        # arrière, c'est un `git revert`.
+        #
+        # OPTIONNEL reste indispensable : sans ce mot, un jeton pas encore frappé
+        # empêcherait le pod de DÉMARRER.
         - name: github-token
           secret:
             secretName: github-app-token

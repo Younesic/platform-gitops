@@ -21,8 +21,10 @@
 # (ui-schema : EntityPicker + ui:order [l'API server ALPHABÉTISE les properties du
 # CRD → l'ordre du formulaire se pilote ici] ; form-switch : affichage par type).
 # ⚠️ Annotations JSON une-ligne : TOUJOURS valider json.loads avant commit (vécu).
-# Prérequis (manuel, comme les autres clés de repo) : Secret default/promise-factory-git
-# (sshPrivateKey + knownHosts de la deploy key RW « promise-factory-write »).
+# Prérequis d'accès : le Secret `default/github-app-token`, frappé par le CronJob
+# `backstage/github-token` depuis la clé privée de la GitHub App. Il porte un jeton
+# d'installation (une heure) qui sert à cloner ET à pousser. Un dépôt non couvert
+# se règle en installant l'App dessus — geste que son propriétaire fait lui-même.
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
@@ -376,14 +378,12 @@ spec:
               - get
               - list
           volumes:
-          - name: git-creds
-            secret:
-              secretName: promise-factory-git
-              defaultMode: 256
-          # Jeton d'installation de la GitHub App (frappé toutes les 30 min).
-          # ⚠️ OPTIONNEL : sans ce mot, un secret pas encore frappé empêcherait
-          # le pipeline de DÉMARRER — donc plus aucune promesse ne serait
-          # fabriquée. Absent = repli sur la clé SSH (git_acces).
+          # LA clé SSH de déploiement a été RETIRÉE : l'identité de la fabrique
+          # est le jeton d'installation de la GitHub App. Un repli silencieux
+          # aurait masqué l'arrêt de la frappe ; le secret reste dans le cluster,
+          # revenir en arrière est un `git revert`.
+          # ⚠️ OPTIONNEL reste indispensable : sans ce mot, un jeton pas encore
+          # frappé empêcherait le pipeline de DÉMARRER — donc plus aucune promesse.
           - name: github-token
             secret:
               secretName: github-app-token
@@ -393,9 +393,6 @@ spec:
           - name: factory
             image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:1240879f4fe5ad8eeab87605e456fadd04a46edc10863be7b8850c0572b70b5a
             volumeMounts:
-            - name: git-creds
-              mountPath: /kratix/secrets/git
-              readOnly: true
             - name: github-token
               mountPath: /kratix/secrets/github
               readOnly: true
