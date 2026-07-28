@@ -57,6 +57,15 @@ rules:
   - apiGroups: ['crossplane.platform.example.io']
     resources: ['*']
     verbs: ['get', 'list', 'watch']
+  # Moteur terraform NATIF (TN3) : les ressources `Terraform` et les sources flux que
+  # les demandes provisionnent. Le CronJob des familles a réclamé ce bloc nommément —
+  # doctrine : UN bloc par FAMILLE, jamais une ligne par produit.
+  - apiGroups: ['infra.contrib.fluxcd.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['source.toolkit.fluxcd.io']
+    resources: ['*']
+    verbs: ['get', 'list', 'watch']
   # famille ENTIÈRE (le générateur de customResources liste TOUTES les CRDs du
   # group — un sous-ensemble ici = 403 sur les types non listés, vécu)
   - apiGroups: ['group.keycloak.m.crossplane.io']
