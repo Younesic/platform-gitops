@@ -91,7 +91,11 @@ spec:
       kind: GitRepository
       metadata:
         name: harbor-tf-module
-        namespace: flux-system
+        # ⚠️ DANS LE MÊME NAMESPACE QUE LES DEMANDES, et c'est imposé : tofu-controller
+        # DÉSACTIVE les références inter-namespace par défaut
+        # (« cannot access GitRepository/…, cross-namespace references have been disabled »).
+        # C'est une vraie frontière entre équipes — on ne l'affaiblit pas pour notre confort.
+        namespace: default
       spec:
         interval: 10m
         url: https://github.com/Younesic/platform-gitops
@@ -137,7 +141,7 @@ spec:
                 env:
                   - { name: MODULE_PATH, value: ./sources/terraform/harbor-project }
                   - { name: SOURCE_NAME, value: harbor-tf-module }
-                  - { name: SOURCE_NAMESPACE, value: flux-system }
+                  - { name: SOURCE_NAMESPACE, value: default }
                   - { name: CIBLE_NAMESPACE, value: default }
                   - { name: CREDS_SECRET, value: harbor-identifiants }
                   # ⚠️ L'INTERVALLE EST UNE DÉCISION STRUCTURANTE (mesure TN2 g) : chaque

@@ -80,6 +80,35 @@ roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-app-ide
 subjects:
   - { kind: ServiceAccount, name: github-app-identite, namespace: flux-system }
 ---
+# Le secretRef d'un GitRepository ne lit que SON namespace : l'identité doit donc
+# exister là où vivent les sources, c'est-à-dire avec les demandes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-app-identite-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [github-app]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-app-identite-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-app-identite-ecriture }
+subjects:
+  - { kind: ServiceAccount, name: github-app-identite, namespace: flux-system }
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -106,7 +135,9 @@ data:
     import base64, json, os, pathlib, subprocess, sys, yaml
 
     SA   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
-    NS   = (SA / "namespace").read_text().strip()
+    # La cible peut différer de notre namespace : le secretRef d'un GitRepository
+    # ne lit que SON namespace, et les sources vivent avec les demandes.
+    NS   = os.environ.get("TARGET_NAMESPACE") or (SA / "namespace").read_text().strip()
     NOM  = os.environ.get("SECRET_NAME", "github-app")
     INST = os.environ["GITHUB_APP_INSTALLATION_ID"].strip()
     SRC_NS  = os.environ["SOURCE_NAMESPACE"].strip()
@@ -212,6 +243,9 @@ spec:
                 # un secret : c'est un numéro d'ordre public côté GitHub.
                 - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
                 - { name: SECRET_NAME, value: github-app }
+                # Le secretRef d'un GitRepository ne lit que SON namespace : l'identité
+                # doit exister là où vivent les sources, donc avec les demandes.
+                - { name: TARGET_NAMESPACE, value: default }
                 - { name: SOURCE_NAMESPACE, value: backstage }
                 - { name: SOURCE_SECRET, value: backstage-github-app }
                 - { name: SOURCE_KEY, value: github-app-credentials.yaml }
