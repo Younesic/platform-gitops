@@ -1,0 +1,133 @@
+# ── LE JETON D'INSTALLATION DE LA GITHUB APP, FRAPPÉ DANS LE CLUSTER ─────────
+#
+# POURQUOI. La plateforme clonait et poussait avec UNE clé de déploiement SSH :
+# durable, partagée par le service de dérivation et par la fabrique, et qu'il
+# fallait faire installer À LA MAIN sur chaque dépôt par quelqu'un qui en a
+# l'administration. Portée large, rotation big-bang, et aucune trace de « qui a
+# cloné quoi » — c'était un trousseau, pas une gestion d'accès.
+#
+# Un jeton d'installation répond aux trois :
+#   · il EXPIRE (une heure) — ce qui circule ne survit pas à la journée ;
+#   · sa portée SUIT l'installation de l'App, et installer une App est un geste
+#     que le propriétaire du dépôt fait LUI-MÊME. Le self-service passe de
+#     « demandez une clé à la plateforme » à « autorisez-la » ;
+#   · c'est la MÊME identité que celle qui ouvre les PR et pose les statuts iTop :
+#     une seule chose à révoquer, une seule à auditer.
+#
+# ⚠️ CE QUE ÇA NE FAIT PAS, dit franchement : la clé privée de l'App reste un
+# secret durable. On ne supprime pas les secrets — on réduit ce qui CIRCULE et on
+# rétrécit sa portée. Et cette clé privée ne quitte PAS ce namespace : le CronJob
+# tourne ici, auprès d'elle, et n'écrit que le jeton là où il sert.
+#
+# ⚠️ La cadence (30 min) doit rester nettement sous la durée de vie du jeton
+# (60 min) : sinon une frappe ratée laisserait un jeton périmé, et TOUTE la
+# fabrication de promesses s'arrêterait. Le repli SSH tient encore le filet tant
+# que la clé n'est pas retirée (étape suivante, délibérée).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: github-token
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+---
+# Lire LA clé privée, et elle seule.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-token-lecture
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [backstage-github-app]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-token-lecture
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-token-lecture }
+subjects:
+  - { kind: ServiceAccount, name: github-token, namespace: backstage }
+---
+# Écrire LE jeton, et lui seul, là où la fabrique le lira.
+# `create` sans `resourceNames` : Kubernetes ne sait pas restreindre une création
+# par nom — le nom n'existe pas encore au moment de la décision. Le reste
+# (get/patch) est nominatif, donc ce compte ne peut pas relire d'autres secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-token-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [github-app-token]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-token-ecriture
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: github-token-ecriture }
+subjects:
+  - { kind: ServiceAccount, name: github-token, namespace: backstage }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-token
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  # Un jeton périmé arrête la fabrication : on ne laisse pas une frappe traîner.
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: github-token
+          restartPolicy: Never
+          priorityClassName: platform-high
+          volumes:
+            - name: app
+              secret:
+                secretName: backstage-github-app
+                defaultMode: 0400
+          containers:
+            - name: frappe
+              # MÊME image que la fabrique : mêmes outils, même identité, un seul
+              # digest à suivre. Le script n'affiche JAMAIS le jeton — il irait
+              # dans les journaux du pod.
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:13ba98bbfbf1f7c6f8e875d81088f0da59ab747cf68f52a5415d68b72ee3670f
+              command: [python, /app/github_token.py]
+              env:
+                - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
+                - { name: TOKEN_SECRET_NAMESPACE, value: default }
+                - { name: TOKEN_SECRET_NAME, value: github-app-token }
+              volumeMounts:
+                - { name: app, mountPath: /app/github-app, readOnly: true }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }

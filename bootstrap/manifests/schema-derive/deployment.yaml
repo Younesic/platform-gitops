@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: schema-derive
-          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:4483cbf3f6e41f4d6d0659fa526c778d442268f74647c2df0661ad1b8016a324
+          image: harbor.212-47-226-56.nip.io/platform/schema-derive@sha256:13ba98bbfbf1f7c6f8e875d81088f0da59ab747cf68f52a5415d68b72ee3670f
           command: ["python", "/app/derive_server.py"]
           ports:
             - { name: http, containerPort: 8080 }
@@ -36,10 +36,20 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - { name: git-creds, mountPath: /kratix/secrets/git, readOnly: true }
+            - { name: github-token, mountPath: /kratix/secrets/github, readOnly: true }
       volumes:
         - name: git-creds
           secret:
             secretName: promise-factory-git
+            defaultMode: 256
+        # Le jeton d'installation de la GitHub App, frappé toutes les 30 min.
+        # ⚠️ OPTIONNEL, et ce n'est pas un détail : sans ce mot, un secret pas
+        # encore frappé EMPÊCHERAIT le pod de démarrer. Absent = on retombe sur
+        # la clé SSH (git_acces), et le service continue de répondre.
+        - name: github-token
+          secret:
+            secretName: github-app-token
+            optional: true
             defaultMode: 256
 ---
 apiVersion: v1
