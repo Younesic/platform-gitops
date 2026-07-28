@@ -125,6 +125,14 @@ data:
           createFields:
             org_id: { name: Plateforme }
             caller_id: { email: jdupont@platform.local }
+          # ⚠️ ON GARE LE TICKET DANS LE CIRCUIT D'APPROBATION DÈS SA CRÉATION.
+          # Sans ça il naît en `new`, et un geste parfaitement banal — l'assigner
+          # à quelqu'un — le fait SORTIR du circuit : l'approbation devient alors
+          # définitivement inatteignable (« Invalid stimulus
+          # 'ev_wait_for_approval' … in state 'assigned' »), l'approbateur ne voit
+          # plus qu'« assigner / réassigner » et ne peut RIEN débloquer. Vécu sur
+          # R-000021, qui a dû être remplacé.
+          afterCreateStimulus: ev_wait_for_approval
           # LE CHEMIN LE PLUS COURT, et le plus PARLANT : le cycle de vie d'une
           # UserRequest nomme littéralement l'approbation —
           #   new --ev_wait_for_approval--> waiting_for_approval --ev_approve--> approved
