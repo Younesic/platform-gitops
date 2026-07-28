@@ -91,25 +91,59 @@ data:
   recopie.py: |
     """Recopie l'identité de la GitHub App dans la forme attendue par flux.
 
-    Lit  : /src/github-app-credentials.yaml  (appId + privateKey)
+    Lit  : le Secret de l'App, dans SON namespace, PAR L'API.
     Écrit: le Secret `github-app` du namespace courant, avec les trois clés que
            source-controller réclame pour `provider: github`.
 
-    Rien n'est affiché : ni la clé, ni un extrait, ni sa longueur exacte.
+    ⚠️ POURQUOI PAR L'API ET PAS PAR UN MONTAGE (erreur payée en la posant) :
+    un volume ne peut monter QUE des secrets de son PROPRE namespace. Le droit
+    `get` accordé sur le namespace voisin autorise la LECTURE PAR L'API, pas le
+    montage — le pod reste en ContainerCreating avec « secret not found », et
+    le message n'explique pas que la cause est le namespace.
+
+    Rien n'est affiché : ni la clé, ni un extrait, ni sa longueur.
     """
     import base64, json, os, pathlib, subprocess, sys, yaml
 
-    SRC  = "/src/github-app-credentials.yaml"
-    NS   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read_text().strip()
+    SA   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    NS   = (SA / "namespace").read_text().strip()
     NOM  = os.environ.get("SECRET_NAME", "github-app")
     INST = os.environ["GITHUB_APP_INSTALLATION_ID"].strip()
+    SRC_NS  = os.environ["SOURCE_NAMESPACE"].strip()
+    SRC_NOM = os.environ["SOURCE_SECRET"].strip()
+    SRC_CLE = os.environ["SOURCE_KEY"].strip()
 
-    creds = yaml.safe_load(pathlib.Path(SRC).read_text())
+    JETON = (SA / "token").read_text().strip()
+    BASE  = (f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}"
+             f":{os.environ.get('KUBERNETES_SERVICE_PORT','443')}")
+
+    def api(methode, url, corps=None, ctype="application/json"):
+        cmd = ["curl", "-sS", "--cacert", str(SA / "ca.crt"), "-X", methode,
+               "-H", f"Authorization: Bearer {JETON}", "-H", f"Content-Type: {ctype}",
+               "-w", "\n%{http_code}"]
+        if corps is not None:
+            cmd += ["--data-binary", "@-"]
+        cmd.append(url)
+        r = subprocess.run(cmd, input=corps, capture_output=True, text=True, timeout=45)
+        bout = r.stdout.rsplit("\n", 1)
+        code = int(bout[-1]) if bout[-1].isdigit() else 0
+        return code, bout[0]
+
+    # ---- lire l'identité de l'App, là où elle vit ----
+    code, brut = api("GET", f"{BASE}/api/v1/namespaces/{SRC_NS}/secrets/{SRC_NOM}")
+    if code != 200:
+        sys.exit(f"lecture de {SRC_NS}/{SRC_NOM} refusée ({code})")
+    donnees = json.loads(brut).get("data", {})
+    if SRC_CLE not in donnees:
+        sys.exit(f"clé « {SRC_CLE} » absente de {SRC_NS}/{SRC_NOM} — clés présentes : {sorted(donnees)}")
+    creds = yaml.safe_load(base64.b64decode(donnees[SRC_CLE]).decode())
+
     app_id = str(creds.get("appId") or "").strip()
     cle    = str(creds.get("privateKey") or "")
     if not app_id or "PRIVATE KEY" not in cle:
-        sys.exit(f"{SRC} : appId ou privateKey manquant")
+        sys.exit(f"{SRC_NS}/{SRC_NOM} : appId ou privateKey manquant")
 
+    # ---- écrire la forme attendue par flux ----
     b64 = lambda s: base64.b64encode(s.encode()).decode()
     charge = json.dumps({
         "apiVersion": "v1", "kind": "Secret",
@@ -122,25 +156,12 @@ data:
         },
     })
 
-    sa   = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
-    jeton = (sa / "token").read_text().strip()
-    base = f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}:{os.environ.get('KUBERNETES_SERVICE_PORT','443')}"
-
-    def appel(methode, url, ctype):
-        r = subprocess.run(
-            ["curl", "-sS", "--cacert", str(sa / "ca.crt"), "-X", methode,
-             "-H", f"Authorization: Bearer {jeton}", "-H", f"Content-Type: {ctype}",
-             "-w", "\n%{http_code}", "--data-binary", "@-", url],
-            input=charge, capture_output=True, text=True, timeout=45)
-        bout = r.stdout.rsplit("\n", 1)
-        return (int(bout[-1]) if bout[-1].isdigit() else 0)
-
-    url = f"{base}/api/v1/namespaces/{NS}/secrets/{NOM}"
-    code = appel("PATCH", url, "application/merge-patch+json")
+    url = f"{BASE}/api/v1/namespaces/{NS}/secrets/{NOM}"
+    code, _ = api("PATCH", url, charge, "application/merge-patch+json")
     if code in (200, 201):
         print(f"identité de l'App mise a jour dans {NS}/{NOM} (appId {app_id}, installation {INST})")
     elif code == 404:
-        code = appel("POST", f"{base}/api/v1/namespaces/{NS}/secrets", "application/json")
+        code, _ = api("POST", f"{BASE}/api/v1/namespaces/{NS}/secrets", charge)
         if code not in (200, 201):
             sys.exit(f"création refusée ({code})")
         print(f"identité de l'App créée dans {NS}/{NOM} (appId {app_id}, installation {INST})")
@@ -167,10 +188,8 @@ spec:
       restartPolicy: Never
       priorityClassName: platform-high
       volumes:
-        - name: src
-          secret:
-            secretName: backstage-github-app
-            defaultMode: 0400
+        # ⚠️ PAS de volume vers le secret de l'App : il vit dans un AUTRE namespace, et un
+        # volume ne peut monter que des secrets du sien. Le script le lit par l'API.
         - name: script
           configMap: { name: github-app-identite }
       containers:
@@ -183,8 +202,10 @@ spec:
             # un secret : c'est un numéro d'ordre public côté GitHub.
             - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
             - { name: SECRET_NAME, value: github-app }
+            - { name: SOURCE_NAMESPACE, value: backstage }
+            - { name: SOURCE_SECRET, value: backstage-github-app }
+            - { name: SOURCE_KEY, value: github-app-credentials.yaml }
           volumeMounts:
-            - { name: src, mountPath: /src, readOnly: true }
             - { name: script, mountPath: /script, readOnly: true }
           resources:
             requests: { cpu: 20m, memory: 64Mi }
