@@ -73,7 +73,10 @@ rules:
     verbs: [create]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [github-app-token]
+    # Un secret PAR installation — un jeton d'installation ne couvre qu'un compte.
+    #   github-app-token      → compte Younesic  (accès git de la fabrique)
+    #   github-app-token-org  → organisation YounesicCo (création de dépôts)
+    resourceNames: [github-app-token, github-app-token-org]
     verbs: [get, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -126,6 +129,78 @@ spec:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
                 - { name: TOKEN_SECRET_NAMESPACE, value: default }
                 - { name: TOKEN_SECRET_NAME, value: github-app-token }
+                # ⚠️ OBLIGATOIRE DEPUIS QU'IL Y A PLUS D'UNE INSTALLATION (2026-07-29).
+                # L'App est installée sur DEUX comptes : `Younesic` (les 5 dépôts de la
+                # plateforme) et `YounesicCo` (l'organisation, pour créer des dépôts).
+                # Un jeton d'installation ne couvre QU'UNE installation — il n'y a pas
+                # de jeton qui embrasse les deux. Sans cette épingle, `github_token.py`
+                # REFUSE de deviner et échoue en nommant la cause ; c'est le bon
+                # comportement, mais il faut lui répondre.
+                #
+                # Ici : l'installation du COMPTE, celle qui porte platform-gitops,
+                # kratix-state et portal-templates — donc l'accès git de la fabrique.
+                - { name: GITHUB_APP_INSTALLATION_ID, value: "147217432" }
+              volumeMounts:
+                - { name: app, mountPath: /app/github-app, readOnly: true }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }
+---
+# ── LE JETON DE L'ORGANISATION ───────────────────────────────────────────────
+# Même mécanisme, autre installation. Il ne s'agit PAS d'un doublon : un jeton
+# d'installation d'App est lié à UNE installation, et une App installée sur deux
+# comptes en a deux. Vouloir n'en frapper qu'un reviendrait à choisir lequel des
+# deux usages on abandonne.
+#
+#   github-app-token      (compte Younesic)      → cloner platform-gitops,
+#                                                   kratix-state, portal-templates
+#   github-app-token-org  (org. YounesicCo)      → CRÉER des dépôts
+#
+# ⚠️ Pourquoi l'organisation est indispensable pour créer : GitHub réserve
+# `POST /user/repos` aux jetons d'UTILISATEUR — un jeton d'App reçoit 403 sur un
+# compte personnel même avec `administration: write` accordé (mesuré le
+# 2026-07-29). Sur une organisation, `POST /orgs/{org}/repos` passe.
+#
+# Ce secret alimente l'environnement du runner terraform, qui le lit comme
+# GITHUB_TOKEN — jamais comme variable terraform : une variable atterrit dans
+# l'état et dans le plan.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-token-org
+  namespace: backstage
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: github-token
+          restartPolicy: Never
+          priorityClassName: platform-high
+          volumes:
+            - name: app
+              secret:
+                secretName: backstage-github-app
+                defaultMode: 0400
+          containers:
+            - name: frappe
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cc0e736b1b263e5395cf9d81ab3a4cecd251701003d0fb1b6bff62789f52ed73
+              command: [python, /app/github_token.py]
+              env:
+                - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
+                - { name: TOKEN_SECRET_NAMESPACE, value: default }
+                - { name: TOKEN_SECRET_NAME, value: github-app-token-org }
+                # L'installation sur l'ORGANISATION YounesicCo.
+                - { name: GITHUB_APP_INSTALLATION_ID, value: "149916529" }
               volumeMounts:
                 - { name: app, mountPath: /app/github-app, readOnly: true }
               resources:
