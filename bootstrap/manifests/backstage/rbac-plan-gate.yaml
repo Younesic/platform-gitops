@@ -1,0 +1,43 @@
+# LE SEUL DROIT D'ÉCRITURE DU PORTAIL SUR LE CLUSTER — et il tient en un verbe.
+#
+# POURQUOI. Le portier de plan (TN4) doit poser `spec.approvePlan` sur une ressource
+# `Terraform` quand, et seulement quand, l'ITSM a approuvé ET que l'empreinte de la
+# demande est couverte. Sans ce droit, il peut décider mais pas agir.
+#
+# ⚠️ CE RÔLE EST DÉLIBÉRÉMENT SÉPARÉ de `backstage-readonly` : ce dernier s'appelle
+# « readonly » et doit le rester. Élargir un rôle nommé pour sa retenue est le genre
+# de glissement qu'on ne voit plus six mois après.
+#
+# PORTÉE, aussi étroite que Kubernetes le permet :
+#   · UN groupe d'API   : infra.contrib.fluxcd.io
+#   · UNE ressource     : terraforms
+#   · TROIS verbes      : get, list, patch — ni create, ni delete, ni update complet
+#
+# Ce que ça NE permet pas : créer une ressource terraform, en supprimer une, toucher
+# à quoi que ce soit d'autre dans le cluster. Le portail décide d'une approbation ;
+# il ne provisionne rien.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-plan-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [infra.contrib.fluxcd.io]
+    resources: [terraforms]
+    verbs: [get, list, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-plan-gate
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-plan-gate
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
