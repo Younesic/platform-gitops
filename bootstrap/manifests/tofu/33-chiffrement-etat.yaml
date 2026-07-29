@@ -1,0 +1,161 @@
+# LE CHIFFREMENT DE L'ÉTAT TERRAFORM — non optionnel, et voici pourquoi.
+#
+# L'état terraform contient les valeurs RÉELLES de tout ce qui a été provisionné, y
+# compris les sorties marquées `sensitive` : `sensitive` masque l'AFFICHAGE, pas le
+# STOCKAGE. Le secret du robot Harbor, par exemple, est en clair dans l'état — c'est
+# vrai des deux moteurs (crossplane et natif), et c'est ce qui rend le chiffrement
+# obligatoire en banque.
+#
+# COMMENT. OpenTofu lit sa configuration de chiffrement dans la variable
+# d'environnement `TF_ENCRYPTION`. On l'injecte donc par l'ENVIRONNEMENT du pod runner,
+# exactement comme les identifiants du provider — **le module n'en sait rien et n'a pas
+# à le savoir**. Un module reste réutilisable ; le chiffrement est une décision de la
+# PLATEFORME, pas du produit.
+#
+# ⚠️ LA PHRASE DE PASSE EST ENGENDRÉE DANS LE CLUSTER, jamais tapée ni affichée. Le
+# droit `create` sans `resourceNames` est inévitable (Kubernetes décide avant que le nom
+# existe) ; `get`/`patch` sont nominatifs, et le CronJob n'écrase JAMAIS une phrase
+# existante — perdre la phrase, c'est perdre l'accès à tous les états déjà chiffrés.
+#
+# ⚠️ MIGRATION : activer le chiffrement sur un état DÉJÀ écrit en clair exige une
+# méthode de repli `unencrypted` le temps d'un passage. Ici on l'active AVANT toute
+# demande, donc la question ne se pose pas — mais elle se posera pour la voie crossplane.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terraform-chiffrement
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: terraform-chiffrement
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [terraform-chiffrement]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: terraform-chiffrement
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: terraform-chiffrement }
+subjects:
+  - { kind: ServiceAccount, name: terraform-chiffrement, namespace: flux-system }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: terraform-chiffrement
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+data:
+  engendrer.py: |
+    """Engendre la configuration de chiffrement de l'état, UNE seule fois.
+
+    IDEMPOTENT PAR CONSTRUCTION : si le secret existe déjà, on ne fait RIEN. Le
+    droit accordé est `create` + `get` — pas `update` : ce compte ne PEUT PAS
+    écraser une phrase de passe existante, même en cas de bogue.
+    Perdre la phrase, c'est perdre l'accès à tous les états déjà chiffrés.
+
+    Rien n'est affiché : ni la phrase, ni un extrait, ni sa longueur.
+    """
+    import base64, json, os, pathlib, secrets, subprocess, sys
+
+    SA  = pathlib.Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    NS  = os.environ["TARGET_NAMESPACE"].strip()
+    NOM = os.environ["SECRET_NAME"].strip()
+    JETON = (SA / "token").read_text().strip()
+    BASE  = (f"https://{os.environ.get('KUBERNETES_SERVICE_HOST','kubernetes.default.svc')}"
+             f":{os.environ.get('KUBERNETES_SERVICE_PORT','443')}")
+
+    def api(methode, url, corps=None):
+        cmd = ["curl", "-sS", "--cacert", str(SA / "ca.crt"), "-X", methode,
+               "-H", f"Authorization: Bearer {JETON}",
+               "-H", "Content-Type: application/json", "-w", "\n%{http_code}"]
+        if corps is not None:
+            cmd += ["--data-binary", "@-"]
+        cmd.append(url)
+        r = subprocess.run(cmd, input=corps, capture_output=True, text=True, timeout=45)
+        b = r.stdout.rsplit("\n", 1)
+        return (int(b[-1]) if b[-1].isdigit() else 0), b[0]
+
+    code, _ = api("GET", f"{BASE}/api/v1/namespaces/{NS}/secrets/{NOM}")
+    if code == 200:
+        print(f"phrase de chiffrement déjà en place dans {NS}/{NOM} — rien à faire")
+        sys.exit(0)
+    if code != 404:
+        sys.exit(f"lecture de {NS}/{NOM} refusée ({code})")
+
+    # 48 octets d'aléa → bien au-delà des 16 caractères recommandés.
+    phrase = secrets.token_urlsafe(48)
+    # La configuration que lit OpenTofu. `enforced` interdit qu'un état reparte en
+    # clair par accident — c'est le point de tout l'exercice.
+    conf = (
+        'key_provider "pbkdf2" "plateforme" { passphrase = "%s" }\n'
+        'method "aes_gcm" "plateforme" { keys = key_provider.pbkdf2.plateforme }\n'
+        'state { method = method.aes_gcm.plateforme  enforced = true }\n' % phrase
+    )
+    charge = json.dumps({
+        "apiVersion": "v1", "kind": "Secret",
+        "metadata": {"name": NOM, "namespace": NS},
+        "type": "Opaque",
+        "data": {"TF_ENCRYPTION": base64.b64encode(conf.encode()).decode()},
+    })
+    code, corps = api("POST", f"{BASE}/api/v1/namespaces/{NS}/secrets", charge)
+    if code not in (200, 201):
+        sys.exit(f"création refusée ({code}) : {corps[:200]}")
+    print(f"phrase de chiffrement engendrée dans {NS}/{NOM} — jamais affichée")
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: terraform-chiffrement
+  namespace: flux-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  # Une fois par jour suffit : ce travail ne fait quelque chose QUE si le secret
+  # manque. Sa cadence est un filet, pas un besoin.
+  schedule: "53 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: terraform-chiffrement
+          restartPolicy: Never
+          priorityClassName: platform-high
+          volumes:
+            - name: script
+              configMap: { name: terraform-chiffrement }
+          containers:
+            - name: engendrer
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cc0e736b1b263e5395cf9d81ab3a4cecd251701003d0fb1b6bff62789f52ed73
+              command: [python, /script/engendrer.py]
+              env:
+                - { name: SECRET_NAME, value: terraform-chiffrement }
+                - { name: TARGET_NAMESPACE, value: default }
+              volumeMounts:
+                - { name: script, mountPath: /script, readOnly: true }
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }

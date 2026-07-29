@@ -149,6 +149,11 @@ spec:
                   - { name: SOURCE_NAMESPACE, value: default }
                   - { name: CIBLE_NAMESPACE, value: default }
                   - { name: CREDS_SECRET, value: harbor-identifiants }
+                  # ⚠️ L'ÉTAT CONTIENT DES SECRETS — les sorties `sensitive` y sont en
+                  # clair (`sensitive` masque l'affichage, pas le stockage). Le
+                  # chiffrement est une décision de PLATEFORME, injectée par
+                  # l'environnement : le module n'en sait rien.
+                  - { name: CHIFFREMENT_SECRET, value: terraform-chiffrement }
                   # ⚠️ L'INTERVALLE EST UNE DÉCISION STRUCTURANTE (mesure TN2 g) : chaque
                   # tour fait naître un POD. À 2 min c'est 720 pods/jour et par demande —
                   # le chiffre exact qui a condamné la cadence du moteur ansible. 1 h est
@@ -196,8 +201,17 @@ spec:
                         "vars": variables,
                         # Les identifiants passent par l'ENVIRONNEMENT, jamais par des
                         # variables terraform (une variable atterrit dans l'état).
+                        # DEUX secrets d'environnement : les identifiants du FOURNISSEUR
+                        # (déclarés par le produit) et le CHIFFREMENT DE L'ÉTAT (décision
+                        # de PLATEFORME). Le second est OPTIONNEL : sans lui le runner
+                        # démarre quand même et l'état repart en clair — un défaut visible
+                        # vaut mieux qu'un pod qui refuse de naître.
                         "runnerPodTemplate": {
-                          "spec": {"envFrom": [{"secretRef": {"name": os.environ["CREDS_SECRET"]}}]}
+                          "spec": {"envFrom": [
+                            {"secretRef": {"name": os.environ["CREDS_SECRET"]}},
+                            {"secretRef": {"name": os.environ.get("CHIFFREMENT_SECRET", "terraform-chiffrement"),
+                                           "optional": True}},
+                          ]}
                         },
                       },
                     }
