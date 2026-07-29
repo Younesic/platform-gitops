@@ -327,6 +327,83 @@ Retirer une promesse ansible retire **son** opérateur, **sa** CRD et **son**
 watches. Cela ne touche ni le runtime partagé (ConfigMap de plateforme) ni AWX :
 le job template, l'inventaire et les identifiants machine restent chez le client.
 
+## 9ter. Promesses TERRAFORM NATIF (moteur 6 — le module EST le contrat)
+
+> Prouvé bout en bout par le set TN1→TN8 (`backstage-platform/Objectives/terraform-native/`).
+> ⚠️ **Deux voies terraform coexistent** : celle-ci, et la voie Crossplane
+> (`provider-terraform`, en production depuis 2026-07-07). Le choix est documenté dans
+> `VERDICT-COMPARATIF.md` — il se décide sur **qui écrit** : si le fournisseur écrit du
+> Terraform, cette voie-ci ; s'il compose avec d'autres ressources Kubernetes, la voie
+> Crossplane.
+
+**Ce que l'auteur écrit** : son module, tel quel. Ni CRD, ni Composition, ni image.
+
+**Le contrat se DÉRIVE des blocs `variable`** (mécanisme natif Terraform) :
+
+| dans le module | dans le formulaire |
+|---|---|
+| pas de `default` | champ **requis** |
+| `validation` avec `contains([…])` | **liste de choix** |
+| `validation` avec `can(regex(…))` | **motif** |
+| `validation` avec `length(…) <= N` | longueur maximale |
+| `description` | le texte sous le champ |
+| `output` avec `sensitive` | **exclu du sélecteur**, jamais du Secret |
+
+⚠️ `number` et **non** `integer` : Terraform n'a pas de type entier. Prétendre le contraire
+ferait un formulaire plus strict que le module.
+
+⚠️ Une `validation` intraduisible est **SIGNALÉE, jamais bloquante**. Refuser pousserait
+l'auteur à retirer ses validations pour plaire à notre outil — l'inverse du but. Terraform
+continue de les appliquer.
+
+**Ce que le produit DÉCLARE** (bloc `spec.terraform` du PromiseRequest) :
+
+- `approval` : **`auto` (surveillée) OU `manuelle` (approuvée) — pas les deux.** Mesuré :
+  avec un plan approuvé nommément, l'exécuteur **détecte** la dérive mais ne la corrige
+  jamais, et n'offre **aucun plan à approuver** pour elle. Une offre choisit, et le dit.
+- `interval` : ⚠️ **chaque tour fait naître un POD**. À 2 minutes, 720 pods par jour et par
+  demande — le chiffre exact qui a condamné la cadence du moteur ansible. Défaut : **1 h**.
+- `credsSecret` : les identifiants du provider, lus en **variables d'environnement** par le
+  runner. **Jamais** en variables terraform : une variable atterrit dans l'**état** ET dans
+  le **plan**, et `sensitive` masque l'affichage, pas le stockage.
+
+**Ce que la PLATEFORME décide, et que le module ignore** :
+
+- **le chiffrement de l'état** (`TF_ENCRYPTION` par l'environnement du runner). L'état
+  contient les valeurs réelles, y compris les sorties `sensitive`. Non optionnel en banque.
+- **la source du module est une DÉPENDANCE de la promesse** — appliquée une fois par
+  Destination, pas clonée par demande.
+
+### Les limites, sans adoucissement
+
+- **maturité** : `tofu-controller` est en **v0.16.4, toujours 0.x**, petite équipe.
+  Apache-2.0 donc forkable, mais c'est le risque à porter en comité.
+- **deux contrôleurs de plus** : `tofu-controller` et le `source-controller` de Flux.
+  ⚠️ Installer le second **n'est pas « faire tourner Flux »** — c'est un contrôleur dont le
+  seul métier est d'aller chercher un artefact, comme cert-manager pour Kratix. **ArgoCD
+  reste le seul moteur GitOps.**
+- ⚠️ le RBAC vendorisé de l'amont accorde **`cluster-admin`** au compte de service du
+  contrôleur. Vendorisé tel quel, documenté, **à trancher**.
+- ⚠️ **les références inter-namespace sont désactivées par défaut** — c'est une vraie
+  frontière entre équipes. La source vit **avec les demandes**, on ne l'affaiblit pas.
+- ⚠️ **un compte de service `tf-runner` par namespace** accueillant des demandes. Sans lui
+  la panne est **silencieuse** : la ressource reste en `Progressing`, elle ne tombe jamais
+  en erreur.
+- ⚠️ `destroyResourcesOnDeletion` vaut **`false` par défaut**. Sans cette ligne, supprimer
+  une demande **ne détruit rien**. La promesse la pose ; ne jamais la laisser au défaut.
+- ⚠️ le **secret d'état survit** à la destruction (vide, sans rien de sensible — mais un par
+  demande supprimée). À balayer.
+- ⚠️ le format OCI de **Flux** (`flux push artifact`) **n'est pas** la source de module
+  `oci://` native d'OpenTofu. Les deux marchent avec Harbor, ce ne sont pas les mêmes paquets.
+
+### Suppression — l'ordre compte
+
+**demandes → promesse → exécuteur.** Prouvé en TN8 : la promesse retirée, sa dépendance est
+prunée et l'exécuteur reste intact ; `git revert` restaure tout.
+
+⚠️ Et au niveau d'une ressource : **supprimer la SOURCE avant la ressource BLOQUE le
+finalizer** — il lui faut le module pour jouer le destroy. Remède : recréer la source.
+
 ## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
 
 **Règle d'or : un champ dont UNE SEULE valeur est valide dans le contexte d'usage ne

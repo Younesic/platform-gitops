@@ -356,6 +356,47 @@ Les **demandes d'abord**, on attend qu'elles soient parties, **la promesse
 ensuite** — la règle d'or du projet (cf. PROMISE-STANDARD §9bis). Retirer une
 promesse ansible ne touche ni le runtime partagé ni AWX.
 
+## 11. Variante terraform natif — le module EST le contrat
+
+```bash
+kratix new-terraform-promise harbor-tf \
+  --repo-url https://github.com/Younesic/platform-gitops \
+  --ref v0.17.0 --path sources/terraform/harbor-project \
+  --kind HarborTf --plural harbortfs \
+  --approval auto --interval 1h \
+  --creds-secret harbor-identifiants \
+  --provider indus --public [--deploy]
+```
+
+Le plugin **assemble**, il ne réinvente rien :
+
+1. clone à la **ref pinnée** (tag ou SHA — jamais une branche) ;
+2. le contrat se **dérive** des blocs `variable` (`hcl-to-crd`) ;
+3. la **source du module devient une dépendance** de la promesse — appliquée une fois par
+   Destination, pas clonée par demande ;
+4. le rendu écrit une ressource `Terraform` nommée d'après la demande ;
+5. l'aval commun : conteneur Backstage ×2, placement, famille d'API déclarée, sorties
+   étiquetées.
+
+**Deux options sont OBLIGATOIRES à penser, parce qu'elles ne se devinent pas** :
+
+- `--approval auto|manuelle` — **surveillée OU approuvée, pas les deux.** Avec une
+  approbation nommée, la dérive est détectée mais **jamais corrigée**.
+- `--interval` — **chaque tour fait naître un pod.** À 2 min : 720 pods/jour/demande.
+
+**Gotchas du moteur** (les vrais, ceux qui coûtent du temps) :
+
+- `kubectl` refuse le **singulier** `terraform` — employer `terraforms` ou `tf`. Le message
+  (« you must specify only one resource ») ne désigne pas la cause.
+- un **rejeu local** de la fabrique **sans** `KRATIX_WORKFLOW_ACTION=configure` et
+  `KRATIX_WORKFLOW_TYPE=resource` sort en **code 0 sans rien dire**.
+- le service `schema-derive` écoute sur **8080**, pas 80.
+- **HCL : un bloc sur une seule ligne n'accepte qu'un argument.** Deux arguments →
+  « Invalid single-argument block definition ». Gotcha payé deux fois.
+- après plusieurs échecs, le contrôleur reste en **attente exponentielle** : corriger la
+  cause ne suffit pas, il faut **réveiller**
+  (`reconcile.fluxcd.io/requestedAt`, ou `kratix.io/manual-reconciliation` côté demande).
+
 ## Vérifier
 ```bash
 kubectl get promises                          # Available
