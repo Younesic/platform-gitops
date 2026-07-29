@@ -79,6 +79,31 @@ spec:
                   fieldPath: metadata.namespace
             - name: TUF_ROOT
               value: /tmp/.sigstore
+            # ⚠️⚠️ LE GARDE-FOU QUI MANQUAIT, ET IL A COÛTÉ 11 HEURES DE PANNE MUETTE.
+            #
+            # Sur ce cluster (Kapsule, control-plane mutualisé), les reflectors de
+            # client-go ≥0.36 en mode « watch-list » PENDENT SANS ERREUR après un
+            # cycle ou une dégradation de l'apiserver : le cache ne se synchronise
+            # jamais, et le contrôleur reste « Running » en zombie.
+            #
+            # CONSTATÉ LE 2026-07-29 : le source-controller n'avait plus réconcilié
+            # depuis 11 h alors que sa cadence est de 10 min — donc ~68 tours ratés —
+            # tout en affichant `Ready=True` sur ses sources, avec un artefact périmé.
+            # Toute source NEUVE restait bloquée sur « building artifact » avec pour
+            # seule trace `timed out waiting for the condition` : la signature exacte
+            # du cache qui ne se synchronise pas.
+            #
+            # ⚠️ C'est « la santé qui mente par OMISSION » : rien ne passe au rouge,
+            # la condition ne bascule simplement jamais. Une source Ready avec un
+            # artefact de 11 h n'est pas une source saine — c'est une source gelée.
+            #
+            # CONSÉQUENCE si on ne le pose pas : aucune nouvelle offre terraform ne
+            # peut être provisionnée (la source du module est une dépendance de la
+            # promesse), et aucune mise à jour de module n'est jamais reprise.
+            #
+            # Même remède que le manager Kratix (BR1/BR4) : gate natif de client-go.
+            - name: KUBE_FEATURE_WatchListClient
+              value: "false"
           ports:
             - { containerPort: 9090, name: http, protocol: TCP }
             - { containerPort: 8080, name: http-prom, protocol: TCP }

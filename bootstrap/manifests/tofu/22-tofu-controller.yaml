@@ -57,6 +57,14 @@ spec:
             # C'est CETTE image qui embarque OpenTofu et qui exécute.
             - name: RUNNER_POD_IMAGE
               value: ghcr.io/flux-iac/tf-runner:v0.16.4@sha256:fc3af4d9b99f54cc92d4aec51d83117dcf373b79d8ed1dc6f69a4ac154184725
+            # ⚠️ MÊME GARDE-FOU QUE LE SOURCE-CONTROLLER (voir 12-*.yaml pour le détail).
+            # Posé ici par PRÉCAUTION, pas sur constat : le source-controller a été pris
+            # gelé 11 h le 2026-07-29 avec cette signature ; celui-ci partage le même
+            # socle client-go et le même apiserver. Un contrôleur de réconciliation qui
+            # pend sans erreur est la panne la plus coûteuse à diagnostiquer — on ne
+            # laisse pas le second exposé après avoir payé pour le premier.
+            - name: KUBE_FEATURE_WatchListClient
+              value: "false"
           ports:
             - { containerPort: 8080, name: http-prom }
             - { containerPort: 9440, name: healthz, protocol: TCP }
