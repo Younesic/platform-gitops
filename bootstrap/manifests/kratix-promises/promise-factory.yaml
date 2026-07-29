@@ -35,12 +35,12 @@ metadata:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","terraform","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["apiSchemaFrom","omit"]}],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -90,6 +90,10 @@ spec:
                   message: 'type ansible : la cible doit être déclarée — automation.inventory (le produit la fixe) OU automation.allowedLimits (le produit ouvre le choix, dans cette liste et elle seule)'
                 - rule: self.type != 'ansible' || (has(self.automation) && has(self.automation.awxTokenSecret))
                   message: 'type ansible : automation.awxTokenSecret est requis — le credential AWX est celui du FOURNISSEUR, jamais un jeton commun à la plateforme'
+                # terraform : le dépôt du module ET son chemin. Le contrat se dérive des
+                # blocs `variable` — l'auteur n'écrit aucune CRD.
+                - rule: self.type != 'terraform' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
+                  message: 'type terraform : source.url (dépôt du module), source.version (tag ou SHA) et source.path (chemin du module) sont requis (pin de gouvernance)'
                 properties:
                   type:
                     type: string
@@ -171,6 +175,24 @@ spec:
                       entrypoint:
                         type: string
                         description: 'Point d''entrée du rôle dont on dérive le contrat (défaut : main).'
+                  terraform:
+                    type: object
+                    description: 'terraform : ce que le produit DÉCLARE de son exécution. Ces valeurs partent dans l''ENVIRONNEMENT du rendu — hors de portée du spec d''une demande.'
+                    properties:
+                      approval:
+                        type: string
+                        enum: [auto, manuelle]
+                        default: auto
+                        description: 'SURVEILLÉE ou APPROUVÉE — pas les deux. Mesuré : avec un plan approuvé nommément, l''exécuteur DÉTECTE la dérive mais ne la corrige jamais, et n''offre aucun plan à approuver pour elle. « auto » = la dérive se corrige toute seule. « manuelle » = chaque changement attend une décision. Choisir, et le dire.'
+                      interval:
+                        type: string
+                        pattern: ^[0-9]+(s|m|h)$
+                        default: 1h
+                        description: 'Cadence de réconciliation. ⚠️ Chaque tour fait naître un POD : à 2 minutes c''est 720 pods par jour et par demande. L''heure rattrape une dérive dans l''heure pour 24 pods par jour.'
+                      credsSecret:
+                        type: string
+                        pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                        description: 'Secret portant les identifiants du provider, lus en VARIABLES D''ENVIRONNEMENT par le runner. Jamais des variables terraform : une variable atterrit dans l''état ET dans le plan, et « sensitive » masque l''affichage, pas le stockage.'
                   placement:
                     type: string
                     pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
@@ -399,7 +421,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0d2c0dbd2cf3c5d475ad924f1a218c3fdbba75c88801f628727233c3fd660840
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:731323e43d3d0310f7b5f1f61e89bd46a10101767eebf5fdf91c31cfc5502d3a
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
