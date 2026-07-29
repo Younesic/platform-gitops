@@ -35,6 +35,13 @@ metadata:
     # moteur operator, qui accepte terraform SANS une ligne de code — c'est de la donnée.
     # (Doctrine : un bloc par FAMILLE, jamais une ligne par produit.)
     platform.kratix.io/operator-group: infra.contrib.fluxcd.io
+    # Les SORTIES du module, étiquetées par leur description — ce que le sélecteur du
+    # Studio propose pour composer. ⚠️ `robot_secret` en est ABSENT : il est déclaré
+    # `sensitive` dans le module. Il continue d'aller dans le Secret de sorties (c'est
+    # ainsi que le demandeur reçoit ses identifiants) ; il n'a rien à faire dans un
+    # sélecteur qui sert à AFFICHER. Valeur produite par le plugin (TN5), recopiée ici
+    # sur la promesse écrite à la main.
+    platform.kratix.io/status-schema: '{"project_name": {"path": ".status.availableOutputs.project_name", "label": "Nom du projet Harbor provisionné.", "type": "string"}, "robot_full_name": {"path": ".status.availableOutputs.robot_full_name", "label": "Nom complet du robot write (robot$<projet>+publisher).", "type": "string"}}'
 spec:
   destinationSelectors:
     - matchLabels:
