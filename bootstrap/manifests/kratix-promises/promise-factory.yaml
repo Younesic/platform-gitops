@@ -30,7 +30,7 @@ kind: Promise
 metadata:
   name: promise-factory
   labels:
-    kratix.io/promise-version: v0.8.3
+    kratix.io/promise-version: v0.8.4
   annotations:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
@@ -188,7 +188,20 @@ spec:
                         type: string
                         pattern: ^[0-9]+(s|m|h)$
                         default: 1h
-                        description: 'Cadence de réconciliation. ⚠️ Chaque tour fait naître un POD : à 2 minutes c''est 720 pods par jour et par demande. L''heure rattrape une dérive dans l''heure pour 24 pods par jour.'
+                        # PLANCHER IMPOSÉ PAR LA PLATEFORME — 5 minutes, et pas de secondes.
+                        # POURQUOI un plancher, alors qu'ailleurs « on n'impose rien » : une
+                        # cadence frappe TOUT le cluster, pas seulement le produit qui la
+                        # déclare. À 10s, une seule offre × 200 demandes ≈ 1,7 M pods/jour.
+                        # C'est mot pour mot la faute du post-mortem ansible (120s = 262 800
+                        # connexions/an/demande). Et AUCUN éditeur n'expose ce levier à
+                        # l'auteur d'un produit : HCP Terraform fixe sa détection de dérive à
+                        # ~24 h, en édition payante, NON réglable par l'utilisateur.
+                        # Vérifié 16/16 sur CRD jetable avant d'atterrir ici — dont `0h`, qui
+                        # passait dans la 1re version de la règle et vaudrait « sans pause ».
+                        x-kubernetes-validations:
+                          - rule: "!self.endsWith('s') && int(self.substring(0, self.size()-1)) >= (self.endsWith('h') ? 1 : 5)"
+                            message: 'cadence trop rapide : chaque tour fait naître un POD. Minimum 5m, et les secondes sont refusées. L''heure (défaut) rattrape une dérive dans l''heure pour 24 pods/jour/demande, contre 720 à deux minutes. Si le produit n''a pas besoin de guetter la dérive, laisser 1h suffit : la plateforme réagit DÉJÀ au changement de demande et au changement de module, sans horloge.'
+                        description: 'Cadence de réconciliation. ⚠️ Chaque tour fait naître un POD. Plancher imposé : 5m, secondes refusées. Repère : 1h = 24 pods/jour/demande, 2m en ferait 720. À savoir avant de descendre — l''horloge ne sert QU''À guetter la dérive : un changement de demande ou de module déclenche déjà tout seul. Par comparaison, HCP Terraform fixe sa détection de dérive à ~24 h et ne la rend pas réglable.'
                       credsSecret:
                         type: string
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
