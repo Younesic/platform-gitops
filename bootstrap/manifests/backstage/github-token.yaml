@@ -21,8 +21,12 @@
 #
 # ⚠️ La cadence (30 min) doit rester nettement sous la durée de vie du jeton
 # (60 min) : sinon une frappe ratée laisserait un jeton périmé, et TOUTE la
-# fabrication de promesses s'arrêterait. Le repli SSH tient encore le filet tant
-# que la clé n'est pas retirée (étape suivante, délibérée).
+# fabrication de promesses s'arrêterait.
+#
+# ⚠️ IL N'Y A PLUS DE REPLI SSH (clé démontée le 2026-07-28) : ce chemin est le
+# SEUL. C'est délibéré — un repli silencieux masque exactement la panne qu'il faut
+# voir. Le secret `promise-factory-git` existe encore dans le cluster, donc revenir
+# en arrière reste un `git revert`.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -123,7 +127,7 @@ spec:
               # MÊME image que la fabrique : mêmes outils, même identité, un seul
               # digest à suivre. Le script n'affiche JAMAIS le jeton — il irait
               # dans les journaux du pod.
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cc0e736b1b263e5395cf9d81ab3a4cecd251701003d0fb1b6bff62789f52ed73
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7ce1544fa5e37401629597e83a6520911246fff79491d1b1802268b1ce7d8644
               command: [python, /app/github_token.py]
               env:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
@@ -193,7 +197,7 @@ spec:
                 defaultMode: 0400
           containers:
             - name: frappe
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:cc0e736b1b263e5395cf9d81ab3a4cecd251701003d0fb1b6bff62789f52ed73
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7ce1544fa5e37401629597e83a6520911246fff79491d1b1802268b1ce7d8644
               command: [python, /app/github_token.py]
               env:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
