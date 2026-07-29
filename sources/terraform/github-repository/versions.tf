@@ -23,14 +23,16 @@ terraform {
 #
 # La plateforme l'injecte donc par l'ENVIRONNEMENT du pod runner
 # (`spec.runnerPodTemplate.spec.envFrom`), que le provider github lit tout seul :
-#   GITHUB_TOKEN · GITHUB_OWNER
+#   GITHUB_TOKEN
+#
+# UNE SEULE variable d'environnement, et c'est voulu : la cible (`organization`)
+# vient de la DEMANDE, pas de l'environnement. La plateforme fournit le droit
+# d'agir ; elle ne décide pas où.
 #
 # ⚠️ CE QUE LE JETON DOIT POUVOIR FAIRE, dit franchement : créer un dépôt.
-# Un jeton d'installation d'App GitHub ne le peut PAS sur un compte personnel
-# (GitHub réserve `POST /user/repos` aux jetons d'utilisateur) ; sur une ORGANISATION,
-# il le peut avec la permission `Administration: write`. Voir le README, §Identité.
+# Un jeton d'installation d'App GitHub ne le peut PAS sur un compte personnel —
+# `POST /user/repos` rend 403 même avec `administration: write` ACCORDÉ (mesuré le
+# 2026-07-29). Sur une ORGANISATION, il le peut. Voir le README, §Identité.
 provider "github" {
-  # Vide ⇒ on retombe sur GITHUB_OWNER (l'environnement du runner décide).
-  # Renseigné ⇒ la demande désigne explicitement où le dépôt est créé.
-  owner = var.organization != "" ? var.organization : null
+  owner = var.organization
 }

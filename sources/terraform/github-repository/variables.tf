@@ -36,19 +36,23 @@ variable "name" {
 
 variable "organization" {
   type        = string
-  default     = ""
-  description = "Organisation GitHub qui hébergera le dépôt. Vide = le compte configuré sur la plateforme."
-
-  # ⚠️ Le « vide autorisé » est DANS le motif (`^$|`), pas dans une garde
-  # `var.organization == "" || …` devant lui. Les deux écritures sont correctes côté
-  # Terraform, mais celle-ci se dérive fidèlement par n'importe quelle version de
-  # `hcl-to-crd` : elle ne dépend pas de la lecture des disjonctions.
+  description = "Organisation GitHub qui hébergera le dépôt."
+  # Pas de défaut, donc REQUIS — et c'est une décision, pas un oubli.
   #
-  # (La forme à garde est désormais gérée elle aussi — c'est le défaut trouvé sur ce
-  # module même : le motif seul était recopié, et la CRD refusait le défaut vide du
-  # champ, donc une demande vierge. Voir `contraintes()` dans hcl-to-crd.py.)
+  # POURQUOI. Un défaut ici ferait décider à la PLATEFORME où le code d'une équipe
+  # atterrit, silencieusement. « Où » n'est pas une chose à deviner : une erreur de
+  # cible met du code au mauvais endroit, et personne ne le voit passer.
+  #
+  # Le fournisseur qui n'a qu'une organisation ne condamne pas son demandeur à la
+  # retaper : il FIGE le champ au moment de concevoir la promesse (mode « Fixé » du
+  # Studio). Le module reste générique, la promesse porte la convention — chacun sa
+  # responsabilité.
+  #
+  # Effet de bord heureux : le module n'a plus besoin de `GITHUB_OWNER` dans
+  # l'environnement du runner. Une variable de moins à câbler côté plateforme.
+
   validation {
-    condition     = can(regex("^$|^[a-zA-Z0-9][a-zA-Z0-9-]*$", var.organization))
+    condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9-]*$", var.organization))
     error_message = "Le nom d'organisation ne peut contenir que des lettres, chiffres et tirets."
   }
 }

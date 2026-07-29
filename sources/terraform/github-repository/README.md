@@ -11,12 +11,12 @@ On enlève donc une couche, pas une capacité.
 
 ## Le contrat
 
-Huit champs. Un seul est obligatoire.
+Huit champs. Deux sont obligatoires : **quoi** et **où**.
 
 | Champ | Type | Défaut | Rôle |
 |---|---|---|---|
 | `name` | texte | — **requis** | Nom du dépôt |
-| `organization` | texte | *(vide)* | Où le créer ; vide = le compte de la plateforme |
+| `organization` | texte | — **requis** | Organisation qui l'héberge |
 | `description` | texte | *(vide)* | Une phrase, affichée sur GitHub et au catalogue |
 | `visibility` | `private` \| `public` | `private` | Qui le voit |
 | `default_branch` | texte | `main` | Branche principale |
@@ -53,30 +53,42 @@ Ne marquez `sensitive` que ce qui l'est : tout marquer revient à ne rien marque
 
 ## ⚠️ Identité — le point à trancher AVANT de brancher le produit
 
-Le module lit `GITHUB_TOKEN` et `GITHUB_OWNER` dans l'environnement du runner
+Le module lit **`GITHUB_TOKEN`** dans l'environnement du runner
 (`runnerPodTemplate.spec.envFrom`), jamais en variable — une variable atterrit dans
 l'état et dans le plan.
 
-**Créer un dépôt demande plus que ce que la plateforme détient aujourd'hui.**
+**Une seule variable d'environnement**, et c'est voulu : la plateforme fournit le
+*droit d'agir*, la demande dit *où*. Pas de `GITHUB_OWNER` à câbler, donc pas de
+cible décidée en silence côté plateforme.
 
-| Identité | Peut créer un dépôt ? |
+### ⚠️ Il faut une organisation — ce n'est pas un confort, c'est la condition
+
+Mesuré le 2026-07-29, deux fois, avec le droit réellement accordé sur l'installation :
+
+| Appel | Jeton d'installation d'App |
 |---|---|
-| GitHub App `attijari-portal`, jeton d'installation, sur un **compte personnel** | **Non.** GitHub réserve `POST /user/repos` aux jetons d'utilisateur |
-| La même App sur une **organisation**, permission `Administration: write` | **Oui** |
-| Un jeton personnel de portée `repo` | Oui — mais c'est un jeton durable, ce qu'on a retiré le 2026-07-28 |
+| `POST /user/repos` (compte personnel) | **403** `Resource not accessible by integration` — **même avec `administration: write` accordé** |
+| `POST /orgs/{org}/repos` | **passe** |
 
-L'App actuelle a `contents`, `metadata`, `pull_requests`, `statuses` — **pas
-`administration`** — et `Younesic` est un compte utilisateur, donc sans organisation.
+GitHub réserve la création de dépôt sur un compte personnel aux jetons d'*utilisateur*.
+Un jeton d'App n'en est pas un, et aucune permission ne change ça.
 
-**Chemin recommandé : créer une organisation GitHub** (gratuit), y installer l'App avec
-`Administration: write`. Ça donne au champ `organization` du contrat un sens réel, ça
-préserve la doctrine « aucun jeton durable », et ça ouvre au passage les équipes GitHub
-pour les droits d'accès. La création de l'organisation et l'octroi de la permission sont
-des gestes utilisateur.
+**En place aujourd'hui** : App `attijari-portal` installée sur l'organisation
+`YounesicCo` (installation `149916529`, portée *all*, `administration: write`). Le
+CronJob `github-token-org` frappe le jeton toutes les 30 min dans
+`default/github-app-token-org` — il expire en une heure, rien de durable ne circule.
 
 L'ancienne plateforme, elle, utilisait un **jeton personnel en dur**
 (`project-as-code/providers/github-secret.yaml`) — c'est la réponse à « comment
 faisait-on avant », et c'est aussi ce qu'on ne refait pas.
+
+### Pourquoi `organization` est requis plutôt que par défaut
+
+Un défaut ferait décider à la plateforme où le code d'une équipe atterrit,
+silencieusement — et une erreur de cible ne se voit pas passer. Le fournisseur qui n'a
+qu'une organisation ne condamne pas son demandeur à la retaper : il **fige** le champ
+en concevant la promesse (mode « Fixé » du Studio). Le module reste générique, la
+promesse porte la convention.
 
 ## Essayer le module à la main
 
@@ -85,18 +97,24 @@ cd platform-gitops/sources/terraform/github-repository
 terraform init -backend=false
 terraform validate
 
-# avec une identité capable de créer un dépôt :
-export GITHUB_TOKEN=…        # jamais dans un fichier, jamais dans l'historique
-export GITHUB_OWNER=…
-terraform plan -var name=essai-plateforme
+# avec le jeton de la PLATEFORME — jamais un jeton personnel.
+# Il n'est jamais affiché, et il expire dans l'heure.
+export GITHUB_TOKEN=$(kubectl -n default get secret github-app-token-org \
+                        -o jsonpath='{.data.token}' | base64 -d)
+
+terraform plan -var name=essai -var organization=YounesicCo
 ```
 
 Le `plan` seul ne crée rien : c'est la façon de vérifier le contrat sans toucher à
-GitHub.
+GitHub. Une sonde encore plus sûre, si l'on doute du droit avant même de planifier :
+un `POST` de nom vide rend `422` quand l'authentification passe, `403` sinon — aucun
+effet de bord dans les deux cas.
 
 ## Éprouvé en réel (2026-07-29, organisation `YounesicCo`)
 
-Cycle complet joué contre le vrai GitHub, pas contre une doublure :
+Deux cycles complets contre le vrai GitHub, pas contre une doublure.
+
+**Cycle 1 — avec un jeton personnel**, pour valider le module :
 
 | Geste | Résultat mesuré |
 |---|---|
@@ -105,7 +123,16 @@ Cycle complet joué contre le vrai GitHub, pas contre une doublure :
 | écriture directe sur `main` (propriétaire) | **201 — passée** ⇒ défaut trouvé |
 | correctif `enforce_admins` | plan = **une seule ligne**, en place |
 | même écriture, après | **409 — « Changes must be made through a pull request »** |
-| `destroy` (défaut) | dépôt **archivé**, `archived: true`, **code conservé** |
+| `destroy` (défaut) | dépôt **archivé**, `archived: true`, code conservé |
+
+**Cycle 2 — avec le jeton de la PLATEFORME** (l'App, jamais un jeton personnel) :
+
+| Geste | Résultat mesuré |
+|---|---|
+| `apply` | dépôt privé + `main`/`develop` + protection |
+| écriture directe sur `main` **par la plateforme** | **409** — elle ne contourne pas la protection qu'elle pose |
+| `destroy` avec `archive_on_destroy=false` | **suppression réelle** |
+| état final | organisation à **0 dépôt**, zéro résidu |
 
 ## Limites, dites franchement
 
@@ -113,10 +140,12 @@ Cycle complet joué contre le vrai GitHub, pas contre une doublure :
   `YounesicCo` est en plan **team**, donc disponible. Sur un compte gratuit avec
   `visibility = private`, l'apply échoue à cette étape avec un message explicite de
   GitHub. Limite de la plateforme d'en face, pas du module.
-- **Archiver demande moins de droits que détruire** : l'archivage est une modification
-  du dépôt (portée `repo`), la suppression exige `delete_repo`. Le défaut sûr est donc
-  aussi celui qui réclame le moins — c'est heureux, mais ça veut dire qu'une plateforme
-  qui voudrait vraiment détruire devrait demander un droit de plus, délibérément.
+- **Archiver demande moins de droits que détruire, mais pas pour tout le monde** :
+  avec un jeton *personnel*, archiver relève de la portée `repo` et supprimer exige
+  `delete_repo` en plus — le défaut sûr est donc aussi le moins privilégié. Avec un
+  jeton d'*App*, `administration: write` couvre les deux (vérifié : la suppression
+  réelle passe). Le défaut reste l'archivage : ce n'est plus une contrainte de droits,
+  c'est un choix.
 - **`default_branch` autre que `main`** : le module crée la branche puis la désigne par
   défaut ; `main` continue d'exister à côté. C'est le comportement attendu, pas un
   oubli.
