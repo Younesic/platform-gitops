@@ -104,10 +104,21 @@ data:
     phrase = secrets.token_urlsafe(48)
     # La configuration que lit OpenTofu. `enforced` interdit qu'un état reparte en
     # clair par accident — c'est le point de tout l'exercice.
+    # ⚠️ HCL : un bloc sur UNE SEULE LIGNE n'accepte QU'UN argument. Le bloc `state`
+    # en a deux (méthode + enforced) — sur une ligne, OpenTofu rend « Invalid
+    # single-argument block definition » et l'init échoue. Gotcha déjà payé sur le
+    # HCL inline de harbor-project, re-vécu ici : on écrit donc en multiligne.
     conf = (
-        'key_provider "pbkdf2" "plateforme" { passphrase = "%s" }\n'
-        'method "aes_gcm" "plateforme" { keys = key_provider.pbkdf2.plateforme }\n'
-        'state { method = method.aes_gcm.plateforme  enforced = true }\n' % phrase
+        'key_provider "pbkdf2" "plateforme" {\n'
+        '  passphrase = "%s"\n'
+        '}\n'
+        'method "aes_gcm" "plateforme" {\n'
+        '  keys = key_provider.pbkdf2.plateforme\n'
+        '}\n'
+        'state {\n'
+        '  method   = method.aes_gcm.plateforme\n'
+        '  enforced = true\n'
+        '}\n' % phrase
     )
     charge = json.dumps({
         "apiVersion": "v1", "kind": "Secret",
