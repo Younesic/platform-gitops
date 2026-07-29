@@ -67,6 +67,19 @@ resource "github_branch_protection" "principale" {
   repository_id = github_repository.this.node_id
   pattern       = var.default_branch
 
+  # 🔑 LA PROTECTION S'APPLIQUE AUSSI AUX ADMINISTRATEURS. Non négociable, donc
+  # pas exposé au contrat.
+  #
+  # PROUVÉ SUR LE PRODUIT LUI-MÊME : sans cette ligne, GitHub laisse un propriétaire
+  # d'organisation écrire directement sur la branche « protégée » — mesuré, l'écriture
+  # a réussi. Le portail aurait affiché « branche protégée » pendant que la personne
+  # la plus capable de contourner n'était pas concernée : c'est un CONTRÔLE DÉCORATIF,
+  # et un contrôle décoratif est pire qu'un contrôle absent, parce qu'il ferme la
+  # question en comité.
+  #
+  # En faire une option reviendrait à offrir le bouton qui recrée le problème.
+  enforce_admins = true
+
   required_pull_request_reviews {
     required_approving_review_count = 1
     # Une nouvelle poussée périme les approbations déjà données : sinon « approuvé »

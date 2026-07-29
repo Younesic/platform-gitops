@@ -32,6 +32,19 @@ deux fois.
 casserait le reste), les droits d'équipe (ils vivent dans le modèle d'identité), le
 contenu initial (c'est un autre produit).
 
+## Ce que « protégée » veut dire ici
+
+Quand `protect_default_branch` vaut oui : une revue exigée avant fusion, les
+approbations annulées à chaque nouvelle poussée, ni poussée forcée ni suppression —
+**et la règle s'applique aussi aux administrateurs** (`enforce_admins`).
+
+Ce dernier point n'est pas une option, et il a été payé cher : sans lui, GitHub laisse
+un propriétaire d'organisation écrire **directement** sur la branche « protégée ».
+Mesuré sur ce module même — l'écriture a réussi (HTTP 201) alors que le portail aurait
+affiché « branche protégée ». C'est un **contrôle décoratif**, et un contrôle décoratif
+est pire qu'un contrôle absent : il ferme la question en comité. Après correction, la
+même tentative rend `409 — Changes must be made through a pull request`.
+
 ## Ce que le demandeur reçoit
 
 Adresse du dépôt · clonage SSH · clonage HTTPS · chemin complet · branche principale.
@@ -81,11 +94,29 @@ terraform plan -var name=essai-plateforme
 Le `plan` seul ne crée rien : c'est la façon de vérifier le contrat sans toucher à
 GitHub.
 
+## Éprouvé en réel (2026-07-29, organisation `YounesicCo`)
+
+Cycle complet joué contre le vrai GitHub, pas contre une doublure :
+
+| Geste | Résultat mesuré |
+|---|---|
+| `plan` | 4 objets à créer, lisible |
+| `apply` | dépôt **privé** + `main`/`develop`/`recette` + protection, **30 s** |
+| écriture directe sur `main` (propriétaire) | **201 — passée** ⇒ défaut trouvé |
+| correctif `enforce_admins` | plan = **une seule ligne**, en place |
+| même écriture, après | **409 — « Changes must be made through a pull request »** |
+| `destroy` (défaut) | dépôt **archivé**, `archived: true`, **code conservé** |
+
 ## Limites, dites franchement
 
 - **Protection de branche sur un dépôt privé** : réservée aux plans payants (Pro/Team).
-  Sur un compte gratuit avec `visibility = private`, l'apply échoue à cette étape avec
-  un message explicite de GitHub. Limite de la plateforme d'en face, pas du module.
+  `YounesicCo` est en plan **team**, donc disponible. Sur un compte gratuit avec
+  `visibility = private`, l'apply échoue à cette étape avec un message explicite de
+  GitHub. Limite de la plateforme d'en face, pas du module.
+- **Archiver demande moins de droits que détruire** : l'archivage est une modification
+  du dépôt (portée `repo`), la suppression exige `delete_repo`. Le défaut sûr est donc
+  aussi celui qui réclame le moins — c'est heureux, mais ça veut dire qu'une plateforme
+  qui voudrait vraiment détruire devrait demander un droit de plus, délibérément.
 - **`default_branch` autre que `main`** : le module crée la branche puis la désigne par
   défaut ; `main` continue d'exister à côté. C'est le comportement attendu, pas un
   oubli.
