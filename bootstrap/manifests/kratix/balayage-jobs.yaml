@@ -1,0 +1,206 @@
+# ── BORNER L'ACCUMULATION DES JOBS DE PIPELINE KRATIX ────────────────────────
+#
+# POURQUOI. Kratix ne pose AUCUN `ttlSecondsAfterFinished` sur les Jobs qu'il
+# engendre (vérifié : 0 sur 127), et n'expose aucun réglage pour le faire — ni sur
+# la Promise, ni sur le Pipeline, ni en option du contrôleur. Les Jobs terminés
+# s'accumulent donc indéfiniment, chacun gardant la couche inscriptible de son pod
+# et ses journaux.
+#
+# Ce n'est pas théorique : le 2026-07-29 la pression disque qui en résulte a
+# provoqué une PANNE D'AUTHENTIFICATION complète (évictions en cascade → bascule
+# CNPG figée → Keycloak à terre). Nettoyé à la main le matin, revenu le soir en
+# deux heures — un bump d'image rejoue toutes les demandes. **C'est structurel.**
+#
+# ⚠️ POURQUOI PAS UN TTL AVEUGLE, ni même un simple « plus vieux que N heures ».
+# Chaque Job porte une étiquette `kratix.io/hash` : c'est ainsi que Kratix sait si
+# le pipeline a déjà tourné pour la spec courante. Supprimer le Job qui porte
+# l'empreinte courante risquerait de faire rejouer le pipeline — la « tempête de
+# rejeux » qu'on redoute.
+#
+# ✅ CE QU'ON FAIT À LA PLACE : on garde **le Job le plus récent par
+# (namespace, promesse, ressource, pipeline)** et on supprime les précédents.
+# C'est la logique de `successfulJobsHistoryLimit` des CronJob, que les Jobs créés
+# par un contrôleur n'ont pas.
+#
+# Sûr PAR CONSTRUCTION : le Job qui porte l'empreinte courante est toujours le plus
+# récent de son groupe, donc il n'est jamais candidat. Et un Job non terminé n'est
+# jamais touché.
+#
+# EFFET MESURÉ à l'écriture : 127 Jobs → 64 conservés (49 % de gain), dont 53
+# repris dans `kratix-platform-system` où les `promise-configure` s'empilaient par
+# cinq. Surtout, l'accumulation devient BORNÉE : elle suit le nombre de triplets,
+# c'est-à-dire la taille de la plateforme, et non le temps qui passe.
+#
+# ⚠️ LIMITE DITE FRANCHEMENT : le plancher (un Job par claim et par pipeline) est
+# imposé par la conception amont — l'empreinte vit sur le Job. Descendre plus bas
+# demanderait un changement chez Kratix.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: balayage-jobs
+  namespace: kratix-platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+---
+# VOIR partout, SUPPRIMER seulement où c'est prévu.
+# La lecture cluster-wide sert à SIGNALER un namespace qui accumulerait sans qu'on
+# ait le droit d'y toucher — mieux qu'une accumulation silencieuse.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: balayage-jobs-lecture
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: balayage-jobs-lecture
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: balayage-jobs-lecture }
+subjects:
+  - { kind: ServiceAccount, name: balayage-jobs, namespace: kratix-platform-system }
+---
+# Le droit de SUPPRIMER, namespace par namespace. Un namespace qui n'est pas listé
+# ici ne peut pas être nettoyé — et le balayage le dira au lieu de se taire.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: balayage-jobs-suppression
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: balayage-jobs-suppression
+  namespace: default
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: balayage-jobs-suppression }
+subjects:
+  - { kind: ServiceAccount, name: balayage-jobs, namespace: kratix-platform-system }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: balayage-jobs-suppression
+  namespace: kratix-platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: balayage-jobs-suppression
+  namespace: kratix-platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: balayage-jobs-suppression }
+subjects:
+  - { kind: ServiceAccount, name: balayage-jobs, namespace: kratix-platform-system }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: balayage-jobs
+  namespace: kratix-platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  schedule: "17,47 * * * *"
+  concurrencyPolicy: Forbid
+  # Le balayeur ne nourrit pas le problème qu'il traite.
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      ttlSecondsAfterFinished: 1800
+      template:
+        spec:
+          serviceAccountName: balayage-jobs
+          restartPolicy: Never
+          containers:
+            - name: balayage
+              # alpine/k8s embarque kubectl ET jq.
+              # ⚠️ bitnami/kubectl est écarté : son catalogue est gelé depuis 2025.
+              image: alpine/k8s:1.35.3
+              env:
+                # Les namespaces où l'on a le droit de supprimer. Toute autre
+                # accumulation est SIGNALÉE, jamais silencieuse.
+                - { name: NS_AUTORISES, value: "default kratix-platform-system" }
+                # Marge de sécurité : on ne touche pas à un Job qui vient de finir,
+                # pour ne jamais courir contre un pipeline en train de se conclure.
+                - { name: GRACE_SECONDES, value: "600" }
+              command: [sh, -c]
+              args:
+                - |
+                  set -eu
+                  kubectl get jobs -A -l app.kubernetes.io/managed-by=Kratix -o json > /tmp/jobs.json
+
+                  # Les groupes = (namespace, promesse, ressource, pipeline).
+                  # On trie par date de fin et on RETIRE le dernier de chaque
+                  # groupe (`.[0:-1]`) : le plus récent porte l'empreinte courante,
+                  # il n'est jamais candidat.
+                  jq -r --argjson grace "${GRACE_SECONDES}" '
+                    [ .items[]
+                      | select(.status.completionTime != null)
+                      | { ns: .metadata.namespace,
+                          n:  .metadata.name,
+                          t:  .status.completionTime,
+                          k: ( .metadata.namespace + "|"
+                             + (.metadata.labels["kratix.io/promise-name"]  // "-") + "|"
+                             + (.metadata.labels["kratix.io/resource-name"] // "-") + "|"
+                             + (.metadata.labels["kratix.io/pipeline-name"] // "-") ) } ]
+                    | group_by(.k)
+                    | map( sort_by(.t) | .[0:-1] )
+                    | flatten
+                    | .[]
+                    | select( (now - (.t | fromdateiso8601)) > $grace )
+                    | "\(.ns) \(.n)"
+                  ' /tmp/jobs.json > /tmp/candidats
+
+                  # Signaler ce qu'on voit mais qu'on ne peut pas nettoyer.
+                  for ns in $(jq -r '[.items[].metadata.namespace] | unique | .[]' /tmp/jobs.json); do
+                    case " ${NS_AUTORISES} " in
+                      *" ${ns} "*) ;;
+                      *) n=$(grep -c "^${ns} " /tmp/candidats || true)
+                         echo "⚠️ ALERTE — des Jobs Kratix s'accumulent dans « ${ns} », hors de portée du balayage (${n} candidat(s)). Ajouter un Role de suppression dans ce namespace." ;;
+                    esac
+                  done
+
+                  total=$(wc -l < /tmp/candidats | tr -d ' ')
+                  if [ "$total" = "0" ]; then
+                    echo "rien à balayer — un seul Job par pipeline, c'est déjà l'état borné"
+                    exit 0
+                  fi
+
+                  faits=0
+                  while read -r ns nom; do
+                    case " ${NS_AUTORISES} " in
+                      *" ${ns} "*)
+                        kubectl -n "$ns" delete job "$nom" --wait=false >/dev/null 2>&1 \
+                          && faits=$((faits+1)) || echo "  échec sur ${ns}/${nom}" ;;
+                    esac
+                  done < /tmp/candidats
+
+                  restants=$(jq '[.items[] | select(.status.completionTime != null)] | length' /tmp/jobs.json)
+                  echo "balayage : ${faits} Job(s) supersédé(s) retiré(s) sur ${restants} terminés — le plus récent de chaque pipeline est conservé (il porte l'empreinte courante)"
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 192Mi }
