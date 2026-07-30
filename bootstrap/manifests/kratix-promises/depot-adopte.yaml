@@ -1,0 +1,255 @@
+# PROMESSE PILOTE DE L'ADOPTION DU LEGACY (objectif LG2 — la porte du set LG).
+#
+# ÉCRITE À LA MAIN, exprès (même démarche que harbor-tf/TN3) : LG2 teste si l'ÉCHELLE
+# D'ADOPTION tient sur les réglages natifs du moteur, SANS toucher la fabrique. La
+# fabrique n'apprendra le champ `mode` qu'en LG4, une fois la mécanique prouvée ici.
+#
+# Contrat de référence : docs/ADOPTION-STANDARD.md (LG1).
+#   observe  → planOnly: true  + destroyResourcesOnDeletion: false  (lit, compare, ne touche RIEN)
+#   gouverne → approvePlan absent (le plan ATTEND une approbation) + destroy: false
+#   gere     → approvePlan: auto + destroy: true                    (le greenfield actuel)
+#
+# ⚠️ Nom `depot-adopte` DISTINCT de tout produit github existant ou à venir (collision
+# de fiches déjà payée deux fois sur ce projet).
+#
+# ⚠️ CADENCE DU PILOTE : 5m (le plancher) pour OBSERVER les tours pendant la preuve —
+# ce n'est PAS le défaut du contrat (Observé = 24h). Dit ici pour que personne ne
+# recopie cette valeur comme un modèle.
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: depot-adopte
+  labels:
+    kratix.io/promise-version: v0.1.0
+  annotations:
+    platform.kratix.io/provider: indus
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: "true"
+    # La famille des objets rendus, pour l'onglet Kubernetes (mécanisme BR3, donnée pure).
+    platform.kratix.io/operator-group: infra.contrib.fluxcd.io
+    # Sorties étiquetées (aucune n'est sensible dans ce module — décision de conception).
+    platform.kratix.io/status-schema: '{"repo_url": {"path": ".status.availableOutputs.repo_url", "label": "Adresse du depot.", "type": "string"}, "full_name": {"path": ".status.availableOutputs.full_name", "label": "Nom complet organisation/depot.", "type": "string"}, "clone_ssh": {"path": ".status.availableOutputs.clone_ssh", "label": "Adresse de clonage SSH.", "type": "string"}}'
+spec:
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+
+  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
+  # Écrit à la main ici = ce que LG4 fera dériver du variables.tf (+ l'injection des
+  # champs plateforme team et mode). L'écart éventuel sera le témoin d'équivalence.
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: depotadoptes.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: DepotAdopte
+        plural: depotadoptes
+        singular: depotadopte
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [name, organization, team]
+                  properties:
+                    name:
+                      type: string
+                      pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+                      maxLength: 100
+                      description: Nom du dépôt.
+                    organization:
+                      type: string
+                      pattern: ^[a-zA-Z0-9][a-zA-Z0-9-]*$
+                      description: Organisation GitHub qui héberge le dépôt.
+                    team:
+                      type: string
+                      description: Équipe propriétaire de la demande.
+                    description:
+                      type: string
+                      default: ""
+                      maxLength: 350
+                      description: Description affichée sur la page du dépôt.
+                    visibility:
+                      type: string
+                      enum: [private, public]
+                      default: private
+                      description: Visibilité du dépôt.
+                    default_branch:
+                      type: string
+                      default: main
+                      description: Nom de la branche principale.
+                    branches:
+                      type: array
+                      items: { type: string }
+                      default: []
+                      description: Branches supplémentaires (la principale n'est pas à répéter).
+                    protect_default_branch:
+                      type: boolean
+                      default: true
+                      description: Protéger la branche principale (revue exigée, admins compris).
+                    archive_on_destroy:
+                      type: boolean
+                      default: true
+                      description: À la suppression en mode géré, archiver plutôt que détruire.
+                    import_id:
+                      type: string
+                      default: ""
+                      pattern: ^$|^[A-Za-z0-9._-]+$
+                      description: >-
+                        ADOPTION — nom d'un dépôt EXISTANT de l'organisation à lier au
+                        lieu d'en créer un. Vide = création classique.
+                    # ── LE NIVEAU D'ADOPTION (contrat ADOPTION-STANDARD §1/§5) ──────
+                    mode:
+                      type: string
+                      enum: [observe, gouverne, gere]
+                      default: gere
+                      description: >-
+                        Niveau d'adoption. Observé = la plateforme lit et compare, ne
+                        modifie rien. Gouverné = chaque changement attend une
+                        approbation. Géré = la plateforme est la source de vérité
+                        (défaut, comportement classique).
+
+  # ── LA SOURCE DU MODULE : une dépendance, installée UNE FOIS ──────────────────
+  dependencies:
+    - apiVersion: source.toolkit.fluxcd.io/v1
+      kind: GitRepository
+      metadata:
+        name: depot-adopte-module
+        namespace: default
+      spec:
+        interval: 10m
+        url: https://github.com/Younesic/platform-gitops
+        ref:
+          tag: v0.19.0            # le module adoption-ready (import_id + ignore_changes)
+        provider: github          # le source-controller frappe le jeton de l'App lui-même
+        secretRef:
+          name: github-app
+        sparseCheckout:
+          - sources/terraform/github-repository
+
+  workflows:
+    config: {}
+
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            containers:
+              - name: rendu-terraform
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7ce1544fa5e37401629597e83a6520911246fff79491d1b1802268b1ce7d8644
+                env:
+                  - { name: MODULE_PATH, value: ./sources/terraform/github-repository }
+                  - { name: SOURCE_NAME, value: depot-adopte-module }
+                  - { name: SOURCE_NAMESPACE, value: default }
+                  - { name: CIBLE_NAMESPACE, value: default }
+                  # Le jeton GitHub vient du secret frappé par le CronJob github-token-org
+                  # (clé `token`) — mappé en GITHUB_TOKEN par `env`, PAS envFrom (les clés
+                  # du secret ne portent pas les noms de variables attendus par le provider).
+                  - { name: CREDS_SECRET_NAME, value: github-app-token-org }
+                  - { name: CHIFFREMENT_SECRET, value: terraform-chiffrement }
+                  # ⚠️ cadence du PILOTE (voir l'en-tête) — le défaut de contrat pour
+                  # un Observé est 24h.
+                  - { name: TF_INTERVAL, value: 5m }
+                  - name: VAR_MAP
+                    value: '{"name":"name","organization":"organization","description":"description","visibility":"visibility","default_branch":"default_branch","branches":"branches","protect_default_branch":"protect_default_branch","archive_on_destroy":"archive_on_destroy","import_id":"import_id"}'
+                command: [python, -c]
+                args:
+                  - |
+                    import json, os, pathlib, yaml
+
+                    o = yaml.safe_load(pathlib.Path("/kratix/input/object.yaml").read_text())
+                    nom  = o["metadata"]["name"]
+                    spec = o.get("spec") or {}
+
+                    # Les variables du module — un champ absent n'est PAS émis (défaut du
+                    # module). `mode` et `team` ne sont PAS dans VAR_MAP : champs
+                    # plateforme, jamais transmis à terraform.
+                    variables = []
+                    for champ, var in json.loads(os.environ["VAR_MAP"]).items():
+                        if champ in spec and spec[champ] is not None:
+                            variables.append({"name": var, "value": spec[champ]})
+
+                    tf = {
+                      "apiVersion": "infra.contrib.fluxcd.io/v1alpha2",
+                      "kind": "Terraform",
+                      "metadata": {"name": nom, "namespace": os.environ["CIBLE_NAMESPACE"]},
+                      "spec": {
+                        "interval": os.environ["TF_INTERVAL"],
+                        "path": os.environ["MODULE_PATH"],
+                        "sourceRef": {
+                          "kind": "GitRepository",
+                          "name": os.environ["SOURCE_NAME"],
+                          "namespace": os.environ["SOURCE_NAMESPACE"],
+                        },
+                        "storeReadablePlan": "human",
+                        "writeOutputsToSecret": {"name": nom + "-sorties"},
+                        "vars": variables,
+                        "runnerPodTemplate": {
+                          "spec": {
+                            # Le jeton du provider par l'ENVIRONNEMENT, jamais par une
+                            # variable terraform (une variable atterrit dans l'état).
+                            "env": [
+                              {"name": "GITHUB_TOKEN",
+                               "valueFrom": {"secretKeyRef": {
+                                 "name": os.environ["CREDS_SECRET_NAME"],
+                                 "key": "token"}}},
+                            ],
+                            # Le chiffrement de l'état : décision de PLATEFORME, optionnel
+                            # (un défaut visible vaut mieux qu'un pod qui refuse de naître).
+                            "envFrom": [
+                              {"secretRef": {"name": os.environ.get("CHIFFREMENT_SECRET", "terraform-chiffrement"),
+                                             "optional": True}},
+                            ],
+                          }
+                        },
+                      },
+                    }
+
+                    # ── LE NIVEAU D'ADOPTION → les réglages du moteur (ADOPTION-STANDARD §4) ──
+                    mode = str(spec.get("mode") or "gere")
+                    if mode == "observe":
+                        # Lit et compare, ne touche RIEN : plan sans apply, jamais de
+                        # destruction. L'import (si import_id) reste au stade « will be
+                        # imported » — l'état n'est matérialisé qu'à une promotion.
+                        tf["spec"]["planOnly"] = True
+                        tf["spec"]["destroyResourcesOnDeletion"] = False
+                    elif mode == "gouverne":
+                        # approvePlan ABSENT = le plan attend une approbation (posée par
+                        # PR : approvePlan: plan-main-<sha>, gatée par le portier ITSM).
+                        tf["spec"]["destroyResourcesOnDeletion"] = False
+                    else:
+                        tf["spec"]["approvePlan"] = "auto"
+                        tf["spec"]["destroyResourcesOnDeletion"] = True
+
+                    sortie = pathlib.Path("/kratix/output/terraform.yaml")
+                    sortie.write_text(yaml.safe_dump(tf, sort_keys=False, allow_unicode=True))
+                    print("rendu : Terraform/" + nom + " · mode=" + mode
+                          + " (" + str(len(variables)) + " variable(s))")
+
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+            rbac: {}
+            jobOptions: {}
