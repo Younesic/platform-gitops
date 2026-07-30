@@ -119,7 +119,7 @@ PRÉCÈDE jamais la mécanique (un badge dit ce qui est, pas ce qui est demandé
 
 | Niveau | Réglages |
 |---|---|
-| Observé | `managementPolicies: ["Observe"]` + annotation `crossplane.io/external-name: <id>` (guide officiel d'import). ⚠️ champ BETA (actif par défaut, crossplane v2.3.2) — support à éprouver PROVIDER PAR PROVIDER avant tout usage réel. |
+| Observé | `managementPolicies: ["Observe"]` + annotation `crossplane.io/external-name: <id>`. **ÉPROUVÉ sur provider-keycloak (LG8)** : atProvider reflète l'état réel, une divergence déclarée n'écrit RIEN, la suppression du MR laisse la ressource vivre. ⚠️ 3 leçons beta : l'external-name SEUL ne suffit pas (les champs d'IDENTITÉ du forProvider restent requis — « required param 'name' not set » sinon) ; les types du forProvider priment sur l'API du fournisseur (attributes = map de strings) ; `providerConfigRef` explicite avec `kind`. Toujours à éprouver PROVIDER PAR PROVIDER. |
 | Gouverné | politiques élargies SANS `Delete` + `deletionPolicy: Orphan` ; la porte reste la PR gatée (pas de mécanisme d'attente natif équivalent à approvePlan → le Gouverné crossplane est « changement par PR approuvée », dérive non corrigée impossible à garantir nativement : LIMITE DITE, à trancher en LG8). |
 | Géré | politiques complètes. |
 | Ligne rouge | **JAMAIS `Observe` sur une `Workspace` provider-terraform** (une Workspace EST une exécution) — l'observé terraform passe par tofu-controller. |

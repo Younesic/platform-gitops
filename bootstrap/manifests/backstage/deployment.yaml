@@ -77,6 +77,10 @@ spec:
             # BR16 — credentials de la GitHub App (secret MANUEL backstage-github-app,
             # pattern des creds bootstrap) : consommé par $include de l'app-config.
             - { name: github-app, mountPath: /app/github-app, readOnly: true }
+            # LG7 — le jeton d'org (rotatif, 1 h) lu en FICHIER par le connecteur
+            # d'inventaire (auth bearerFile) : kubelet rafraîchit le montage ~1 min,
+            # là où une variable d'env serait figée au boot et morte à l'expiration.
+            - { name: github-org-token, mountPath: /app/github-org-token, readOnly: true }
           readinessProbe:
             httpGet: { path: /healthcheck, port: 7007 }
             initialDelaySeconds: 30
@@ -101,6 +105,12 @@ spec:
         - name: github-app
           secret:
             secretName: backstage-github-app
+        - name: github-org-token
+          secret:
+            secretName: github-app-token-org
+            # optionnel : le pod doit pouvoir naître AVANT la première frappe —
+            # la source d'inventaire échouera proprement (isolée), pas le portail.
+            optional: true
 ---
 apiVersion: v1
 kind: Service

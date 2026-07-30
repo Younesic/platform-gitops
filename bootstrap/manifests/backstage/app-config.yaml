@@ -372,6 +372,36 @@ data:
         # client = un bloc de plus ici. Creds via env (SealedSecret
         # backstage-http-entities). NB : config lue au boot → rollout au changement.
         httpEntities:
+          # LG7 — NIVEAU 0 (Répertorié) : l'inventaire du parc GitHub de l'organisation,
+          # catalogué SANS claim ni moteur (docs/ADOPTION-STANDARD.md §2-niveau-0).
+          # Le connecteur PAGINE (Link rel=next) — sans ça GitHub tronque à 30 EN SILENCE.
+          # Owner v1 = team-platform (le « bac de triage » : le mapping fin viendra du
+          # CMDB, décision D4). Les annotations adoption-prefill-* nourrissent le geste
+          # « Adopter » pré-rempli de la console.
+          githubOrgRepos:
+            url: https://api.github.com/orgs/YounesicCo/repos?per_page=100
+            auth:
+              type: bearerFile
+              path: /app/github-org-token/token
+            entity:
+              kind: Component
+              name: 'repo-{name}'
+              title: '{full_name}'
+              spec:
+                type: kratix-repertorie
+                lifecycle: production
+                owner: group:default/team-platform
+              annotations:
+                platform.kratix.io/adoption-niveau: repertorie
+                platform.kratix.io/adopter-via: depot-adopte
+                platform.kratix.io/adoption-prefill-name: '{name}'
+                platform.kratix.io/adoption-prefill-import_id: '{name}'
+                platform.kratix.io/adoption-prefill-organization: YounesicCo
+                platform.kratix.io/adoption-prefill-visibility: '{visibility}'
+            schedule:
+              frequency: { minutes: 30 }
+              timeout: { minutes: 5 }
+              initialDelay: { seconds: 45 }
           keycloakUsers:
             # briefRepresentation=false : renvoie les ATTRIBUTS du user (dont `tech-lead`,
             # projeté en annotation ci-dessous — gate SL2, même mécanisme que le rôle O2).
