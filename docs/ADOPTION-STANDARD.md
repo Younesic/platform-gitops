@@ -52,11 +52,16 @@ d'identité n'est créé tant que le niveau ne l'exige pas** ; **la remédiation
 - **Suppression du claim** = PUR OUBLI : la ressource est intacte ; les artefacts de liaison
   (état) deviennent orphelins et sont balayés (backlog balayage — jamais détruits AVEC la
   ressource).
-- **Coût** : 1 tour = 1 pod (moteur terraform, mesuré) → **intervalle défaut LONG : `24h`**
-  (le choix de l'industrie pour la détection de dérive) ; plus court = choix conscient du
-  demandeur dans le plancher existant (≥ 5m).
-- **Falsification** : N tours sans AUCUNE mutation côté fournisseur (audit API) pendant que le
-  diff est produit ; et la ressource modifiée à la main ⇒ la dérive s'AFFICHE sans être corrigée.
+- **Coût (corrigé par le pilote LG2)** : **ZÉRO pod au repos** — le moteur produit le diff à la
+  LIAISON puis se gare (« stopped to wait for manual operations », constaté) ; un pod naît par
+  RE-VÉRIFICATION demandée, pas par intervalle. L'Observé est un GESTE de lecture, pas un régime.
+- **Re-vérification** : à la demande (le bouton « Re-vérifier » des surfaces) = le geste
+  `tfctl replan` — patch du sous-ressource status (vider `plan.pending` + les révisions) puis
+  `reconcile.fluxcd.io/requestedAt`. ⚠️ `requestedAt` SEUL ne réveille pas un objet garé.
+  La dérive CONTINUE n'est PAS une promesse de l'Observé — elle commence avec la gestion
+  (post-premier-apply) ; l'Observé promet « l'écart est montrable à tout moment, sur demande ».
+- **Falsification** : chaque plan produit sans AUCUNE mutation côté fournisseur (audit API) ;
+  ressource modifiée à la main ⇒ la re-vérification MONTRE l'écart, rien n'est réappliqué.
 
 ### Niveau 2 — Gouverné (rien ne change sans la porte)
 
@@ -105,7 +110,7 @@ PRÉCÈDE jamais la mécanique (un badge dit ce qui est, pas ce qui est demandé
 
 | Niveau | Réglages rendus par la promesse |
 |---|---|
-| Observé | `planOnly: true` + `destroyResourcesOnDeletion: false` + `storeReadablePlan: human` (+ intervalle défaut 24h). **Choix motivé** : `planOnly` plutôt qu'`approvePlan: disable` parce que le DIFF est l'outil de réassurance (même coût : 1 pod/tour) ; `disable` (dérive seule, sans plan) = variante économique possible en offre, pas le défaut. |
+| Observé | `planOnly: true` + `destroyResourcesOnDeletion: false` + `storeReadablePlan: human`. **Constaté au pilote (LG2)** : le plan est produit à la liaison PUIS l'objet SE GARE — zéro pod au repos ; re-diff = re-vérification à la demande (mécanisme tfctl replan, patch de status). Le plan lisible vit dans une **ConfigMap** `tfplan-<ns>-<nom>` (pas un Secret). `approvePlan: disable` (dérive seule) ne vaut que POST-apply — sans état, il n'y a rien à dériver : il ne convient PAS à un Observé jamais appliqué. |
 | Gouverné | `approvePlan` vide (le plan attend) + `destroyResourcesOnDeletion: false` ; approbation = `approvePlan: plan-main-<sha>` posé PAR PR, gatée portier. |
 | Géré | `approvePlan: auto` + `destroyResourcesOnDeletion` selon l'offre (défaut actuel : true). |
 | Liaison | variable de module **`import_id`** (optionnelle, défaut vide) + bloc `import` conditionnel — l'import ne MATÉRIALISE l'état qu'au premier apply (donc à la promotion) ; en Observé le plan montre « will be imported » + le diff. Règle d'or : après alignement, **0 change**. |
@@ -154,10 +159,10 @@ noms qualifiés anti-collision.
 
 | Garantie | Test | Joué en |
 |---|---|---|
-| Observé ne peut pas écrire | N tours + audit API fournisseur : zéro mutation | LG2 (b) |
-| Le plan dit la vérité (import puis plan vide) | premier plan « will be imported » ; après alignement : 0 change | LG2 (c) |
-| La dérive s'affiche sans se corriger (Observé) | mutation manuelle → visible au tour suivant, non réappliquée | LG2 (d) |
-| Suppression = pur oubli (Observé/Gouverné) | delete claim → ressource intacte ; sort de l'état documenté | LG2 (e) |
+| Observé ne peut pas écrire | chaque plan + audit API fournisseur : zéro mutation | LG2 (b) ✅ |
+| Le plan dit la vérité (import puis plan vide) | premier plan « will be imported » ; après alignement : 0 add / 0 destroy, seul l'enregistrement protecteur d'archive_on_destroy | LG2 (c) ✅ |
+| La dérive s'affiche sans se corriger (Observé) | mutation manuelle → visible à la RE-VÉRIFICATION, non réappliquée | LG2 (d) ✅ |
+| Suppression = pur oubli (Observé/Gouverné) | delete claim → ressource intacte ; l'état devient ORPHELIN (constaté — pièce du backlog balayage) | LG2 (e) ✅ |
 | Import idempotent | ressource en état + bloc import toujours présent → ni erreur ni ré-import | LG3 (g de LG2, rejoué post-apply) |
 | Gouverné bloque sans approbation | merge tenté sans ticket approuvé → rouge ; contenu changé après approbation → re-bloqué | LG3 (a), (e) |
 | Géré corrige seul | dérive provoquée → corrigée dans l'intervalle | LG3 (c) |
