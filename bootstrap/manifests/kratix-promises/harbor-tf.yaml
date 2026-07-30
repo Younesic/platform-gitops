@@ -133,7 +133,7 @@ spec:
               # Pousse le Template scaffolder et la fiche de la promesse. AUCUNE
               # adaptation terraform : c'est le conteneur partagé, tel quel.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7fa2fb3c168a5d1efdebbbaa222391be61fb2a8f4ddb88f46189307cedee82d7
 
     resource:
       configure:
@@ -149,7 +149,7 @@ spec:
               # on veut savoir si la plateforme accueille le résultat, pas fabriquer l'outil.
               # L'image est celle de la fabrique — déjà pinnée, déjà présente.
               - name: rendu-terraform
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:7ce1544fa5e37401629597e83a6520911246fff79491d1b1802268b1ce7d8644
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:091cefad85a9bf74175f23e070a1e00edba05b447eac079193b299eefbc35ec4
                 env:
                   - { name: MODULE_PATH, value: ./sources/terraform/harbor-project }
                   - { name: SOURCE_NAME, value: harbor-tf-module }
@@ -233,6 +233,6 @@ spec:
               # TOUTE la sortie — c'est ce qui doit labelliser la ressource Terraform
               # SANS une ligne écrite pour terraform.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7fa2fb3c168a5d1efdebbbaa222391be61fb2a8f4ddb88f46189307cedee82d7
             rbac: {}
             jobOptions: {}

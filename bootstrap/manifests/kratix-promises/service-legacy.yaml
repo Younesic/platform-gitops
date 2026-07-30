@@ -477,7 +477,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7fa2fb3c168a5d1efdebbbaa222391be61fb2a8f4ddb88f46189307cedee82d7
             name: backstage
             env:
             - name: CURATION_REV
@@ -499,7 +499,7 @@ spec:
               value: ServiceLegacy
             image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
             name: from-api-to-operator
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:721ee25eaf8f5f2974b0a6b1cdf83bb45c70617563d76086c031ef1687c59ce5
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7fa2fb3c168a5d1efdebbbaa222391be61fb2a8f4ddb88f46189307cedee82d7
             name: backstage
           jobOptions: {}
           rbac: {}
