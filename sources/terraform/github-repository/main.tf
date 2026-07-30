@@ -18,6 +18,27 @@ resource "github_repository" "this" {
   # survit en lecture seule. Détruire du code sur une suppression de ticket est le
   # genre d'irréversible qu'on ne met pas en défaut.
   archive_on_destroy = var.archive_on_destroy
+
+  # ── ADOPTION : le plan d'un dépôt IMPORTÉ doit finir VIDE ──────────────────────
+  # Trois familles d'attributs pollueraient le plan d'adoption sans rien dire d'utile :
+  #   · `auto_init` — ne sert qu'à la CRÉATION ; sur un dépôt importé il est faux en
+  #     état et vrai en config, un écart sans aucun effet réel ;
+  #   · `has_issues/has_projects/has_wiki` — HORS CONTRAT : le module ne les gouverne
+  #     pas, il ne doit donc JAMAIS les modifier (ni à l'adoption, ni après) ;
+  #   · `ignore_vulnerability_alerts_during_read` — drapeau virtuel du provider.
+  # ⚠️ `archive_on_destroy` n'est PAS ignoré, et c'est voulu : l'ignorer le laisserait
+  # vide dans l'état d'un dépôt adopté, et une suppression DÉTRUIRAIT au lieu
+  # d'archiver. Son enregistrement au premier apply est le seul « change » légitime
+  # d'une adoption alignée — il est PROTECTEUR.
+  lifecycle {
+    ignore_changes = [
+      auto_init,
+      has_issues,
+      has_projects,
+      has_wiki,
+      ignore_vulnerability_alerts_during_read,
+    ]
+  }
 }
 
 # ── La branche principale ────────────────────────────────────────────────────────

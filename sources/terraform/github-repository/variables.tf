@@ -103,6 +103,18 @@ variable "archive_on_destroy" {
   description = "À la suppression de la demande : archiver le dépôt (le code est conservé, en lecture seule) plutôt que le détruire."
 }
 
+variable "import_id" {
+  type        = string
+  default     = ""
+  description = "ADOPTION — nom d'un dépôt EXISTANT de l'organisation, à LIER au lieu d'en créer un. Vide = création classique. Tant que la demande reste en Observé, rien n'est modifié : la plateforme lit le dépôt et montre l'écart."
+  validation {
+    # Vide (pas d'adoption), OU un nom de dépôt valide — la forme `vide-ou-motif`
+    # se dérive fidèlement dans le formulaire (le dérivateur relâche pour le vide).
+    condition     = var.import_id == "" || can(regex("^[A-Za-z0-9._-]+$", var.import_id))
+    error_message = "Nom de dépôt invalide : lettres, chiffres, points, tirets et underscores seulement."
+  }
+}
+
 # ⚠️ CE QUI N'EST PAS DANS LE CONTRAT, et pourquoi — les absences sont des décisions.
 #
 # · `auto_init` — FIXÉ à true dans main.tf, pas exposé. Un dépôt sans commit initial n'a
