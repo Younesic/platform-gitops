@@ -100,10 +100,9 @@ spec:
                 image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:7fa2fb3c168a5d1efdebbbaa222391be61fb2a8f4ddb88f46189307cedee82d7
 
               # 3) LE ROUTEUR — APRÈS bc : relit ses selectors, COMPLÈTE avec le niveau.
-              #    ⚠️ L'entrée porte environment: platform EN PLUS d'adoption : le
-              #    strictMatchLabels des Destinations d'adoption exige TOUTES leurs
-              #    étiquettes. En mode gere : {environment: platform} seul → worker-1
-              #    (explicite, mieux que le tirage des works sans selectors).
+              #    Mode observe/gouverne → {adoption: <mode>} SEUL (voir le
+              #    commentaire des Destinations) ; mode gere → {environment: platform}
+              #    → worker-1 (explicite, mieux que le tirage des works sans selectors).
               - name: routeur
                 image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:091cefad85a9bf74175f23e070a1e00edba05b447eac079193b299eefbc35ec4
                 command: [python, -c]
@@ -116,9 +115,13 @@ spec:
                     entrees = yaml.safe_load(p.read_text()) if p.exists() else []
                     if not isinstance(entrees, list):
                         entrees = []
-                    labels = {"environment": "platform"}
-                    if mode in ("observe", "gouverne"):
-                        labels["adoption"] = mode
+                    # ⚠️ La clé adoption SEULE pour observe/gouverne : la correspondance
+                    # est par sous-ensemble — ajouter environment ferait AUSSI matcher
+                    # worker-1... et inversement, une entrée environment+adoption ne
+                    # matcherait plus les destinations d'adoption (qui ne portent QUE
+                    # adoption). Constaté à la porte, pas supposé.
+                    labels = {"adoption": mode} if mode in ("observe", "gouverne") \
+                        else {"environment": "platform"}
                     entrees.append({"directory": "", "matchLabels": labels})
                     p.parent.mkdir(parents=True, exist_ok=True)
                     p.write_text(yaml.safe_dump(entrees, sort_keys=False))

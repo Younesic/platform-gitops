@@ -12,12 +12,15 @@
 # /kratix/metadata/destination-selectors.yaml {environment: platform, adoption: <mode>}
 # (routage par la donnée du claim — natif Kratix, le mécanisme conçu par RT2).
 #
-# ⚠️ `strictMatchLabels: true` EST LE VERROU. Sémantique constatée sur la CRD vivante :
-# « An empty label set on the work won't be scheduled to this destination » — un claim
-# ordinaire (selectors {environment: platform} ou vides) ne peut JAMAIS tomber ici par
-# tirage : il faudrait qu'il porte explicitement la clé `adoption`. Sans ce verrou, le
-# scheduling aléatoire des works sans selectors pourrait ranger un claim ORDINAIRE dans
-# un chemin jamais appliqué — une panne silencieuse de provisionnement.
+# ⚠️⚠️ LE LABEL `adoption` EST SEUL, ET C'EST LE VRAI VERROU — appris de la PORTE :
+# la correspondance Kratix est par SOUS-ENSEMBLE (selectors du work ⊆ labels de la
+# destination) et `strictMatchLabels` ne bloque QUE les works aux selectors VIDES.
+# Première version (labels {environment: platform, adoption: x}) : les DÉPENDANCES de
+# TOUTES les promesses ordinaires (selector {environment: platform}) sont IMMÉDIATEMENT
+# entrées dans les chemins d'adoption, et un claim gere y est tombé — CONSTATÉ sur les
+# workplacements, pas supposé. Sans `environment` dans les labels, un selector ordinaire
+# ne peut plus matcher ; et `strictMatchLabels` ferme le dernier trou (les works sans
+# selectors, qui sinon se placent au hasard).
 #
 # ⚠️ `initWorkloads: enabled: true` (comme worker-1) : crée le chemin dans kratix-state
 # dès la naissance de la Destination — sans lui, les Applications ArgoCD pointeraient un
@@ -28,7 +31,6 @@ kind: Destination
 metadata:
   name: adoption-observe
   labels:
-    environment: platform
     adoption: observe
 spec:
   path: adoption/observe
@@ -42,7 +44,6 @@ kind: Destination
 metadata:
   name: adoption-gouverne
   labels:
-    environment: platform
     adoption: gouverne
 spec:
   path: adoption/gouverne
