@@ -1,0 +1,52 @@
+# ── AU2 : LES DESTINATIONS DE L'ADOPTION — le routage par NIVEAU ────────────────
+#
+# Le niveau d'adoption des moteurs helm/operator/compound se règle dans ArgoCD
+# (docs/ADOPTION-STANDARD.md §4 : « la dernière couche avant la ressource réelle »).
+# Trois politiques ⇒ trois chemins du statestore ⇒ trois Applications :
+#
+#   worker-1            (existant)          gere      automated{selfHeal,prune}
+#   adoption/observe    (cette Destination) observe   AUCUN syncPolicy — diff seul
+#   adoption/gouverne   (cette Destination) gouverne  automated SANS selfHeal SANS prune
+#
+# Un pipeline route la sortie d'un claim par SON mode : il écrit
+# /kratix/metadata/destination-selectors.yaml {environment: platform, adoption: <mode>}
+# (routage par la donnée du claim — natif Kratix, le mécanisme conçu par RT2).
+#
+# ⚠️ `strictMatchLabels: true` EST LE VERROU. Sémantique constatée sur la CRD vivante :
+# « An empty label set on the work won't be scheduled to this destination » — un claim
+# ordinaire (selectors {environment: platform} ou vides) ne peut JAMAIS tomber ici par
+# tirage : il faudrait qu'il porte explicitement la clé `adoption`. Sans ce verrou, le
+# scheduling aléatoire des works sans selectors pourrait ranger un claim ORDINAIRE dans
+# un chemin jamais appliqué — une panne silencieuse de provisionnement.
+#
+# ⚠️ `initWorkloads: enabled: true` (comme worker-1) : crée le chemin dans kratix-state
+# dès la naissance de la Destination — sans lui, les Applications ArgoCD pointeraient un
+# chemin inexistant (ComparisonError). Contrepartie : les canaries Kratix y naissent
+# aussi → les Applications les EXCLUENT (elles n'ont pas à être appliquées ici).
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: adoption-observe
+  labels:
+    environment: platform
+    adoption: observe
+spec:
+  path: adoption/observe
+  strictMatchLabels: true
+  stateStoreRef:
+    name: default
+    kind: GitStateStore
+---
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: adoption-gouverne
+  labels:
+    environment: platform
+    adoption: gouverne
+spec:
+  path: adoption/gouverne
+  strictMatchLabels: true
+  stateStoreRef:
+    name: default
+    kind: GitStateStore

@@ -1,0 +1,32 @@
+# ── AU2 : L'APPLICATION DE L'OBSERVÉ — le diff sans l'apply ─────────────────────
+#
+# ⚠️ AUCUN `syncPolicy`, ET C'EST TOUT LE CONTRAT : ArgoCD calcule et AFFICHE le diff
+# live↔déclaré (OutOfSync par ressource, panneau de diff complet) mais n'applique
+# JAMAIS rien. Pour un claim Observé, ce diff EST l'écran « voici ce que la gestion
+# changerait » — l'équivalent exact du « will be imported » du moteur terraform.
+#
+# La lecture seule est PAR CONSTRUCTION : il n'existe aucun chemin de code qui
+# applique — pas une option qu'on n'active pas, une absence de mécanisme.
+# (Contrat : docs/ADOPTION-STANDARD.md §4 — décision « rien ne converge sans
+# déclenchement humain ».)
+#
+# ⚠️ Un état OutOfSync PERMANENT est ici LA SANTÉ NORMALE, pas une anomalie : l'écart
+# affiché est la fonction même du niveau. Ne jamais « corriger » cette app en lui
+# ajoutant un syncPolicy — ce serait détruire la garantie du niveau Observé.
+#
+# Les canaries Kratix (kratix-canary-*) sont exclus : ils naissent avec la Destination
+# (initWorkloads) et n'ont pas vocation à être appliqués — ni même montrés en écart.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: adoption-observe
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "3" }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/kratix-state.git
+    targetRevision: main
+    path: adoption/observe
+    directory: { recurse: true, exclude: "{**/.kratix/**,**/kratix-canary-*}" }
+  destination: { server: https://kubernetes.default.svc, namespace: default }

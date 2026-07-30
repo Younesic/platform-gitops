@@ -1,0 +1,33 @@
+# ── AU2 : L'APPLICATION DU GOUVERNÉ — « rien ne converge sans déclenchement humain »
+#
+# `automated` SANS selfHeal SANS prune (contrat ADOPTION-STANDARD §4, décision
+# utilisateur du 2026-07-30) :
+#
+#   · un CHANGEMENT s'applique quand le statestore change — c'est-à-dire quand un
+#     humain a mergé une PR approuvée (gatée par le portier ITSM) : le merge EST le
+#     déclenchement humain ;
+#   · une DÉRIVE (modification manuelle du live) reste OutOfSync — VISIBLE, jamais
+#     corrigée : selfHeal est absent, et la corriger sera un geste humain dédié
+#     (le futur bouton « Corriger la dérive », jumeau du « Re-vérifier ») ;
+#   · rien n'est jamais DÉTRUIT : prune est absent — la suppression d'un claim
+#     adopté est un oubli, pas une destruction (ceinture du contrat §3).
+#
+# ⚠️ Ne JAMAIS ajouter selfHeal ou prune à cette app : chacun des deux détruirait une
+# garantie du niveau (la dérive-visible, ou l'oubli-à-la-suppression).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: adoption-gouverne
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "3" }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/kratix-state.git
+    targetRevision: main
+    path: adoption/gouverne
+    directory: { recurse: true, exclude: "{**/.kratix/**,**/kratix-canary-*}" }
+  destination: { server: https://kubernetes.default.svc, namespace: default }
+  syncPolicy:
+    automated: { selfHeal: false, prune: false }
+    syncOptions: [ CreateNamespace=true, ServerSideApply=true ]
