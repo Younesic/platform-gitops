@@ -108,11 +108,22 @@ Règles transverses : une transition ne saute jamais la porte quand elle ÉLARGI
 (monter = approuver) ; descendre est libre d'approbation mais tracé (PR) ; l'affichage ne
 PRÉCÈDE jamais la mécanique (un badge dit ce qui est, pas ce qui est demandé).
 
+⚠️ **Le geste de bascule (helm/operator/compound) — CONSTATÉ AU2** : Kratix ne re-place
+JAMAIS un workloadGroup déjà placé — ni quand les labels d'une Destination changent (pas
+même un label `misscheduled`), ni quand le selector du work change (un changement de
+`mode`). Le contenu du placement est mis à jour, sa CIBLE jamais. Toute transition qui
+change le chemin (promotion/rétrogradation) inclut donc la suppression du workplacement
+périmé → le scheduler re-place selon le selector courant (<30 s, constaté dans les deux
+sens). Un geste PLATEFORME, automatisé côté portail (AU6) — jamais demandé à l'humain,
+même famille que le « Re-vérifier » (patch d'objet interne, jamais la ressource).
+
 ⚠️ **Suppression d'un claim ADOPTÉ = OUBLI, à TOUS les niveaux (v1).** Les ressources issues
 d'une adoption (liaison renseignée) portent la ceinture
 `argocd.argoproj.io/sync-options: Prune=false,Delete=false` quel que soit le mode. Pourquoi :
 un changement de mode fait CHANGER les fichiers de chemin — la rétrogradation Géré→Observé
 fait QUITTER l'application `prune: true`, qui DÉTRUIRAIT les objets sans cette ceinture.
+**PROUVÉ EMPIRIQUEMENT (AU2)** : la rétrogradation d'un témoin SANS ceinture a rendu
+`ConfigMap … pruned` — la destruction constatée sur un objet inoffensif, pas supposée.
 C'est aussi l'esprit du contrat (« adoption ≠ propriété immédiate ») et le miroir
 d'`archive_on_destroy` côté terraform. Détruire volontairement un adopté = un geste explicite,
 hors v1 (backlog nommé).
@@ -147,6 +158,13 @@ hors v1 (backlog nommé).
 - une **dérive** n'est JAMAIS corrigée seule — la corriger est un geste humain dédié
   (sync manuel ; futur bouton « Corriger la dérive », jumeau du « Re-vérifier ») ;
 - la dérive est **VISIBLE DANS LA CONSOLE** — l'exigence de premier rang du niveau.
+
+⚠️ **Périmètre du re-apply (constaté AU2, dit franchement)** : `automated` sans selfHeal
+resynchronise à CHAQUE nouveau commit sur le chemin — le prochain merge (d'un objet A)
+réapplique le chemin ENTIER et corrige au passage la dérive d'un objet B du même chemin.
+La chaîne causale remonte toujours à un geste humain (la règle est tenue) ; mais le
+périmètre du geste est LE CHEMIN, pas l'objet mergé. En fenêtre calme (aucun commit), la
+dérive tient indéfiniment et reste OutOfSync — prouvé.
 
 Conséquences par moteur, dites franchement :
 
@@ -191,6 +209,17 @@ politiques, trois chemins du statestore (le routage par la donnée du claim : AU
 | Gouverné | `automated: {selfHeal: false, prune: false}` | seul un merge APPROUVÉ s'applique ; la dérive reste OutOfSync, VISIBLE (console), jamais corrigée sans geste humain ; rien n'est détruit |
 | Géré | `automated: {selfHeal: true, prune: true}` | l'actuel (`kratix-destination.yaml:19`) |
 
+⚠️ **La règle des labels (constatée AU2, la porte a réfuté l'hypothèse initiale)** : la
+correspondance Kratix est par SOUS-ENSEMBLE (selectors du work ⊆ labels de la Destination)
+et `strictMatchLabels` ne bloque QUE les works aux selectors VIDES. Les Destinations
+d'adoption ne portent donc QUE `{adoption: observe|gouverne}` — aucun label partagé avec
+worker-1 — sinon les deps de TOUTES les promesses (selector `{environment: platform}`)
+entrent dans les chemins d'adoption, et un claim gere peut y tomber (vécu). Le renderer
+écrit `{adoption: <mode>}` SEUL pour observe/gouverne, `{environment: platform}` pour gere.
+Suppression par niveau, contraste prouvé (AU2) : observé = pur oubli · gouverné = l'objet
+SURVIT et ArgoCD le SIGNALE (OutOfSync « requires pruning » — le retrait réel reste un
+geste humain) · géré = destruction pilotée.
+
 - **Liaison helm = la CONVENTION DE NOMS** : les values du claim déterminent les noms que le
   chart rend ; mêmes noms = même objet. La promotion applique EN PLACE (SSA) : objets repris,
   **UID inchangés** — le protocole de bascule historique du projet, formalisé en niveau.
@@ -213,7 +242,7 @@ politiques, trois chemins du statestore (le routage par la donnée du claim : AU
 |---|---|---|---|---|
 | terraform | catalogue (par source) | `planOnly` ✅ LG2 | `approvePlan` attend ✅ LG3 | `approvePlan: auto` ✅ |
 | crossplane | catalogue (par source) | `managementPolicies: [Observe]` ✅ LG8 (MR) → par le produit : AU4 | **non offert** (règle du Gouverné — limite dite) | policies complètes ✅ |
-| helm | catalogue (par source) | app sans sync (le diff) → AU2/AU3 | app sans selfHeal/prune → AU2 | l'actuel ✅ |
+| helm | catalogue (par source) | app sans sync (le diff) ✅ AU2 (témoin) → pilote produit : AU3 | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
 | operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
 | compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
 
