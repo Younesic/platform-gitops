@@ -482,6 +482,14 @@ data:
           rules:
             - allow: [Template]
 
+        # LG10 — la PROMESSE-TICKET : « Demander un geste sur l'identité GitHub ». Le legacy
+        # SANS API entre au catalogue en classe ACTION (LG9) : un ticket ITSM, pas une
+        # ressource. Aucune surveillance, aucune réparation, aucun défaire.
+        - type: url
+          target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/demande-geste-identite.yaml
+          rules:
+            - allow: [Template]
+
         # SL5/BR8 — produit « Offboarder une squad » (Platform, gated tech-lead, miroir).
         - type: url
           target: https://github.com/Younesic/platform-gitops/blob/main/bootstrap/manifests/backstage/templates/offboard-squad.yaml

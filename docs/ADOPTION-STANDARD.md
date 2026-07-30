@@ -146,10 +146,38 @@ noms qualifiés anti-collision.
 3. Les libellés français du §1 sont LA référence d'affichage (sous réserve de validation
    utilisateur finale).
 
-## 6. Ce que ce contrat NE couvre PAS (dit franchement)
+## 6. Le legacy SANS API — et le TEST D'ENTRÉE qui l'encadre
 
-- Le legacy SANS surface d'API pilotable (procédures humaines, systèmes fermés) → motif
-  « promesse-ticket », objectif LG9, GATED au premier besoin réel.
+L'échelle des §2-§4 ne couvre que ce qui a **une API pilotable**. Pour le reste — procédures
+humaines, systèmes fermés, consoles web sans API — la plateforme offre une **promesse-ticket**
+(objectif LG10) : le contrat self-service d'abord (un formulaire, une demande tracée, une
+référence rendue), l'exécution HUMAINE derrière, et l'automatisation plus tard **derrière le
+même contrat**.
+
+**L'aiguillage** — on y entre par constat, jamais par déclaration :
+
+| Ce que le système expose | → le bon barreau |
+|---|---|
+| une API pilotable (écriture) | un moteur : terraform, crossplane, helm, operator |
+| une API en LECTURE seule | Répertorié (§2 niveau 0) ou Observé (§2 niveau 1) |
+| **aucune API — CONSTATÉE** | **la promesse-ticket** (LG10), classe « Action » |
+
+⚠️ **« Constatée » veut dire mesurée, pas affirmée.** L'exemple de référence : la création
+d'une organisation GitHub — `POST /admin/organizations` rend **404** sur github.com (l'appel
+n'existe que sur GitHub Enterprise Server). C'est ce genre de trace qu'on exige avant d'admettre
+une promesse-ticket.
+
+**Pourquoi cette exigence.** Sans elle, le motif devient l'échappatoire de qui n'a pas envie
+d'écrire un module — et la plateforme institutionnaliserait le travail manuel qu'elle est censée
+réduire. Le ticket est un aveu d'absence d'API, pas un raccourci.
+
+**Et ce que la promesse-ticket ne promet PAS**, écrit sur la carte, dans la description et dans
+le corps du ticket : elle ne surveille rien, ne se répare pas, et retirer la demande ne défait
+rien. D'où sa **classe distincte** au marketplace (LG9, `entry-kind: action`) : une entrée qui
+n'offre pas la même garantie que ses voisines doit se voir comme telle.
+
+## 6bis. Ce que ce contrat NE couvre PAS (dit franchement)
+
 - La migration d'objets DÉJÀ gérés par une autre Composition/outillage (changement de
   propriétaire technique) — un autre sujet, à ne pas confondre avec l'adoption.
 - La remédiation par contrôle (liste de contrôles autorisés en Géré) — backlog nommé, hérité de

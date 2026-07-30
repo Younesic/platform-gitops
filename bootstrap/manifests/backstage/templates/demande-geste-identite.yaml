@@ -1,0 +1,114 @@
+# LG10 — LA PROMESSE-TICKET : le legacy SANS API entre au catalogue.
+#
+# CE QUE C'EST : une porte self-service pour des gestes que la plateforme ne PEUT PAS faire —
+# ils n'ont aucune API. Le contrat d'abord (un formulaire, une demande tracée, une référence
+# rendue), l'exécution HUMAINE derrière. C'est le seul vrai motif brownfield de Syntasso, et
+# il tient parce qu'il ne ment pas.
+#
+# ⚠️ CE QUE ÇA N'EST PAS, et c'est dit partout (description, carte, corps du ticket) :
+#   · ça ne surveille rien        · ça ne se répare pas
+#   · supprimer la demande ne défait rien   · le geste est fait par un humain
+# D'où `entry-kind: action` (LG9) : le marketplace la range dans la section ACTIONS, jamais
+# à côté des ressources — « le guichet peut être unique, la GARANTIE ne peut pas l'être ».
+#
+# ⚠️ LES 4 GESTES DE LA LISTE SONT CONSTATÉS SANS API, pas supposés :
+#   · permissions d'une GitHub App        → réglage web de l'App, aucune API
+#   · installer l'App sur une organisation → le sélecteur web est le SEUL chemin (URL ciblées : 404)
+#   · créer une organisation GitHub        → POST /admin/organizations = 404 sur github.com
+#                                            (réservé à GitHub Enterprise Server)
+#   · révoquer un jeton                    → aucune API
+# C'est le TEST D'ENTRÉE du contrat (ADOPTION-STANDARD §6) : on constate l'absence d'API,
+# on ne la déclare pas. Sans quoi ce produit deviendrait l'échappatoire de qui n'a pas envie
+# d'écrire un module.
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: demande-geste-identite
+  title: Demander un geste sur l'identité GitHub
+  description: >-
+    Demande un geste que la plateforme ne peut pas faire elle-même (aucune API) : permissions
+    de la GitHub App, installation sur une organisation, création d'organisation, révocation
+    d'un jeton. Ouvre un ticket ITSM et vous en rend la référence. Ne surveille rien, ne se
+    répare pas, et retirer la demande ne défait rien.
+  annotations:
+    platform.kratix.io/exposure: product
+    platform.kratix.io/audience: consumer
+    platform.kratix.io/marketplace: "true"
+    platform.kratix.io/provider: platform
+    # LG9 — LE DISCRIMINANT. Une exécution qui se termine, pas une ressource possédée.
+    platform.kratix.io/entry-kind: action
+  tags: [platform, action, identite, github, itsm]
+spec:
+  type: portal-product
+  owner: group:default/team-platform
+  parameters:
+    - title: Le geste
+      required: [geste, cible, justification]
+      properties:
+        geste:
+          title: Geste demandé
+          type: string
+          description: >-
+            Ces gestes n'ont AUCUNE API : un humain les fera dans l'interface web de GitHub.
+          enum:
+            - Ajouter une permission à la GitHub App
+            - Installer la GitHub App sur une organisation
+            - Créer une organisation GitHub
+            - Révoquer un jeton
+        cible:
+          title: Cible
+          type: string
+          description: >-
+            L'élément concerné — nom de l'organisation, du dépôt, ou du jeton (jamais sa valeur).
+          maxLength: 120
+        justification:
+          title: Pourquoi
+          type: string
+          description: À quoi ce geste sert — c'est ce que lira la personne qui l'exécutera.
+          maxLength: 500
+          ui:widget: textarea
+    - title: Précisions (facultatif)
+      properties:
+        permission:
+          title: Permission concernée
+          type: string
+          description: >-
+            Si le geste porte sur une permission (ex. « Administration: write »).
+          maxLength: 80
+        urgence:
+          title: Ce que ça bloque
+          type: string
+          description: Ce qui est à l'arrêt tant que le geste n'est pas fait (facultatif).
+          maxLength: 200
+
+  steps:
+    # ── UNE SEULE ÉTAPE, et c'est tout le produit ────────────────────────────
+    # Pas de PR : il n'y a rien à appliquer. Le ticket EST la demande.
+    # ⚠️ Défaut fermé : iTop injoignable ⇒ l'action échoue et le demandeur le VOIT.
+    # Une demande qui « réussit » sans ticket serait pire que pas de produit du tout.
+    - id: ticket
+      name: Ouvrir la demande dans l'ITSM
+      action: itop:open-ticket
+      input:
+        geste: ${{ parameters.geste }}
+        cible: ${{ parameters.cible }}
+        justification: ${{ parameters.justification }}
+        details:
+          permission: ${{ parameters.permission }}
+          bloque: ${{ parameters.urgence }}
+
+  output:
+    links:
+      - title: Votre demande dans l'ITSM
+        url: ${{ steps.ticket.output.url }}
+    text:
+      - title: Référence de la demande
+        content: >-
+          **${{ steps.ticket.output.ref }}** — suivez-la dans l'ITSM.
+      - title: Ce qui va se passer
+        content: >-
+          Un humain va exécuter ce geste, puis clôturer le ticket. **La plateforme
+          n'automatise rien ici** : elle ne surveillera pas le résultat, ne le réparera pas
+          en cas de changement, et retirer cette demande ne défera pas le geste.
+          Le jour où ce geste aura une API, il passera par ce même formulaire — c'est
+          l'exécution derrière qui changera, pas votre parcours.
