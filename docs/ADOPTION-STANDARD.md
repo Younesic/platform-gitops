@@ -68,8 +68,12 @@ d'identité n'est créé tant que le niveau ne l'exige pas** ; **la remédiation
 - **Permis** : tout l'Observé ; PLUS : préparer un changement (plan) qui ATTEND une approbation ;
   appliquer UNIQUEMENT un plan approuvé ; évaluer l'écart à un profil de conformité (v1 : le
   diff du plan EST l'évaluation ; profils nommés = backlog).
-- **Interdit** : appliquer sans approbation (le défaut est fermé) ; corriger la dérive seul ;
-  détruire (même à la suppression du claim) ; escalader des droits non déclarés.
+- **Interdit** : appliquer sans approbation (le défaut est fermé) ; **CONVERGER SANS
+  DÉCLENCHEMENT HUMAIN** — la règle du Gouverné (décision utilisateur, 2026-07-30) : la
+  dérive n'est JAMAIS corrigée seule, la corriger est un geste humain dédié ; détruire
+  (même à la suppression du claim) ; escalader des droits non déclarés.
+- **Exigence de visibilité** : la dérive APPARAÎT DANS LA CONSOLE (« dérive détectée »),
+  jamais seulement dans un outil d'infrastructure — c'est l'essentiel du niveau.
 - **Sorties attendues** : le plan lisible cité dans la demande d'approbation ; l'état
   « en attente d'approbation — ‹réf ticket› » ; l'empreinte couverte par l'approbation.
 - **Suppression du claim** = pur oubli (comme Observé).
@@ -97,14 +101,65 @@ d'identité n'est créé tant que le niveau ne l'exige pas** ; **la remédiation
 | Observé → Gouverné | oui | PR d'une ligne (`mode`) | portier ITSM (empreinte) |
 | Gouverné → Géré | oui | PR d'une ligne | portier ITSM ; le PREMIER apply est le moment de vérité : plan cité, approuvé, puis plan VIDE |
 | Géré → Gouverné / Observé | oui (rétrogradation) | PR d'une ligne | l'état est CONSERVÉ ; plus aucune écriture ; JAMAIS de destruction en descendant |
-| tout niveau → suppression du claim | oui | suppression de la demande | Observé/Gouverné : pur oubli. Géré : le contrat de l'offre s'applique (destruction si déclarée) |
+| tout niveau → suppression du claim | oui | suppression de la demande | Observé/Gouverné : pur oubli. Géré : le contrat de l'offre s'applique (destruction si déclarée) — ⚠️ sauf ADOPTÉ : oubli même en Géré, v1 (ceinture ci-dessous) |
 | Répertorié → rien | oui | l'entité disparaît quand la source ne la liste plus (full-mutation) | — |
 
 Règles transverses : une transition ne saute jamais la porte quand elle ÉLARGIT les droits
 (monter = approuver) ; descendre est libre d'approbation mais tracé (PR) ; l'affichage ne
 PRÉCÈDE jamais la mécanique (un badge dit ce qui est, pas ce qui est demandé).
 
+⚠️ **Suppression d'un claim ADOPTÉ = OUBLI, à TOUS les niveaux (v1).** Les ressources issues
+d'une adoption (liaison renseignée) portent la ceinture
+`argocd.argoproj.io/sync-options: Prune=false,Delete=false` quel que soit le mode. Pourquoi :
+un changement de mode fait CHANGER les fichiers de chemin — la rétrogradation Géré→Observé
+fait QUITTER l'application `prune: true`, qui DÉTRUIRAIT les objets sans cette ceinture.
+C'est aussi l'esprit du contrat (« adoption ≠ propriété immédiate ») et le miroir
+d'`archive_on_destroy` côté terraform. Détruire volontairement un adopté = un geste explicite,
+hors v1 (backlog nommé).
+
 ## 4. Déclinaison par moteur
+
+> **LE PRINCIPE (AU1)** : le niveau d'adoption ne se joue jamais dans le moteur — il se règle
+> dans **la DERNIÈRE couche avant la ressource réelle**, celle qui écrit dans le monde.
+> ArgoCD livre partout, mais il n'est cette dernière couche QUE pour helm (les manifestes
+> SONT la ressource) ; pour les autres, il ne livre qu'une INTENTION (XR, CR, objet
+> Terraform) qu'un exécuteur traduit ensuite — et c'est LUI qui porte les réglages :
+>
+> | Moteur | ArgoCD y livre… | La dernière couche | Les réglages du niveau |
+> |---|---|---|---|
+> | helm | la ressource elle-même | **ArgoCD** | la politique de sync de l'Application |
+> | operator | le CR (l'intention) | ArgoCD pour le CR ; l'opérateur pour ses enfants | syncPolicy (CR) — l'opérateur maintient ses enfants conformes au CR approuvé |
+> | crossplane | le XR (l'intention) | **le provider** | `managementPolicies` / `deletionPolicy` / `external-name` |
+> | terraform | l'objet Terraform (l'intention) | **tofu-controller** | `planOnly` / `approvePlan` / `destroyResourcesOnDeletion` |
+>
+> Corollaire : le DIFF d'ArgoCD compare git ↔ cluster — il ne voit le monde réel QUE pour
+> helm. L'écart réel d'un adopté crossplane se lit dans `atProvider` (le provider), celui
+> d'un terraform dans le plan (tofu). Preuve interne du levier :
+> `bootstrap/apps/kratix-destination.yaml:19` (`automated{selfHeal,prune}`) — tout ce que
+> rendent helm/operator/compound est aujourd'hui forcé en Géré par CE seul réglage.
+
+### La règle du Gouverné (DÉCISION UTILISATEUR, gravée le 2026-07-30)
+
+**« RIEN NE CONVERGE SANS DÉCLENCHEMENT HUMAIN. »** Une seule définition, pas de variantes :
+
+- un **changement** converge parce qu'un humain a mergé une PR approuvée (le merge EST le
+  déclenchement — gaté par le portier ITSM, le mode et le spec sont dans l'empreinte) ;
+- une **dérive** n'est JAMAIS corrigée seule — la corriger est un geste humain dédié
+  (sync manuel ; futur bouton « Corriger la dérive », jumeau du « Re-vérifier ») ;
+- la dérive est **VISIBLE DANS LA CONSOLE** — l'exigence de premier rang du niveau.
+
+Conséquences par moteur, dites franchement :
+
+| Moteur | Le Gouverné sous cette règle |
+|---|---|
+| terraform | NATIF : `approvePlan` attend, la dérive est détectée et jamais corrigée (prouvé LG3). |
+| helm | app `automated: {selfHeal: false, prune: false}` : seul un merge approuvé s'applique ; la dérive reste OutOfSync, visible, non corrigée. |
+| operator | idem pour le CR ; ⚠️ nuance AFFICHÉE : l'opérateur maintient ses ENFANTS conformes au CR approuvé — l'exécution d'une intention déjà approuvée, pas une convergence nouvelle. |
+| crossplane | **NON OFFERT (limite dite)** : le provider converge seul par construction (`Update` ne distingue pas « appliquer un changement » de « corriger une dérive »). L'échelle crossplane = Répertorié → Observé → Géré, la PROMOTION restant gatée par un humain — et même en Géré, tout changement passe par une PR gatée : la seule chose que crossplane ne sait pas faire, c'est laisser une dérive non corrigée. |
+| compound | hérite — un compound avec un enfant crossplane n'offre pas le Gouverné (tout-ou-rien). |
+
+Impact sur l'existant : **AUCUN** — le défaut est `gere`, une promesse ou une instance qui ne
+dit rien garde exactement le comportement d'aujourd'hui.
 
 ### terraform (tofu-controller — moteur de référence, pilote LG2)
 
@@ -115,20 +170,56 @@ PRÉCÈDE jamais la mécanique (un badge dit ce qui est, pas ce qui est demandé
 | Géré | `approvePlan: auto` + `destroyResourcesOnDeletion` selon l'offre (défaut actuel : true). |
 | Liaison | variable de module **`import_id`** (optionnelle, défaut vide) + bloc `import` conditionnel — l'import ne MATÉRIALISE l'état qu'au premier apply (donc à la promotion) ; en Observé le plan montre « will be imported » + le diff. Règle d'or : après alignement, **0 change**. |
 
-### crossplane (2ᵉ moteur, GATED LG8 — beta)
+### crossplane (éprouvé LG8 sur MR brut ; par le PRODUIT : AU4)
 
 | Niveau | Réglages |
 |---|---|
 | Observé | `managementPolicies: ["Observe"]` + annotation `crossplane.io/external-name: <id>`. **ÉPROUVÉ sur provider-keycloak (LG8)** : atProvider reflète l'état réel, une divergence déclarée n'écrit RIEN, la suppression du MR laisse la ressource vivre. ⚠️ 3 leçons beta : l'external-name SEUL ne suffit pas (les champs d'IDENTITÉ du forProvider restent requis — « required param 'name' not set » sinon) ; les types du forProvider priment sur l'API du fournisseur (attributes = map de strings) ; `providerConfigRef` explicite avec `kind`. Toujours à éprouver PROVIDER PAR PROVIDER. |
-| Gouverné | politiques élargies SANS `Delete` + `deletionPolicy: Orphan` ; la porte reste la PR gatée (pas de mécanisme d'attente natif équivalent à approvePlan → le Gouverné crossplane est « changement par PR approuvée », dérive non corrigée impossible à garantir nativement : LIMITE DITE, à trancher en LG8). |
+| Gouverné | **NON OFFERT** (la règle « rien ne converge sans déclenchement humain » — voir §4, décision utilisateur) : le provider converge seul par construction. L'échelle crossplane saute d'Observé à Géré, la promotion gatée par le portier. |
 | Géré | politiques complètes. |
 | Ligne rouge | **JAMAIS `Observe` sur une `Workspace` provider-terraform** (une Workspace EST une exécution) — l'observé terraform passe par tofu-controller. |
 
-### ArgoCD (legacy k8s qui a DÉJÀ un dépôt git)
+### helm · operator · compound — la couche ArgoCD (set AU)
 
-`syncPolicy` absent = Observé (le diff est visible, rien n'est appliqué) → sync manuel = Gouverné
-→ `automated + selfHeal (+ prune déclaré)` = Géré. Hors périmètre des premiers objectifs ;
-décliné ici pour que le mot ait le même sens le jour venu.
+Ces moteurs n'écrivent jamais directement : leurs pipelines RENDENT des manifestes
+qu'**ArgoCD applique**. Le niveau se règle sur l'Application qui les porte — trois
+politiques, trois chemins du statestore (le routage par la donnée du claim : AU2) :
+
+| Niveau | Application ArgoCD | Ce que ça garantit |
+|---|---|---|
+| Observé | **AUCUN `syncPolicy`** | le diff live↔déclaré est calculé et AFFICHÉ, rien n'est jamais appliqué — le diff EST le « will be imported » du monde k8s |
+| Gouverné | `automated: {selfHeal: false, prune: false}` | seul un merge APPROUVÉ s'applique ; la dérive reste OutOfSync, VISIBLE (console), jamais corrigée sans geste humain ; rien n'est détruit |
+| Géré | `automated: {selfHeal: true, prune: true}` | l'actuel (`kratix-destination.yaml:19`) |
+
+- **Liaison helm = la CONVENTION DE NOMS** : les values du claim déterminent les noms que le
+  chart rend ; mêmes noms = même objet. La promotion applique EN PLACE (SSA) : objets repris,
+  **UID inchangés** — le protocole de bascule historique du projet, formalisé en niveau.
+- **Test d'alignement (l'analogue du « plan vide »)** : une adoption k8s est ALIGNÉE quand le
+  diff ne contient AUCUNE création — uniquement des objets existants. Une création dans le
+  diff = on n'adopte pas, on ajoute.
+- **Scoping operator** : adopter via operator suppose un **CR EXISTANT** (la liaison = son
+  nom). S'il n'y a que les objets enfants sans CR, poser un CR est une CRÉATION, pas une
+  adoption — l'offre le dit. Le mode vit en ANNOTATION du claim, jamais dans le spec d'une
+  CRD tierce (`strict decoding error` sinon — leçon OP6). Détail : AU7.
+- **Compound** : le mode du parent vaut pour TOUS les enfants (tout-ou-rien) ; un compound
+  dont UN enfant n'est pas adoptable n'expose pas le mode ; le mode MIXTE est interdit en v1
+  (backlog nommé). Détail : AU7.
+- Cas particulier conservé : un dépôt git CLIENT existant (legacy externe) suit la même
+  échelle en pointant SON dépôt — même mot, même sens.
+
+### La matrice complète — 5 moteurs × 4 niveaux, aucune case vide (AU1)
+
+| Moteur \ Niveau | Répertorié (0) | Observé (1) | Gouverné (2) | Géré (3) |
+|---|---|---|---|---|
+| terraform | catalogue (par source) | `planOnly` ✅ LG2 | `approvePlan` attend ✅ LG3 | `approvePlan: auto` ✅ |
+| crossplane | catalogue (par source) | `managementPolicies: [Observe]` ✅ LG8 (MR) → par le produit : AU4 | **non offert** (règle du Gouverné — limite dite) | policies complètes ✅ |
+| helm | catalogue (par source) | app sans sync (le diff) → AU2/AU3 | app sans selfHeal/prune → AU2 | l'actuel ✅ |
+| operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
+| compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
+
+Une case « → AUx » = mécanisme DÉFINI, preuve à jouer dans l'objectif nommé. Un badge ne
+s'affiche pour un moteur QUE quand sa case est prouvée — jamais d'affichage en avance sur la
+mécanique.
 
 ### Catalogue (niveau 0)
 
@@ -196,3 +287,10 @@ n'offre pas la même garantie que ses voisines doit se voir comme telle.
 | Géré corrige seul | dérive provoquée → corrigée dans l'intervalle | LG3 (c) |
 | Rétrogradation conserve l'état et cesse d'écrire | même tfstate ; plus d'apply ; dérive redevient visible | LG3 (d) |
 | Répertorié jamais menteur | horodatage de synchro visible ; caps signalés | LG7 (a)(e) |
+| Observé-k8s ne peut pas écrire | app sans sync : UID/RV du décor inchangés ≥ 10 min pendant que le diff est visible | AU3 (b)(c) |
+| Adoption k8s alignée = diff sans création | le diff ArgoCD ne montre QUE des updates sur des objets existants | AU3 (b) |
+| Un claim gere ne tombe jamais en observe | strictMatchLabels : témoin négatif de routage | AU2 (c) |
+| Rien ne converge sans humain (Gouverné) | dérive manuelle OutOfSync non corrigée ≥ 2 cycles ; le merge approuvé, lui, s'applique | AU2 (e) |
+| La dérive se VOIT dans la console | dérive provoquée → la fiche affiche « dérive détectée », sans correction | AU6 (f) |
+| Rétrograder ne détruit JAMAIS | gere→observe : les fichiers quittent l'app prune:true, l'objet SURVIT (ceinture) | AU3 (f) |
+| Promotion k8s = reprise, pas recréation | UID identiques avant/après le premier apply | AU3 (d) · AU7 (c) |
