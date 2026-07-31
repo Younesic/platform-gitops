@@ -18,7 +18,7 @@ spec:
       priorityClassName: platform-high
       containers:
         - name: backstage
-          image: harbor.212-47-226-56.nip.io/platform/backstage:20260731-0003@sha256:b3ed9def6e088bf748f4de0b9b394ed3a4cafe86dba6ce29edd65c9030c663d1
+          image: harbor.212-47-226-56.nip.io/platform/backstage:20260731-0004@sha256:61f44b18eac4847f2d3c860fd8b9ce00d3a4f12e1e3c401cbbc3e4d400cd3ae6
           imagePullPolicy: IfNotPresent
           command: ["node", "packages/backend"]
           # 2e fichier = config DYNAMIQUE (customResources générés par le CronJob
