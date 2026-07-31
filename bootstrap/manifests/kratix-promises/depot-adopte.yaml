@@ -25,6 +25,12 @@ metadata:
     platform.kratix.io/provider: indus
     platform.kratix.io/exposure: product
     platform.kratix.io/public: "true"
+    # AU6 — l'offre est ADOPTABLE (son contrat porte `mode` + `import_id`) : le
+    # marketplace lui ouvre DEUX portes, « Provisionner » (créer du neuf) et
+    # « Adopter l'existant » (le MÊME formulaire, pré-réglé observe — pas de
+    # produit dupliqué). La fabrique la pose désormais toute seule sur les offres
+    # qu'elle génère (AU5) ; cette promesse-ci est écrite MAIN, d'où la donnée ici.
+    platform.kratix.io/adoptable: "true"
     # La famille des objets rendus, pour l'onglet Kubernetes (mécanisme BR3, donnée pure).
     platform.kratix.io/operator-group: infra.contrib.fluxcd.io
     # Sorties étiquetées (aucune n'est sensible dans ce module — décision de conception).
