@@ -57,6 +57,37 @@ spec:
                 toFieldPath: spec.forProvider.attributes.role
                 policy:
                   fromFieldPath: Optional
+              # ── ADOPTION (AU4) : LA TABLE UNIQUE (mode, liaison) → managementPolicies.
+              # ⚠️ deletionPolicy N'EXISTE PAS sur les MRs namespacés v2 (constaté au banc :
+              # « field not declared in schema ») — la non-destruction d'un ADOPTÉ = des
+              # policies SANS Delete (contrat §3 v1 : oubli à tous les niveaux).
+              # liaison ABSENTE ⇒ combine skippé ⇒ policies absentes = full (greenfield
+              # intact à l'octet) ; observe sans liaison = FERMÉ PAR CEL à l'admission.
+              - type: CombineFromComposite
+                combine:
+                  strategy: string
+                  string: { fmt: "%s|%s" }
+                  variables:
+                    - fromFieldPath: spec.mode
+                    - fromFieldPath: spec.liaison
+                toFieldPath: spec.managementPolicies
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: '^observe\|.*'
+                          result: ["Observe"]
+                        - type: regexp
+                          regexp: '^gere\|.+'
+                          result: ["Observe", "Create", "Update", "LateInitialize"]
+                      fallbackValue: ["*"]
+                      fallbackTo: Value
+              # liaison → l'identité de l'EXISTANT (Optional : absent = création)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.liaison
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+                policy: { fromFieldPath: Optional }
               - type: ToCompositeFieldPath
                 fromFieldPath: status.atProvider.id
                 toFieldPath: status.groupId

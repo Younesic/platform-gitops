@@ -11,37 +11,57 @@ spec:
     kind: XKeycloakGroup
     plural: xkeycloakgroups
   versions:
-    - name: v1alpha1
-      served: true
-      referenceable: true
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required:
-                - group
-              properties:
-                group:
-                  type: string
-                  pattern: ^[a-z][a-z0-9-]*$
-                  maxLength: 63
-                  description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
-                realm:
-                  type: string
-                  default: platform
-                  description: Realm Keycloak.
-                role:
-                  type: string
-                  enum:
-                    - consumer
-                    - provider
-                  description: Rôle de gouvernance de la squad (posé en attribut du groupe
-                    Keycloak, lu par le RBAC portail). Omis = pas d'attribut.
-            status:
-              type: object
-              properties:
-                groupId:
-                  type: string
-                  description: UUID Keycloak du groupe créé (status.atProvider.id).
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - group
+            properties:
+              group:
+                type: string
+                pattern: ^[a-z][a-z0-9-]*$
+                maxLength: 63
+                description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
+              realm:
+                type: string
+                default: platform
+                description: Realm Keycloak.
+              role:
+                type: string
+                enum:
+                - consumer
+                - provider
+                description: Rôle de gouvernance de la squad (posé en attribut du groupe Keycloak, lu
+                  par le RBAC portail). Omis = pas d'attribut.
+              liaison:
+                type: string
+                maxLength: 63
+                description: ADOPTION — identifiant de l'élément EXISTANT à lier (UUID du groupe Keycloak).
+                  Omis = création classique.
+              mode:
+                type: string
+                enum:
+                - observe
+                - gere
+                default: gere
+                description: 'Niveau d''adoption. observe = « La plateforme voit l''état réel et la dérive
+                  ; elle ne modifie rien, par construction. » · gere = « La plateforme est la source de
+                  vérité : elle détecte la dérive et y ramène l''état. » ⚠️ Le niveau Gouverné n''est
+                  pas offert sur ce moteur (le provider crossplane converge seul — règle « rien ne converge
+                  sans déclenchement humain », ADOPTION-STANDARD §4).'
+            x-kubernetes-validations:
+            - rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison) && self.liaison
+                != '''')'
+              message: 'le niveau Observé se LIE à un existant : renseigner liaison (UUID du groupe).'
+          status:
+            type: object
+            properties:
+              groupId:
+                type: string
+                description: UUID Keycloak du groupe créé (status.atProvider.id).
