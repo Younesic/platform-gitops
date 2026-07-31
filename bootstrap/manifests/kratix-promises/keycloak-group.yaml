@@ -1,20 +1,23 @@
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
-  labels:
-    # ⚠️ NE PAS BUMPER : `requiredPromises` exige l'ÉGALITÉ STRICTE de version
-    # (vérifié au source, gravé au CLAUDE.md — « vide = any » n'existe pas ici).
-    # Un bump ici rend teamaccess → teamspace/harbor-project Unavailable EN CASCADE
-    # (vécu 2026-07-31 en AU4 : le contrat étendu, lui, n'a pas besoin d'un numéro).
-    kratix.io/promise-version: v0.0.1
-  name: keycloak-group
   annotations:
-    platform.kratix.io/status-schema: '{"groupId": {"path": ".status.groupId", "label": "UUID Keycloak
-      du groupe créé (status.atProvider.id).", "type": "string"}}'
-    platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name": "${spec.group}", "defaultName":
-      "team-${spec.team}", "severity": "suggest", "origin": "source"}]}'
+    platform.kratix.io/adoptable: 'true'
+    platform.kratix.io/status-schema: "{\"groupId\": {\"path\": \".status.groupId\"\
+      , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
+      , \"type\": \"string\"}}"
+    platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
+      "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
+      "origin": "source"}]}'
+    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
+      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
+      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"}},\"\
+      ui:order\":[\"mode\",\"liaison\",\"*\"]}"
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: keycloak-group
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -36,48 +39,53 @@ spec:
               spec:
                 properties:
                   group:
-                    description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
+                    description: "Nom du groupe Keycloak g\xE9r\xE9 par la plateforme\
+                      \ (ex. team-vente)."
                     maxLength: 63
                     pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant de l'\xE9l\xE9ment EXISTANT\
+                      \ \xE0 lier (UUID du groupe Keycloak). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. observe = \xAB La plateforme\
+                      \ voit l'\xE9tat r\xE9el et la d\xE9rive ; elle ne modifie rien,\
+                      \ par construction. \xBB \xB7 gere = \xAB La plateforme est\
+                      \ la source de v\xE9rit\xE9 : elle d\xE9tecte la d\xE9rive et\
+                      \ y ram\xE8ne l'\xE9tat. \xBB \u26A0\uFE0F Le niveau Gouvern\xE9\
+                      \ n'est pas offert sur ce moteur (le provider crossplane converge\
+                      \ seul \u2014 r\xE8gle \xAB rien ne converge sans d\xE9clenchement\
+                      \ humain \xBB, ADOPTION-STANDARD \xA74)."
+                    enum:
+                    - observe
+                    - gere
                     type: string
                   realm:
                     default: platform
                     description: Realm Keycloak.
                     type: string
                   role:
-                    description: Rôle de gouvernance de la squad (posé en attribut du groupe Keycloak,
-                      lu par le RBAC portail). Omis = pas d'attribut.
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
                     enum:
                     - consumer
                     - provider
                     type: string
-                  liaison:
-                    type: string
-                    maxLength: 63
-                    description: ADOPTION — identifiant de l'élément EXISTANT à lier (UUID du groupe Keycloak).
-                      Omis = création classique.
-                  mode:
-                    type: string
-                    enum:
-                    - observe
-                    - gere
-                    default: gere
-                    description: 'Niveau d''adoption. observe = « La plateforme voit l''état réel et la
-                      dérive ; elle ne modifie rien, par construction. » · gere = « La plateforme est
-                      la source de vérité : elle détecte la dérive et y ramène l''état. » ⚠️ Le niveau
-                      Gouverné n''est pas offert sur ce moteur (le provider crossplane converge seul —
-                      règle « rien ne converge sans déclenchement humain », ADOPTION-STANDARD §4).'
                 required:
                 - group
                 type: object
                 x-kubernetes-validations:
-                - rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison) && self.liaison
-                    != '''')'
-                  message: 'le niveau Observé se LIE à un existant : renseigner liaison (UUID du groupe).'
+                - message: "le niveau Observ\xE9 se LIE \xE0 un existant : renseigner\
+                    \ liaison (UUID du groupe)."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
               status:
                 properties:
                   groupId:
-                    description: UUID Keycloak du groupe créé (status.atProvider.id).
+                    description: "UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id)."
                     type: string
                 type: object
             type: object
@@ -139,8 +147,7 @@ spec:
                 fromFieldPath: Optional
               toFieldPath: spec.forProvider.attributes.role
               type: FromCompositeFieldPath
-            - type: CombineFromComposite
-              combine:
+            - combine:
                 strategy: string
                 string:
                   fmt: '%s|%s'
@@ -149,28 +156,29 @@ spec:
                 - fromFieldPath: spec.liaison
               toFieldPath: spec.managementPolicies
               transforms:
-              - type: match
-                match:
+              - match:
+                  fallbackTo: Value
+                  fallbackValue:
+                  - '*'
                   patterns:
-                  - type: regexp
-                    regexp: ^observe\|.*
+                  - regexp: ^observe\|.*
                     result:
                     - Observe
-                  - type: regexp
-                    regexp: ^gere\|.+
+                    type: regexp
+                  - regexp: ^gere\|.+
                     result:
                     - Observe
                     - Create
                     - Update
                     - LateInitialize
-                  fallbackValue:
-                  - '*'
-                  fallbackTo: Value
-            - type: FromCompositeFieldPath
-              fromFieldPath: spec.liaison
-              toFieldPath: metadata.annotations[crossplane.io/external-name]
+                    type: regexp
+                type: match
+              type: CombineFromComposite
+            - fromFieldPath: spec.liaison
               policy:
                 fromFieldPath: Optional
+              toFieldPath: metadata.annotations[crossplane.io/external-name]
+              type: FromCompositeFieldPath
             - fromFieldPath: status.atProvider.id
               toFieldPath: status.groupId
               type: ToCompositeFieldPath
@@ -196,48 +204,53 @@ spec:
               spec:
                 properties:
                   group:
-                    description: Nom du groupe Keycloak géré par la plateforme (ex. team-vente).
+                    description: "Nom du groupe Keycloak g\xE9r\xE9 par la plateforme\
+                      \ (ex. team-vente)."
                     maxLength: 63
                     pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant de l'\xE9l\xE9ment EXISTANT\
+                      \ \xE0 lier (UUID du groupe Keycloak). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. observe = \xAB La plateforme\
+                      \ voit l'\xE9tat r\xE9el et la d\xE9rive ; elle ne modifie rien,\
+                      \ par construction. \xBB \xB7 gere = \xAB La plateforme est\
+                      \ la source de v\xE9rit\xE9 : elle d\xE9tecte la d\xE9rive et\
+                      \ y ram\xE8ne l'\xE9tat. \xBB \u26A0\uFE0F Le niveau Gouvern\xE9\
+                      \ n'est pas offert sur ce moteur (le provider crossplane converge\
+                      \ seul \u2014 r\xE8gle \xAB rien ne converge sans d\xE9clenchement\
+                      \ humain \xBB, ADOPTION-STANDARD \xA74)."
+                    enum:
+                    - observe
+                    - gere
                     type: string
                   realm:
                     default: platform
                     description: Realm Keycloak.
                     type: string
                   role:
-                    description: Rôle de gouvernance de la squad (posé en attribut du groupe Keycloak,
-                      lu par le RBAC portail). Omis = pas d'attribut.
+                    description: "R\xF4le de gouvernance de la squad (pos\xE9 en attribut\
+                      \ du groupe Keycloak, lu par le RBAC portail). Omis = pas d'attribut."
                     enum:
                     - consumer
                     - provider
                     type: string
-                  liaison:
-                    type: string
-                    maxLength: 63
-                    description: ADOPTION — identifiant de l'élément EXISTANT à lier (UUID du groupe Keycloak).
-                      Omis = création classique.
-                  mode:
-                    type: string
-                    enum:
-                    - observe
-                    - gere
-                    default: gere
-                    description: 'Niveau d''adoption. observe = « La plateforme voit l''état réel et la
-                      dérive ; elle ne modifie rien, par construction. » · gere = « La plateforme est
-                      la source de vérité : elle détecte la dérive et y ramène l''état. » ⚠️ Le niveau
-                      Gouverné n''est pas offert sur ce moteur (le provider crossplane converge seul —
-                      règle « rien ne converge sans déclenchement humain », ADOPTION-STANDARD §4).'
                 required:
                 - group
                 type: object
                 x-kubernetes-validations:
-                - rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison) && self.liaison
-                    != '''')'
-                  message: 'le niveau Observé se LIE à un existant : renseigner liaison (UUID du groupe).'
+                - message: "le niveau Observ\xE9 se LIE \xE0 un existant : renseigner\
+                    \ liaison (UUID du groupe)."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
               status:
                 properties:
                   groupId:
-                    description: UUID Keycloak du groupe créé (status.atProvider.id).
+                    description: "UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id)."
                     type: string
                 type: object
             type: object
@@ -258,6 +271,8 @@ spec:
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6593b04b050f902e17a62ff06042f5185f21d2c2a8f1d37da9bd822afb875f41
             name: backstage
             env:
+            - name: UI_SCHEMA_REV
+              value: 194e87ce373d
             - name: CONTRACTS_REV
               value: 59e32cc2a610
             - name: CURATION_REV
