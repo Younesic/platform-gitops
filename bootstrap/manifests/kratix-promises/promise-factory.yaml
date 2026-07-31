@@ -434,7 +434,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:76ce394bb777e1803c920c78e1131d005d5520ea1dee5c31d4820d6fb75cf6f5
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:d53d14541dea98740b5e5bc8ec50bbba348e2696e8634f34053f1dc6eb66835d
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
