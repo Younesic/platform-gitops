@@ -14,3 +14,13 @@ resourcesRBACManager:
 # (phase d'adoption identity-as-code), pas en pré-chargement ici.
 provider:
   packages: []
+
+# ⚠️ Gate WatchList (client-go >=0.36 / apiserver Kapsule) : sans lui, après un cycle
+# de l'apiserver, les reflectors watch-list PENDENT sans erreur — manager « Running »
+# zombie, XRD jamais Established, nouveaux contrôleurs jamais démarrés (vécu 2026-07-31
+# sur le banc AU4 ; même signature que Kratix/BR1, source-controller, Cilium, CNPG).
+# La règle du cluster : TOUT contrôleur porte ce gate.
+extraEnvVarsCrossplane:
+  KUBE_FEATURE_WatchListClient: "false"
+extraEnvVarsRBACManager:
+  KUBE_FEATURE_WatchListClient: "false"
