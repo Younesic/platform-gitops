@@ -31,6 +31,12 @@ metadata:
     # produit dupliqué). La fabrique la pose désormais toute seule sur les offres
     # qu'elle génère (AU5) ; cette promesse-ci est écrite MAIN, d'où la donnée ici.
     platform.kratix.io/adoptable: "true"
+    # AU6 — LES LIBELLÉS FR du cycle (« jamais un identifiant technique à l'écran »).
+    # La fabrique pose cette couche toute seule sur les offres qu'elle génère
+    # (run.py:adoption_ui_layer) ; cette promesse-ci est écrite MAIN, d'où la donnée.
+    # ⚠️ Format EMBALLÉ obligatoire ({"properties": …}) : à plat, l'annotation est
+    # silencieusement INERTE (le bug d'héritage payé 3 semaines).
+    backstage.example.io/ui-schema: '{"properties": {"mode": {"title": "Niveau d''adoption", "ui:title": "Niveau d''adoption"}, "import_id": {"title": "Élément existant à lier", "ui:title": "Élément existant à lier", "ui:placeholder": "nom du dépôt existant (ex. patrimoine-legacy-1)", "ui:description": "Vide = création classique. En Observé, rien n''est modifié : la plateforme lit et compare."}}, "ui:order": ["mode", "import_id", "*"]}'
     # La famille des objets rendus, pour l'onglet Kubernetes (mécanisme BR3, donnée pure).
     platform.kratix.io/operator-group: infra.contrib.fluxcd.io
     # Sorties étiquetées (aucune n'est sensible dans ce module — décision de conception).
