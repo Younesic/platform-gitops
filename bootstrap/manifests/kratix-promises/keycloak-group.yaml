@@ -2,7 +2,11 @@ apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
   labels:
-    kratix.io/promise-version: v0.1.0
+    # ⚠️ NE PAS BUMPER : `requiredPromises` exige l'ÉGALITÉ STRICTE de version
+    # (vérifié au source, gravé au CLAUDE.md — « vide = any » n'existe pas ici).
+    # Un bump ici rend teamaccess → teamspace/harbor-project Unavailable EN CASCADE
+    # (vécu 2026-07-31 en AU4 : le contrat étendu, lui, n'a pas besoin d'un numéro).
+    kratix.io/promise-version: v0.0.1
   name: keycloak-group
   annotations:
     platform.kratix.io/status-schema: '{"groupId": {"path": ".status.groupId", "label": "UUID Keycloak
