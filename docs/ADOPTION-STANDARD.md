@@ -194,6 +194,7 @@ dit rien garde exactement le comportement d'aujourd'hui.
 |---|---|
 | Observé | `managementPolicies: ["Observe"]` + annotation `crossplane.io/external-name: <id>`. **ÉPROUVÉ sur provider-keycloak (LG8)** : atProvider reflète l'état réel, une divergence déclarée n'écrit RIEN, la suppression du MR laisse la ressource vivre. ⚠️ 3 leçons beta : l'external-name SEUL ne suffit pas (les champs d'IDENTITÉ du forProvider restent requis — « required param 'name' not set » sinon) ; les types du forProvider priment sur l'API du fournisseur (attributes = map de strings) ; `providerConfigRef` explicite avec `kind`. Toujours à éprouver PROVIDER PAR PROVIDER. |
 | Gouverné | **NON OFFERT** (la règle « rien ne converge sans déclenchement humain » — voir §4, décision utilisateur) : le provider converge seul par construction. L'échelle crossplane saute d'Observé à Géré, la promotion gatée par le portier. |
+| ⚠️ v2 (AU4) | `deletionPolicy` N'EXISTE PAS sur les MRs namespacés v2 (constaté). La non-destruction d'un ADOPTÉ = des `managementPolicies` SANS `Delete` — UNE table `(mode\|liaison)` : observe→`[Observe]` · gere+liaison→`[Observe,Create,Update,LateInitialize]` · greenfield→absentes (défaut serveur `[*]`). CEL d'admission : l'Observé EXIGE la liaison. ⚠️ La convergence à la promotion applique LE DÉCLARÉ — un attribut réel inconnu du déclaré disparaît (le sens fort du Géré, à dire dans l'offre). |
 | Géré | politiques complètes. |
 | Ligne rouge | **JAMAIS `Observe` sur une `Workspace` provider-terraform** (une Workspace EST une exécution) — l'observé terraform passe par tofu-controller. |
 
@@ -241,7 +242,7 @@ geste humain) · géré = destruction pilotée.
 | Moteur \ Niveau | Répertorié (0) | Observé (1) | Gouverné (2) | Géré (3) |
 |---|---|---|---|---|
 | terraform | catalogue (par source) | `planOnly` ✅ LG2 | `approvePlan` attend ✅ LG3 | `approvePlan: auto` ✅ |
-| crossplane | catalogue (par source) | `managementPolicies: [Observe]` ✅ LG8 (MR) → par le produit : AU4 | **non offert** (règle du Gouverné — limite dite) | policies complètes ✅ |
+| crossplane | catalogue (par source) | `managementPolicies: [Observe]` ✅ LG8 (MR) ✅ AU4 (par le PRODUIT : liaison+table dans la Composition, uuid inchangé à la promotion) | **non offert** (règle du Gouverné — limite dite, AFFICHÉE dans la description du champ) | policies complètes ✅ (adopté-en-gere = sans Delete, §3 prouvé AU4) |
 | helm | catalogue (par source) | app sans sync (le diff) ✅ AU2+AU3 (pilote produit : alignement 0-création, UID inchangés, reprise en place) | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
 | operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
 | compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
