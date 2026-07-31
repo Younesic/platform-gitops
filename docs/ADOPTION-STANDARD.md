@@ -117,16 +117,55 @@ périmé → le scheduler re-place selon le selector courant (<30 s, constaté d
 sens). Un geste PLATEFORME, automatisé côté portail (AU6) — jamais demandé à l'humain,
 même famille que le « Re-vérifier » (patch d'objet interne, jamais la ressource).
 
-⚠️ **Suppression d'un claim ADOPTÉ = OUBLI, à TOUS les niveaux (v1).** Les ressources issues
-d'une adoption (liaison renseignée) portent la ceinture
-`argocd.argoproj.io/sync-options: Prune=false,Delete=false` quel que soit le mode. Pourquoi :
-un changement de mode fait CHANGER les fichiers de chemin — la rétrogradation Géré→Observé
-fait QUITTER l'application `prune: true`, qui DÉTRUIRAIT les objets sans cette ceinture.
-**PROUVÉ EMPIRIQUEMENT (AU2)** : la rétrogradation d'un témoin SANS ceinture a rendu
-`ConfigMap … pruned` — la destruction constatée sur un objet inoffensif, pas supposée.
-C'est aussi l'esprit du contrat (« adoption ≠ propriété immédiate ») et le miroir
-d'`archive_on_destroy` côté terraform. Détruire volontairement un adopté = un geste explicite,
-hors v1 (backlog nommé).
+### 3 bis. La non-destruction d'un adopté — LA GARANTIE, PUIS SES PORTEURS
+
+⚠️ **LA GARANTIE (elle ne dépend d'aucun moteur) : supprimer le claim d'une ressource
+ADOPTÉE ne la détruit pas — à TOUS les niveaux, y compris Géré (v1).** « Adoption ≠
+propriété immédiate » : ce que la plateforme n'a pas créé, elle ne le détruit pas en
+partant. Détruire volontairement un adopté est un geste explicite, hors v1 (backlog).
+Est ADOPTÉE toute ressource dont la **liaison est renseignée**, ou dont le mode ≠ `gere`,
+ou qui porte le marqueur durable du parcours (un adopté promu en Géré RESTE un adopté).
+
+⚠️⚠️ **CETTE GARANTIE A UN PORTEUR DIFFÉRENT PAR MOTEUR, ET LE CRITÈRE N'EST PAS LE
+ROUTAGE — C'EST CE QUE LE MOTEUR REND.** Deux cas, et un seul les sépare :
+
+| moteur | l'objet rendu est… | porteur de la non-destruction |
+|---|---|---|
+| **helm** | **la ressource elle-même** (Namespace, Quota, RoleBinding…) | **ceinture** `argocd.argoproj.io/sync-options: Prune=false,Delete=false` sur les objets rendus |
+| **operator** | un CR dont la suppression détruit, et une CRD **tierce** n'offre aucun levier | **ceinture** sur le CR |
+| **compound** | rien en propre | **délègue** : chaque enfant applique SON porteur |
+| **crossplane** | l'**ENTRÉE** d'un contrôleur (un XR, qui porte un finalizer) | **`managementPolicies` sans `Delete`** sur la ressource managée (table AU4) |
+| **terraform** | l'**ENTRÉE** d'un contrôleur (un objet `Terraform`, finalizer `finalizers.tf.contrib.fluxcd.io`) | **`destroyResourcesOnDeletion: false`** sur l'objet `Terraform` |
+| répertorié | rien n'est rendu | sans objet |
+
+**LA RÈGLE, en une phrase** : *si le moteur offre un levier de non-destruction, on
+l'utilise ; sinon on protège l'objet rendu avec la ceinture.*
+
+⚠️ **NE PAS mettre la ceinture sur l'ENTRÉE d'un contrôleur.** Un XR ou un objet
+`Terraform` que le prune ne peut plus retirer devient un **ORPHELIN VIVANT** : il garde
+son finalizer et continue de réconcilier (terraform replanifierait toutes les 5 min)
+pour une demande qui n'existe plus. La ceinture protège une RESSOURCE, jamais une
+INSTRUCTION.
+
+**Pourquoi la ceinture, là où elle s'applique** : un changement de mode fait CHANGER les
+fichiers de chemin — la rétrogradation Géré→Observé fait QUITTER l'application
+`prune: true`, qui DÉTRUIRAIT les objets sans elle. **PROUVÉ EMPIRIQUEMENT (AU2)** : la
+rétrogradation d'un témoin SANS ceinture a rendu `ConfigMap … pruned` — la destruction
+constatée sur un objet inoffensif, pas supposée.
+
+🚨 **LEÇON DE CONCEPTION, PAYÉE DEUX FOIS.** Cette garantie et celle de l'adoptabilité
+(« cette offre est adoptable ») avaient toutes deux été implémentées **à l'intérieur du
+chemin de routage Kubernetes** — comme si le routage était le porteur universel de
+l'adoption. Il ne l'est pas : c'est un mécanisme parmi trois. Conséquences constatées le
+2026-07-31 : la fabrique ne pouvait STRUCTURELLEMENT pas marquer adoptable une offre
+terraform (CL4), et la ceinture n'était jamais posée pour un moteur sans routage — de
+sorte que **le moteur sur lequel tout ce standard a été prouvé (terraform : LG2, LG3,
+CL3) était le seul à ne recevoir aucune des deux garanties**, en silence.
+**La forme correcte est celle de §4 : énoncer la garantie, puis publier sa déclinaison —
+et faire lire cette déclinaison au code comme une DONNÉE, jamais l'inférer d'un
+mécanisme voisin.** Le porteur est déclaré par l'annotation
+`platform.kratix.io/adoption-non-destruction` (`ceinture` | `moteur`), posée par le
+plugin qui connaît son moteur.
 
 ## 4. Déclinaison par moteur
 

@@ -2,6 +2,8 @@ apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
   annotations:
+    # ADOPTION-STANDARD 3bis : porteur de la non-destruction d'un adopte.
+    platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/adoptable: 'true'
     platform.kratix.io/status-schema: "{\"groupId\": {\"path\": \".status.groupId\"\
       , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
@@ -268,7 +270,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6593b04b050f902e17a62ff06042f5185f21d2c2a8f1d37da9bd822afb875f41
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f8881df50239ee90c1611efd5dd0cee4627e1d5757e7242888515c67ade62edc
             name: backstage
             env:
             - name: UI_SCHEMA_REV
@@ -294,7 +296,7 @@ spec:
               value: XKeycloakGroup
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6593b04b050f902e17a62ff06042f5185f21d2c2a8f1d37da9bd822afb875f41
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f8881df50239ee90c1611efd5dd0cee4627e1d5757e7242888515c67ade62edc
             name: backstage
           jobOptions: {}
           rbac: {}

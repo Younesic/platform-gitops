@@ -27,6 +27,8 @@ metadata:
   labels:
     kratix.io/promise-version: v0.1.0
   annotations:
+    # ADOPTION-STANDARD 3bis : porteur de la non-destruction d'un adopte.
+    platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/provider: indus
     platform.kratix.io/exposure: product
     platform.kratix.io/public: "true"
@@ -133,7 +135,7 @@ spec:
               # Pousse le Template scaffolder et la fiche de la promesse. AUCUNE
               # adaptation terraform : c'est le conteneur partagé, tel quel.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6593b04b050f902e17a62ff06042f5185f21d2c2a8f1d37da9bd822afb875f41
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f8881df50239ee90c1611efd5dd0cee4627e1d5757e7242888515c67ade62edc
 
     resource:
       configure:
@@ -149,7 +151,7 @@ spec:
               # on veut savoir si la plateforme accueille le résultat, pas fabriquer l'outil.
               # L'image est celle de la fabrique — déjà pinnée, déjà présente.
               - name: rendu-terraform
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:c64cad09293ad01600dcb489de70bcd4b19403016c229bee800e9b07ba35aa4f
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:9747b087de568f2d5be45144f209f44a2c80f12edf704ec51c6f517889d266dc
                 env:
                   - { name: MODULE_PATH, value: ./sources/terraform/harbor-project }
                   - { name: SOURCE_NAME, value: harbor-tf-module }
@@ -233,6 +235,6 @@ spec:
               # TOUTE la sortie — c'est ce qui doit labelliser la ressource Terraform
               # SANS une ligne écrite pour terraform.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:6593b04b050f902e17a62ff06042f5185f21d2c2a8f1d37da9bd822afb875f41
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:f8881df50239ee90c1611efd5dd0cee4627e1d5757e7242888515c67ade62edc
             rbac: {}
             jobOptions: {}
