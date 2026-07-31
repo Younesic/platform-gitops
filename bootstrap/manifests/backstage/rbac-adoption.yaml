@@ -1,0 +1,72 @@
+# ── AU6 : LE DROIT DE L'ÉCHELLE D'ADOPTION — ClusterRole SÉPARÉ ─────────────────
+#
+# ⚠️ JAMAIS élargir `backstage-readonly` : un rôle nommé pour sa retenue doit la
+# garder (la leçon TN4, déjà appliquée au plan-gate). Deux besoins, deux blocs :
+#
+# 1. LA DÉRIVE SE VOIT (exigence utilisateur de premier rang) : le backend lit
+#    le status des Applications ArgoCD d'adoption (adoption-observe/gouverne) —
+#    l'OutOfSync de leurs ressources EST la dérive d'un adopté k8s, remontée SUR
+#    la fiche console. Lecture seule, namespace argocd.
+#
+# 2. LE KEEPER DE BASCULE (la découverte AU2 automatisée) : Kratix ne re-place
+#    JAMAIS un workloadGroup déjà placé — après un merge de promotion, le
+#    placement pointe l'ancienne destination pour toujours. Le keeper compare le
+#    selector COURANT du work aux labels de la destination et supprime le
+#    placement périmé (le scheduler Kratix re-place en <30 s — prouvé AU2/AU3
+#    dans les deux sens). `delete` sur workplacements SEULEMENT — jamais works,
+#    jamais destinations, jamais une ressource réelle (un workplacement est un
+#    objet INTERNE de planification, même famille que le « Re-vérifier »).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-adoption-argocd-read
+  namespace: argocd
+rules:
+  - apiGroups: [argoproj.io]
+    resources: [applications]
+    verbs: [get]
+    resourceNames: [adoption-observe, adoption-gouverne]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-adoption-argocd-read
+  namespace: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-adoption-argocd-read
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-adoption-bascule
+rules:
+  - apiGroups: [platform.kratix.io]
+    resources: [works, destinations]
+    verbs: [get, list]
+  - apiGroups: [platform.kratix.io]
+    resources: [workplacements]
+    verbs: [get, list, delete]
+  # les niveaux qu'une offre sait tenir = l'enum de son CRD (la matrice vit dans
+  # la donnée — crossplane sans gouverne, AU1/AU4) ; lecture seule.
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-adoption-bascule
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-adoption-bascule
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
