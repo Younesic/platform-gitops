@@ -242,7 +242,7 @@ geste humain) · géré = destruction pilotée.
 |---|---|---|---|---|
 | terraform | catalogue (par source) | `planOnly` ✅ LG2 | `approvePlan` attend ✅ LG3 | `approvePlan: auto` ✅ |
 | crossplane | catalogue (par source) | `managementPolicies: [Observe]` ✅ LG8 (MR) → par le produit : AU4 | **non offert** (règle du Gouverné — limite dite) | policies complètes ✅ |
-| helm | catalogue (par source) | app sans sync (le diff) ✅ AU2 (témoin) → pilote produit : AU3 | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
+| helm | catalogue (par source) | app sans sync (le diff) ✅ AU2+AU3 (pilote produit : alignement 0-création, UID inchangés, reprise en place) | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
 | operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
 | compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
 
