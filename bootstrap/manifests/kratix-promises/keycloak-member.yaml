@@ -1,17 +1,23 @@
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
-  labels:
-    kratix.io/promise-version: v0.0.1
-  name: keycloak-member
   annotations:
-    # ADOPTION-STANDARD 3bis : porteur de la non-destruction d'un adopte.
+    platform.kratix.io/adoptable: 'true'
     platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/contracts: '{"requires": [{"kind": "keycloak-group", "name":
       "${spec.group}", "origin": "derived"}]}'
-    backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
+    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
+      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
+      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"\
+      group\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
+      :{\"kind\":\"Group\"}}},\"users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\"\
+      :{\"catalogFilter\":{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\",\"liaison\"\
+      ,\"*\"]}"
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: keycloak-member
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -38,6 +44,26 @@ spec:
                     maxLength: 63
                     pattern: ^[a-z][a-z0-9-]*$
                     type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant du groupe Keycloak EXISTANT\
+                      \ dont on reprend les membres (le m\xEAme UUID que la liaison\
+                      \ du claim keycloak-group fr\xE8re). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. observe = \xAB La plateforme\
+                      \ voit les membres r\xE9els et la d\xE9rive ; elle ne modifie\
+                      \ rien, par construction. \xBB \xB7 gere = \xAB La plateforme\
+                      \ est la source de v\xE9rit\xE9 : ce claim g\xE8re LA liste\
+                      \ compl\xE8te des membres. \xBB \u26A0\uFE0F Le niveau Gouvern\xE9\
+                      \ n'est pas offert sur ce moteur (le provider crossplane converge\
+                      \ seul \u2014 r\xE8gle \xAB rien ne converge sans d\xE9clenchement\
+                      \ humain \xBB, ADOPTION-STANDARD \xA74)."
+                    enum:
+                    - observe
+                    - gere
+                    type: string
                   realm:
                     default: platform
                     description: Realm Keycloak.
@@ -55,6 +81,13 @@ spec:
                 - group
                 - users
                 type: object
+                x-kubernetes-validations:
+                - message: "adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                    \ \xBB (l'UUID du groupe Keycloak existant dont on reprend les\
+                    \ membres). Sans lui, la plateforme n'aurait rien \xE0 observer\
+                    \ et cr\xE9erait."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
             type: object
         served: true
         storage: true
@@ -109,6 +142,44 @@ spec:
             - fromFieldPath: spec.realm
               toFieldPath: spec.forProvider.realmId
               type: FromCompositeFieldPath
+            - combine:
+                strategy: string
+                string:
+                  fmt: '%s|%s'
+                variables:
+                - fromFieldPath: spec.mode
+                - fromFieldPath: spec.liaison
+              toFieldPath: spec.managementPolicies
+              transforms:
+              - match:
+                  fallbackTo: Value
+                  fallbackValue:
+                  - '*'
+                  patterns:
+                  - regexp: ^observe\|.*
+                    result:
+                    - Observe
+                    type: regexp
+                  - regexp: ^gere\|.+
+                    result:
+                    - Observe
+                    - Create
+                    - Update
+                    - LateInitialize
+                    type: regexp
+                type: match
+              type: CombineFromComposite
+            - combine:
+                strategy: string
+                string:
+                  fmt: '%s/group-memberships/%s'
+                variables:
+                - fromFieldPath: spec.realm
+                - fromFieldPath: spec.liaison
+              policy:
+                fromFieldPath: Optional
+              toFieldPath: metadata.annotations[crossplane.io/external-name]
+              type: CombineFromComposite
         step: patch-and-transform
   - apiVersion: apiextensions.crossplane.io/v2
     kind: CompositeResourceDefinition
@@ -134,6 +205,26 @@ spec:
                     maxLength: 63
                     pattern: ^[a-z][a-z0-9-]*$
                     type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant du groupe Keycloak EXISTANT\
+                      \ dont on reprend les membres (le m\xEAme UUID que la liaison\
+                      \ du claim keycloak-group fr\xE8re). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. observe = \xAB La plateforme\
+                      \ voit les membres r\xE9els et la d\xE9rive ; elle ne modifie\
+                      \ rien, par construction. \xBB \xB7 gere = \xAB La plateforme\
+                      \ est la source de v\xE9rit\xE9 : ce claim g\xE8re LA liste\
+                      \ compl\xE8te des membres. \xBB \u26A0\uFE0F Le niveau Gouvern\xE9\
+                      \ n'est pas offert sur ce moteur (le provider crossplane converge\
+                      \ seul \u2014 r\xE8gle \xAB rien ne converge sans d\xE9clenchement\
+                      \ humain \xBB, ADOPTION-STANDARD \xA74)."
+                    enum:
+                    - observe
+                    - gere
+                    type: string
                   realm:
                     default: platform
                     description: Realm Keycloak.
@@ -151,6 +242,13 @@ spec:
                 - group
                 - users
                 type: object
+                x-kubernetes-validations:
+                - message: "adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                    \ \xBB (l'UUID du groupe Keycloak existant dont on reprend les\
+                    \ membres). Sans lui, la plateforme n'aurait rien \xE0 observer\
+                    \ et cr\xE9erait."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
             type: object
         served: true
   destinationSelectors:
@@ -170,7 +268,7 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 40a8c92b0817
+              value: 58b095ea5a68
             - name: CONTRACTS_REV
               value: 9e3c0b0f1cbd
             - name: CURATION_REV
@@ -192,7 +290,10 @@ spec:
               value: XKeycloakMember
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
+          - env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
             name: backstage
           jobOptions: {}
           rbac: {}
