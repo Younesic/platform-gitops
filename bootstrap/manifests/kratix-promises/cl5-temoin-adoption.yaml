@@ -17,9 +17,11 @@ metadata:
     # placer. L'adoption operator suppose donc un opérateur DÉJÀ installé : c'est
     # la 3ᵉ limite d'AU7, dite à la génération, jamais découverte au 1er claim.
     platform.kratix.io/provider: indus
-    # brique interne : PAS de Template au marketplace — ce témoin ne s'offre pas,
-    # il se prouve. (SL0 : la fiche reste poussée, donc la console le voit.)
-    platform.kratix.io/exposure: internal
+    # ⚠️ PUBLIÉE (et non plus `internal`) le temps de prouver le BOUTON de bout en
+    # bout : la promotion exige une demande VENUE DU PORTAIL, donc un Template au
+    # marketplace. Le témoin redeviendra interne — ou disparaîtra — après la preuve.
+    platform.kratix.io/exposure: product
+    platform.kratix.io/title: CL5 — témoin d'adoption operator
     platform.kratix.io/adoptable: "true"
     # ⚠️ ADOPTION-STANDARD / AU7 — LE CANAL DU NIVEAU EST UNE ANNOTATION.
     # La CRD `Motd` est TIERCE : son spec n'accepte que `bannerText` et
