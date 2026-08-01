@@ -5,7 +5,14 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: teamspace
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["environment","mesh","team","tier","users","*"]}'
+    platform.kratix.io/adoption-non-destruction: moteur
+    platform.kratix.io/adoptable: 'true'
+    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
+      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
+      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"\
+      users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
+      :{\"kind\":\"User\"}}}},\"ui:order\":[\"environment\",\"mesh\",\"team\",\"tier\"\
+      ,\"users\",\"*\"]}"
     platform.kratix.io/provider: cloud
 spec:
   api:
@@ -34,6 +41,12 @@ spec:
                     - staging
                     - prod
                     type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant du groupe Keycloak EXISTANT\
+                      \ dont on reprend les membres (le m\xEAme UUID que la liaison\
+                      \ du claim keycloak-group fr\xE8re). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
                   mesh:
                     description: Activer la mesh Istio sur le namespace
                     properties:
@@ -46,6 +59,17 @@ spec:
                         - PERMISSIVE
                         type: string
                     type: object
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. Observ\xE9 = la plateforme lit\
+                      \ et compare, ne modifie rien. Gouvern\xE9 = chaque changement\
+                      \ attend une approbation. G\xE9r\xE9 = la plateforme est la\
+                      \ source de v\xE9rit\xE9 (d\xE9faut)."
+                    enum:
+                    - observe
+                    - gere
+                    title: Niveau d'adoption
+                    type: string
                   team:
                     pattern: ^[a-z][a-z0-9-]*$
                     type: string
@@ -71,6 +95,13 @@ spec:
                 - team
                 - users
                 type: object
+                x-kubernetes-validations:
+                - message: "adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                    \ \xBB (l'UUID du groupe Keycloak existant dont on reprend les\
+                    \ membres). Sans lui, la plateforme n'aurait rien \xE0 observer\
+                    \ et cr\xE9erait."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
             type: object
         served: true
         storage: true
@@ -96,7 +127,7 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 1e0c5ba49020
+              value: 6c430cad8a8f
             - name: CURATION_REV
               value: 1cc1f5a4af7a
     resource:
@@ -118,25 +149,43 @@ spec:
                 \        enabled:\n          type: boolean\n        mtls:\n      \
                 \    default: STRICT\n          enum:\n          - STRICT\n      \
                 \    - PERMISSIVE\n          type: string\n      type: object\n  \
-                \  team:\n      pattern: ^[a-z][a-z0-9-]*$\n      type: string\n \
-                \   tier:\n      default: standard\n      enum:\n      - small\n \
-                \     - standard\n      - large\n      - restricted\n      type: string\n\
-                \    users:\n      description: Usernames Keycloak membres du groupe\
-                \ \u2014 ce claim g\xE8re LA liste compl\xE8te\n        (1 claim par\
-                \ groupe).\n      items:\n        maxLength: 63\n        minLength:\
-                \ 1\n        type: string\n      minItems: 1\n      type: array\n\
-                \  required:\n  - environment\n  - team\n  - users\nchildren:\n- name:\
-                \ workspace\n  promise: workspace\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: Workspace\n  spec:\n    environment:\
-                \ ${spec.environment}\n    mesh: ${spec.mesh}\n    team: ${spec.team}\n\
+                \  mode:\n      default: gere\n      description: Niveau d'adoption.\
+                \ Observ\xE9 = la plateforme lit et compare, ne modifie\n        rien.\
+                \ Gouvern\xE9 = chaque changement attend une approbation. G\xE9r\xE9\
+                \ = la plateforme\n        est la source de v\xE9rit\xE9 (d\xE9faut).\n\
+                \      enum:\n      - observe\n      - gere\n      title: Niveau d'adoption\n\
+                \      type: string\n    team:\n      pattern: ^[a-z][a-z0-9-]*$\n\
+                \      type: string\n    tier:\n      default: standard\n      enum:\n\
+                \      - small\n      - standard\n      - large\n      - restricted\n\
+                \      type: string\n    liaison:\n      description: ADOPTION \u2014\
+                \ identifiant du groupe Keycloak EXISTANT dont on reprend\n      \
+                \  les membres (le m\xEAme UUID que la liaison du claim keycloak-group\
+                \ fr\xE8re). Omis\n        = cr\xE9ation classique.\n      maxLength:\
+                \ 63\n      type: string\n    users:\n      description: Usernames\
+                \ Keycloak membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8\
+                te\n        (1 claim par groupe).\n      items:\n        maxLength:\
+                \ 63\n        minLength: 1\n        type: string\n      minItems:\
+                \ 1\n      type: array\n  required:\n  - environment\n  - team\n \
+                \ - users\n  x-kubernetes-validations:\n  - message: 'adoption : le\
+                \ niveau \xAB observe \xBB exige \xAB liaison \xBB (l''UUID du groupe\n\
+                \      Keycloak existant dont on reprend les membres). Sans lui, la\
+                \ plateforme n''aurait\n      rien \xE0 observer et cr\xE9erait.'\n\
+                \    rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)\
+                \ && self.liaison\n      != '''')'\nchildren:\n- name: workspace\n\
+                \  promise: workspace\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: Workspace\n  spec:\n    environment: ${spec.environment}\n\
+                \    mesh: ${spec.mesh}\n    mode: ${spec.mode}\n    team: ${spec.team}\n\
                 \    tier: ${spec.tier}\n- name: teamaccess\n  promise: teamaccess\n\
                 \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
-                \ kind: TeamAccess\n  spec:\n    group: team-${spec.team}\n    users:\
-                \ ${spec.users}\n"
+                \ kind: TeamAccess\n  spec:\n    group: team-${spec.team}\n    liaison:\
+                \ ${spec.liaison}\n    mode: ${spec.mode}\n    users: ${spec.users}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
             name: backstage
+            env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
           jobOptions: {}
           rbac: {}
 status:
