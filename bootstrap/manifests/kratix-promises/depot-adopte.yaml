@@ -176,7 +176,7 @@ spec:
           spec:
             containers:
               - name: rendu-terraform
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:4420575c6349a3beffa9b658f347b24d74c81ba89321e9aba826f79c3d075109
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:bc5c05f73e885b2e912eb8cf303d6c808919f0510835cb5bdb2a7b0ac85c5f23
                 env:
                   - { name: MODULE_PATH, value: ./sources/terraform/github-repository }
                   - { name: SOURCE_NAME, value: depot-adopte-module }
