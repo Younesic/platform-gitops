@@ -46,3 +46,28 @@ spec:
                   type: string
                   default: platform
                   description: Realm Keycloak.
+                liaison:
+                  type: string
+                  maxLength: 63
+                  description: ADOPTION — identifiant du groupe Keycloak EXISTANT dont on reprend
+                    les membres (le même UUID que la liaison du claim keycloak-group frère).
+                    Omis = création classique.
+                mode:
+                  type: string
+                  enum:
+                    - observe
+                    - gere
+                  default: gere
+                  description: 'Niveau d''adoption. observe = « La plateforme voit les membres
+                    réels et la dérive ; elle ne modifie rien, par construction. » · gere = « La
+                    plateforme est la source de vérité : ce claim gère LA liste complète des
+                    membres. » ⚠️ Le niveau Gouverné n''est pas offert sur ce moteur (le provider
+                    crossplane converge seul — règle « rien ne converge sans déclenchement
+                    humain », ADOPTION-STANDARD §4).'
+              x-kubernetes-validations:
+                # ⚠️ AU4 — un « observé » SANS liaison serait un full-management SILENCIEUX :
+                # sans identifiant, crossplane n'a rien à observer et créerait. Fermé à
+                # l'ADMISSION, pas au runtime.
+                - rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison) && self.liaison != '''')'
+                  message: "adoption : le niveau « observe » exige « liaison » (l'UUID du groupe Keycloak existant dont on reprend les membres). Sans lui, la plateforme n'aurait rien à observer et créerait."
+

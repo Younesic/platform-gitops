@@ -49,3 +49,46 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.realm
                 toFieldPath: spec.forProvider.realmId
+              # ── ADOPTION (AU4, appliqué au 2e produit crossplane — CL6) ────────────
+              # LA TABLE UNIQUE (mode, liaison) → managementPolicies, à l'identique de
+              # keycloak-group : un seul patron pour tout le moteur.
+              # ⚠️ `deletionPolicy` N'EXISTE PAS sur les MRs namespacés v2 (constaté au
+              # banc en AU4) — la non-destruction d'un ADOPTÉ = des policies SANS Delete.
+              # liaison ABSENTE ⇒ le combine est skippé ⇒ policies absentes = défaut
+              # serveur `[*]` : le greenfield reste intact à l'octet, et sa suppression
+              # retire réellement les membres (comportement prouvé aujourd'hui).
+              # observe SANS liaison = FERMÉ PAR CEL à l'admission (cf. XRD).
+              - type: CombineFromComposite
+                combine:
+                  strategy: string
+                  string: { fmt: "%s|%s" }
+                  variables:
+                    - fromFieldPath: spec.mode
+                    - fromFieldPath: spec.liaison
+                toFieldPath: spec.managementPolicies
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: '^observe\|.*'
+                          result: ["Observe"]
+                        - type: regexp
+                          regexp: '^gere\|.+'
+                          result: ["Observe", "Create", "Update", "LateInitialize"]
+                      fallbackValue: ["*"]
+                      fallbackTo: Value
+              # liaison → l'identité de l'EXISTANT. ⚠️ La forme de l'identifiant d'une
+              # `Memberships` a été RELEVÉE SUR UNE RESSOURCE VIVANTE, pas devinée :
+              #   platform/group-memberships/fdfcccac-7768-4350-a6a2-d5124112cae2
+              # soit « <realm>/group-memberships/<uuid du groupe> ». On la compose donc
+              # depuis les deux champs qui la portent déjà.
+              - type: CombineFromComposite
+                combine:
+                  strategy: string
+                  string: { fmt: "%s/group-memberships/%s" }
+                  variables:
+                    - fromFieldPath: spec.realm
+                    - fromFieldPath: spec.liaison
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+                policy: { fromFieldPath: Optional }
