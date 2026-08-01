@@ -236,7 +236,7 @@ spec:
           containers:
             - name: recopie
               # MÊME image que la fabrique : mêmes outils, un seul digest à suivre.
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:16d006c48f4f97317b7ec941d6a0ed0d74e7947c719fd9ca47947af658ddcaf1
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0b49f3150246f64a09ff8236c1a246c68c85aa20a2198062c8dc6ca965de9505
               command: [python, /script/recopie.py]
               env:
                 # L'identifiant d'installation de l'App `attijari-portal` (BR16). Ce n'est pas
