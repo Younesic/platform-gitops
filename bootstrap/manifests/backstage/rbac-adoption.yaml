@@ -57,6 +57,26 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list]
+  # ── LE DÉCLENCHEUR DU CANAL ANNOTATION (constaté en production, CL5) ──────────
+  # Après le merge d'une promotion sur une offre OPERATOR, l'annotation du claim
+  # passe bien à `gere` — et rien ne se passe : changer une ANNOTATION ne bumpe pas
+  # `metadata.generation`, donc Kratix ne rejoue jamais le pipeline, le work garde
+  # son ancien selector, et le keeper de bascule a RAISON de ne rien faire. Toute la
+  # chaîne d'aval est saine ; elle travaille sur une donnée périmée. (Le canal spec
+  # n'a pas ce trou : `spec.mode` change ⇒ la génération bouge ⇒ tout s'enchaîne.)
+  #
+  # Le keeper pose donc le label `kratix.io/manual-reconciliation` — le levier
+  # DOCUMENTÉ de Kratix, que la plateforme utilise déjà à la main — sur les seuls
+  # claims dont le niveau déclaré diverge du selector courant de leur work.
+  #
+  # ⚠️ LIMITE DITE FRANCHEMENT : Kubernetes n'offre pas de « patch de CE label
+  # seulement ». `patch` sur ces familles est donc plus large que le besoin. Ce qui
+  # borne réellement le geste est le CODE (rayon aux seuls adoptés divergents) et
+  # le fait que ces deux familles sont celles de la plateforme, déjà lisibles par
+  # `backstage-readonly`. Aucune autre famille n'est ouverte.
+  - apiGroups: [platform.example.io, crossplane.platform.example.io]
+    resources: ['*']
+    verbs: [patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
