@@ -77,6 +77,13 @@ spec:
                 - group
                 - users
                 type: object
+                x-kubernetes-validations:
+                - message: "adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                    \ \xBB (l'UUID du groupe Keycloak existant dont on reprend les\
+                    \ membres). Sans lui, la plateforme n'aurait rien \xE0 observer\
+                    \ et cr\xE9erait."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
             type: object
         served: true
         storage: true
@@ -139,15 +146,20 @@ spec:
                 \ Keycloak membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8\
                 te\n        (1 claim par groupe).\n      items:\n        maxLength:\
                 \ 63\n        minLength: 1\n        type: string\n      minItems:\
-                \ 1\n      type: array\n  required:\n  - group\n  - users\nchildren:\n\
-                - name: keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
-                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakMember\n\
-                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
-                \    mode: ${spec.mode}\n    users: ${spec.users}\n  needs:\n  - keycloak-group\n\
-                - name: keycloak-group\n  promise: keycloak-group\n  version: v0.0.1\n\
-                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
-                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
-                \    mode: ${spec.mode}\n"
+                \ 1\n      type: array\n  required:\n  - group\n  - users\n  x-kubernetes-validations:\n\
+                \  - message: 'adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                \ \xBB (l''UUID du groupe\n      Keycloak existant dont on reprend\
+                \ les membres). Sans lui, la plateforme n''aurait\n      rien \xE0\
+                \ observer et cr\xE9erait.'\n    rule: '!has(self.mode) || self.mode\
+                \ != ''observe'' || (has(self.liaison) && self.liaison\n      != '''')'\n\
+                children:\n- name: keycloak-member\n  promise: keycloak-member\n \
+                \ version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind:\
+                \ KeycloakMember\n  spec:\n    group: ${spec.group}\n    liaison:\
+                \ ${spec.liaison}\n    mode: ${spec.mode}\n    users: ${spec.users}\n\
+                \  needs:\n  - keycloak-group\n- name: keycloak-group\n  promise:\
+                \ keycloak-group\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n    liaison:\
+                \ ${spec.liaison}\n    mode: ${spec.mode}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
@@ -187,15 +199,20 @@ spec:
                 \ Keycloak membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8\
                 te\n        (1 claim par groupe).\n      items:\n        maxLength:\
                 \ 63\n        minLength: 1\n        type: string\n      minItems:\
-                \ 1\n      type: array\n  required:\n  - group\n  - users\nchildren:\n\
-                - name: keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
-                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakMember\n\
-                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
-                \    mode: ${spec.mode}\n    users: ${spec.users}\n  needs:\n  - keycloak-group\n\
-                - name: keycloak-group\n  promise: keycloak-group\n  version: v0.0.1\n\
-                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
-                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
-                \    mode: ${spec.mode}\n"
+                \ 1\n      type: array\n  required:\n  - group\n  - users\n  x-kubernetes-validations:\n\
+                \  - message: 'adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                \ \xBB (l''UUID du groupe\n      Keycloak existant dont on reprend\
+                \ les membres). Sans lui, la plateforme n''aurait\n      rien \xE0\
+                \ observer et cr\xE9erait.'\n    rule: '!has(self.mode) || self.mode\
+                \ != ''observe'' || (has(self.liaison) && self.liaison\n      != '''')'\n\
+                children:\n- name: keycloak-member\n  promise: keycloak-member\n \
+                \ version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n  kind:\
+                \ KeycloakMember\n  spec:\n    group: ${spec.group}\n    liaison:\
+                \ ${spec.liaison}\n    mode: ${spec.mode}\n    users: ${spec.users}\n\
+                \  needs:\n  - keycloak-group\n- name: keycloak-group\n  promise:\
+                \ keycloak-group\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n    liaison:\
+                \ ${spec.liaison}\n    mode: ${spec.mode}\n"
             - name: COMPOUND_STAGE
               value: gated
             - name: COMPOUND_DEPTH
