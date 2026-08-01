@@ -5,7 +5,15 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: teamaccess
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"group":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"Group"}}},"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}}}'
+    platform.kratix.io/adoption-non-destruction: moteur
+    platform.kratix.io/adoptable: 'true'
+    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
+      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
+      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"\
+      group\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
+      :{\"kind\":\"Group\"}}},\"users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\"\
+      :{\"catalogFilter\":{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\",\"liaison\"\
+      ,\"*\"]}"
     platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
       "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
       "origin": "claim"}]}'
@@ -35,6 +43,26 @@ spec:
                       \ (ex. team-vente)."
                     maxLength: 63
                     pattern: ^[a-z][a-z0-9-]*$
+                    type: string
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant du groupe Keycloak EXISTANT\
+                      \ dont on reprend les membres (le m\xEAme UUID que la liaison\
+                      \ du claim keycloak-group fr\xE8re). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
+                  mode:
+                    default: gere
+                    description: "Niveau d'adoption. observe = \xAB La plateforme\
+                      \ voit les membres r\xE9els et la d\xE9rive ; elle ne modifie\
+                      \ rien, par construction. \xBB \xB7 gere = \xAB La plateforme\
+                      \ est la source de v\xE9rit\xE9 : ce claim g\xE8re LA liste\
+                      \ compl\xE8te des membres. \xBB \u26A0\uFE0F Le niveau Gouvern\xE9\
+                      \ n'est pas offert sur ce moteur (le provider crossplane converge\
+                      \ seul \u2014 r\xE8gle \xAB rien ne converge sans d\xE9clenchement\
+                      \ humain \xBB, ADOPTION-STANDARD \xA74)."
+                    enum:
+                    - observe
+                    - gere
                     type: string
                   users:
                     description: "Usernames Keycloak membres du groupe \u2014 ce claim\
@@ -74,7 +102,7 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 40a8c92b0817
+              value: 58b095ea5a68
             - name: CONTRACTS_REV
               value: c6656a3b479e
             - name: CURATION_REV
@@ -94,21 +122,39 @@ spec:
               value: "api:\n  type: object\n  properties:\n    group:\n      description:\
                 \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
                 \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
-                \ string\n    users:\n      description: Usernames Keycloak membres\
-                \ du groupe \u2014 ce claim g\xE8re LA liste compl\xE8te\n       \
-                \ (1 claim par groupe).\n      items:\n        maxLength: 63\n   \
-                \     minLength: 1\n        type: string\n      minItems: 1\n    \
-                \  type: array\n  required:\n  - group\n  - users\nchildren:\n- name:\
-                \ keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
+                \ string\n    liaison:\n      description: ADOPTION \u2014 identifiant\
+                \ du groupe Keycloak EXISTANT dont on reprend\n        les membres\
+                \ (le m\xEAme UUID que la liaison du claim keycloak-group fr\xE8re).\
+                \ Omis\n        = cr\xE9ation classique.\n      maxLength: 63\n  \
+                \    type: string\n    mode:\n      default: gere\n      description:\
+                \ 'Niveau d''adoption. observe = \xAB La plateforme voit les membres\n\
+                \        r\xE9els et la d\xE9rive ; elle ne modifie rien, par construction.\
+                \ \xBB \xB7 gere = \xAB\n        La plateforme est la source de v\xE9\
+                rit\xE9 : ce claim g\xE8re LA liste compl\xE8te des\n        membres.\
+                \ \xBB \u26A0\uFE0F Le niveau Gouvern\xE9 n''est pas offert sur ce\
+                \ moteur (le provider\n        crossplane converge seul \u2014 r\xE8\
+                gle \xAB rien ne converge sans d\xE9clenchement humain\n        \xBB\
+                , ADOPTION-STANDARD \xA74).'\n      enum:\n      - observe\n     \
+                \ - gere\n      type: string\n    users:\n      description: Usernames\
+                \ Keycloak membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8\
+                te\n        (1 claim par groupe).\n      items:\n        maxLength:\
+                \ 63\n        minLength: 1\n        type: string\n      minItems:\
+                \ 1\n      type: array\n  required:\n  - group\n  - users\nchildren:\n\
+                - name: keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
                 \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakMember\n\
-                \  spec:\n    group: ${spec.group}\n    users: ${spec.users}\n  needs:\n\
-                \  - keycloak-group\n- name: keycloak-group\n  promise: keycloak-group\n\
-                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
-                \ kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n"
+                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
+                \    mode: ${spec.mode}\n    users: ${spec.users}\n  needs:\n  - keycloak-group\n\
+                - name: keycloak-group\n  promise: keycloak-group\n  version: v0.0.1\n\
+                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
+                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
+                \    mode: ${spec.mode}\n"
             - name: COMPOUND_STAGE
               value: emit
           - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
             name: backstage
+            env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
           jobOptions: {}
           rbac: {}
       - apiVersion: platform.kratix.io/v1alpha1
@@ -124,17 +170,32 @@ spec:
               value: "api:\n  type: object\n  properties:\n    group:\n      description:\
                 \ Nom du groupe Keycloak g\xE9r\xE9 par la plateforme (ex. team-vente).\n\
                 \      maxLength: 63\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
-                \ string\n    users:\n      description: Usernames Keycloak membres\
-                \ du groupe \u2014 ce claim g\xE8re LA liste compl\xE8te\n       \
-                \ (1 claim par groupe).\n      items:\n        maxLength: 63\n   \
-                \     minLength: 1\n        type: string\n      minItems: 1\n    \
-                \  type: array\n  required:\n  - group\n  - users\nchildren:\n- name:\
-                \ keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
+                \ string\n    liaison:\n      description: ADOPTION \u2014 identifiant\
+                \ du groupe Keycloak EXISTANT dont on reprend\n        les membres\
+                \ (le m\xEAme UUID que la liaison du claim keycloak-group fr\xE8re).\
+                \ Omis\n        = cr\xE9ation classique.\n      maxLength: 63\n  \
+                \    type: string\n    mode:\n      default: gere\n      description:\
+                \ 'Niveau d''adoption. observe = \xAB La plateforme voit les membres\n\
+                \        r\xE9els et la d\xE9rive ; elle ne modifie rien, par construction.\
+                \ \xBB \xB7 gere = \xAB\n        La plateforme est la source de v\xE9\
+                rit\xE9 : ce claim g\xE8re LA liste compl\xE8te des\n        membres.\
+                \ \xBB \u26A0\uFE0F Le niveau Gouvern\xE9 n''est pas offert sur ce\
+                \ moteur (le provider\n        crossplane converge seul \u2014 r\xE8\
+                gle \xAB rien ne converge sans d\xE9clenchement humain\n        \xBB\
+                , ADOPTION-STANDARD \xA74).'\n      enum:\n      - observe\n     \
+                \ - gere\n      type: string\n    users:\n      description: Usernames\
+                \ Keycloak membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8\
+                te\n        (1 claim par groupe).\n      items:\n        maxLength:\
+                \ 63\n        minLength: 1\n        type: string\n      minItems:\
+                \ 1\n      type: array\n  required:\n  - group\n  - users\nchildren:\n\
+                - name: keycloak-member\n  promise: keycloak-member\n  version: v0.0.1\n\
                 \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakMember\n\
-                \  spec:\n    group: ${spec.group}\n    users: ${spec.users}\n  needs:\n\
-                \  - keycloak-group\n- name: keycloak-group\n  promise: keycloak-group\n\
-                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
-                \ kind: KeycloakGroup\n  spec:\n    group: ${spec.group}\n"
+                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
+                \    mode: ${spec.mode}\n    users: ${spec.users}\n  needs:\n  - keycloak-group\n\
+                - name: keycloak-group\n  promise: keycloak-group\n  version: v0.0.1\n\
+                \  apiVersion: platform.example.io/v1alpha1\n  kind: KeycloakGroup\n\
+                \  spec:\n    group: ${spec.group}\n    liaison: ${spec.liaison}\n\
+                \    mode: ${spec.mode}\n"
             - name: COMPOUND_STAGE
               value: gated
             - name: COMPOUND_DEPTH
