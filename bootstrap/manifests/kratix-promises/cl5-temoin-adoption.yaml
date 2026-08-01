@@ -28,6 +28,11 @@ metadata:
     # dans le spec produirait un `strict decoding error` à l'admission du CR
     # (leçon OP6). Le niveau voyage donc en annotation, jamais dans le contrat.
     platform.kratix.io/adoption-canal: annotation
+    # ⚠️ LES NIVEAUX, DÉCLARÉS — corrigé après CL5. Aucun enum de contrat ne peut
+    # les porter ici (la CRD de l'opérande est TIERCE) : sans cette ligne, la
+    # console ne sait RIEN des barreaux tenus et son bouton refuse. La fabrique
+    # REFUSE désormais de générer un canal « annotation » sans elle.
+    platform.kratix.io/adoption-niveaux: observe,gouverne,gere
     # §3bis — l'objet rendu est un CR d'une CRD tierce, qui n'offre aucun levier
     # de non-destruction : le seul porteur possible est la CEINTURE.
     platform.kratix.io/adoption-non-destruction: ceinture
