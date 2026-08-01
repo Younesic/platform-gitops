@@ -94,7 +94,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c76eeac2a6b4b76de4cd2ea7b6004c0df9db6158a6b85ee5226eb1792e427dd8
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
             name: backstage
             env:
             - name: UI_SCHEMA_REV
@@ -124,7 +124,7 @@ spec:
             - name: registry-creds
               mountPath: /kratix/secrets/registry
               readOnly: true
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c76eeac2a6b4b76de4cd2ea7b6004c0df9db6158a6b85ee5226eb1792e427dd8
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
             name: backstage
             env:
             - name: ADOPTION_ROUTING

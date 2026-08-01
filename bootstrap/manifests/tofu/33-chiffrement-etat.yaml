@@ -160,7 +160,7 @@ spec:
               configMap: { name: terraform-chiffrement }
           containers:
             - name: engendrer
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:0b49f3150246f64a09ff8236c1a246c68c85aa20a2198062c8dc6ca965de9505
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:f3d3788de99e2cf3d7a85a48ec6f76056e85f386dbbdbb86ee327b2d92717c6d
               command: [python, /script/engendrer.py]
               env:
                 - { name: SECRET_NAME, value: terraform-chiffrement }
