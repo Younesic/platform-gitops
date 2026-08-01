@@ -1,0 +1,123 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: cl5-temoin-adoption
+  labels:
+    kratix.io/promise-version: v0.0.1
+  annotations:
+    # ── CL5 : TÉMOIN JETABLE de l'adoption OPERATOR (AU7 b→d) ─────────────────
+    # Écrite MAIN, sur le modèle d'AU2/AU3 : on éprouve le mécanisme sur une cible
+    # inoffensive AVANT de l'industrialiser. Elle sera retirée après la preuve.
+    #
+    # ⚠️ SANS `dependencies`, et c'est le point de conception : la CRD
+    # `motds.temoin.ansible.example.io` et son opérateur EXISTENT DÉJÀ. Une
+    # promesse operator ordinaire embarque les manifestes de son opérateur (8
+    # objets pour motd-temoin) — et `wire_adoption_routing` REFUSE alors le
+    # routage, parce que des dependencies ont besoin du pin Promise pour se
+    # placer. L'adoption operator suppose donc un opérateur DÉJÀ installé : c'est
+    # la 3ᵉ limite d'AU7, dite à la génération, jamais découverte au 1er claim.
+    # ⚠️ CL5.1 — PROVIDER VOLONTAIREMENT DIFFÉRENT DU DEMANDEUR.
+    # Le demandeur de la preuve est `indus_user` (team-indus). Si l'offre était fournie
+    # par `indus` aussi, une fiche owned par team-indus ne prouverait RIEN : elle serait
+    # juste par coïncidence (l'owner pourrait suivre la lignée au lieu du demandeur).
+    # C'est le témoin de CONFUSION exigé par l'objectif.
+    platform.kratix.io/provider: platform
+    # publiée le temps de la preuve : il faut un Template pour demander par le portail.
+    platform.kratix.io/exposure: product
+    platform.kratix.io/title: CL5.1 — témoin d'ownership operator
+    platform.kratix.io/adoptable: "true"
+    # ⚠️ ADOPTION-STANDARD / AU7 — LE CANAL DU NIVEAU EST UNE ANNOTATION.
+    # La CRD `Motd` est TIERCE : son spec n'accepte que `bannerText` et
+    # `jobTemplate`, sans `x-kubernetes-preserve-unknown-fields`. Le renderer
+    # officiel recopie le spec du claim TEL QUEL dans le CR ⇒ un champ `mode`
+    # dans le spec produirait un `strict decoding error` à l'admission du CR
+    # (leçon OP6). Le niveau voyage donc en annotation, jamais dans le contrat.
+    platform.kratix.io/adoption-canal: annotation
+    # ⚠️ LES NIVEAUX, DÉCLARÉS — corrigé après CL5. Aucun enum de contrat ne peut
+    # les porter ici (la CRD de l'opérande est TIERCE) : sans cette ligne, la
+    # console ne sait RIEN des barreaux tenus et son bouton refuse. La fabrique
+    # REFUSE désormais de générer un canal « annotation » sans elle.
+    platform.kratix.io/adoption-niveaux: observe,gouverne,gere
+    # §3bis — l'objet rendu est un CR d'une CRD tierce, qui n'offre aucun levier
+    # de non-destruction : le seul porteur possible est la CEINTURE.
+    platform.kratix.io/adoption-non-destruction: ceinture
+    # BR3 — la famille d'API, pour l'onglet Kubernetes live de la console.
+    platform.kratix.io/operator-group: temoin.ansible.example.io
+spec:
+  # ⚠️ PAS de `destinationSelectors` au niveau Promise : le pin est INOVERRIDABLE
+  # par le workflow (précédence RT1), et avec lui un claim observé n'atteindrait
+  # JAMAIS la destination d'adoption — il serait appliqué quand même, et le badge
+  # mentirait. Le placement vient de bc (ADOPTION_ROUTING ci-dessous).
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: cl5motds.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: Cl5Motd
+        plural: cl5motds
+        singular: cl5motd
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  # ⚠️ CES CHAMPS SONT RECOPIÉS TELS QUELS DANS LE CR `Motd` :
+                  # ils doivent donc être EXACTEMENT ceux que sa CRD accepte.
+                  properties:
+                    bannerText:
+                      type: string
+                      description: Message d'accueil affiché par l'opérateur.
+                  required:
+                    - bannerText
+  workflows:
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c76eeac2a6b4b76de4cd2ea7b6004c0df9db6158a6b85ee5226eb1792e427dd8
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            containers:
+              # 1) le renderer OFFICIEL de l'amont : il rend un CR `Motd` NOMMÉ
+              #    D'APRÈS LE CLAIM. C'est la LIAISON par convention de noms — la
+              #    même que l'adoption helm d'AU3 : un claim nommé `cl5-legacy`
+              #    reprend le CR `cl5-legacy` qui existe déjà.
+              - name: from-api-to-operator
+                image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
+                env:
+                  - name: OPERATOR_GROUP
+                    value: temoin.ansible.example.io
+                  - name: OPERATOR_VERSION
+                    value: v1alpha1
+                  - name: OPERATOR_KIND
+                    value: Motd
+              # 2) le conteneur partagé : fiche, graphe, status — et le ROUTAGE
+              #    par niveau + la ceinture des adoptés (AU5 / §3bis).
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:c76eeac2a6b4b76de4cd2ea7b6004c0df9db6158a6b85ee5226eb1792e427dd8
+                env:
+                  - name: ADOPTION_ROUTING
+                    value: "on"
+                  - name: ADOPTION_PLACEMENT
+                    value: environment=platform
+                  - name: ADOPTION_NON_DESTRUCTION
+                    value: ceinture
