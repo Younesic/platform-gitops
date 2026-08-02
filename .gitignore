@@ -1,0 +1,10 @@
+
+# ⚠️ Artefacts d'un `terraform init` local. Commités par accident le 2026-08-02 lors
+# d'une validation de module : le binaire du provider (8 Mo) est parti dans le tag, et
+# le tofu-controller a refusé de l'envoyer au runner —
+#   « ResourceExhausted : message de 8 282 290 octets, plafond 4 194 304 ».
+# Le module est devenu inapplicable, et le sparseCheckout n'y pouvait rien : il
+# sélectionne un RÉPERTOIRE, pas un contenu. Comparaison qui a tranché : la source
+# voisine, même mécanisme, pèse 3 902 octets.
+.terraform/
+.terraform.lock.hcl
