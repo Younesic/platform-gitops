@@ -385,7 +385,7 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:41f626bbb302b401f9519f67256a9ef2072f6e5c057a303e9c83f14fe2859af4
             # La MÉTA-promesse n'est PAS une offre publique : son Template + sa fiche
             # restent réservés au plan plateforme/provider (pas les consommateurs).
             env:
@@ -434,7 +434,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:9034521660cb4e68bedc6bd545836eb6442c89307b771f0be252e4a9ca1d9fea
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:bcd1694eb7d4e321b2191ceff94355b2435917130cd70a7d11ab17b6e6bf5c82
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant

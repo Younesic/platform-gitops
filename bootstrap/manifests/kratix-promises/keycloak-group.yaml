@@ -270,7 +270,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:41f626bbb302b401f9519f67256a9ef2072f6e5c057a303e9c83f14fe2859af4
             name: backstage
             env:
             - name: UI_SCHEMA_REV
@@ -296,7 +296,7 @@ spec:
               value: XKeycloakGroup
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:2b4dfa82f2d02d4720f22c3105d74ac213c00ffd02a1571e7c101ae88db3b31a
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:41f626bbb302b401f9519f67256a9ef2072f6e5c057a303e9c83f14fe2859af4
             name: backstage
           jobOptions: {}
           rbac: {}
