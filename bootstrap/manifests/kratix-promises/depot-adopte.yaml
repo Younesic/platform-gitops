@@ -146,7 +146,11 @@ spec:
         interval: 10m
         url: https://github.com/Younesic/platform-gitops
         ref:
-          tag: v0.22.0            # v0.22 : la branche par défaut est GÉRÉE (le count la laissait non gérée sur un adopté)
+          tag: v0.23.0            # v0.23 : v0.22 (branche par défaut GÉRÉE) + retrait du binaire du provider
+                                  # ⚠️ v0.22.0 est INAPPLICABLE : un `terraform init` local avait laissé
+                                  # `.terraform/` dans le tag (8 Mo) et le contrôleur refusait de l'envoyer au
+                                  # runner — « ResourceExhausted : 8 282 290 octets vs plafond 4 194 304 ».
+                                  # Ne jamais re-pinner v0.22.0.
         provider: github          # le source-controller frappe le jeton de l'App lui-même
         secretRef:
           name: github-app
