@@ -43,7 +43,7 @@ resource "github_repository" "this" {
 
 # ── La branche principale ────────────────────────────────────────────────────────
 # `auto_init` crée la branche par défaut du COMPTE, c'est-à-dire `main` (réglage
-# GitHub depuis 2020). On ne fabrique donc une branche que si la demande en veut une
+# GitHub depuis 2020). On ne FABRIQUE donc une branche que si la demande en veut une
 # autre — et le `count` porte sur une VARIABLE, connue au plan, jamais sur un attribut
 # calculé (sinon terraform refuse de planifier).
 resource "github_branch" "principale" {
@@ -53,11 +53,49 @@ resource "github_branch" "principale" {
   branch     = var.default_branch
 }
 
+# ⚠️⚠️ CE `count` A ÉTÉ RETIRÉ, ET C'EST UN CORRECTIF DE FOND — CONSTATÉ EN PRODUCTION.
+#
+# Il valait `var.default_branch != "main" ? 1 : 0`, par le même raisonnement que la
+# ressource ci-dessus : « GitHub crée `main` tout seul, inutile de le forcer ».
+#
+# Ce raisonnement est juste POUR UNE CRÉATION et FAUX POUR UNE ADOPTION. Un dépôt qui
+# existe déjà peut avoir N'IMPORTE QUELLE branche par défaut. Avec le `count`, une
+# demande déclarant `main` sur un dépôt dont la branche par défaut est `integration`
+# ne produisait AUCUNE ressource — donc terraform ne gérait pas ce champ, et l'écart
+# n'était JAMAIS corrigé, même en Géré.
+#
+# MESURÉ sur `socle-metier-2019` : branche par défaut basculée à la main sur
+# `integration`, passage en Géré, apply réussi — `develop` créée, protection posée,
+# description vidée — et `integration` TOUJOURS EN PLACE. Le champ était demandé au
+# formulaire, enregistré dans le claim, et jamais appliqué : la plateforme affichait
+# une valeur qu'elle ne tenait pas.
+#
+# La branche par défaut est donc GÉRÉE DANS TOUS LES CAS. Sur un dépôt neuf c'est un
+# no-op (GitHub a déjà posé `main`) ; sur un dépôt adopté, c'est la seule chose qui
+# ramène l'écart.
+#
+# ⚠️ On pointe `var.default_branch` et NON `github_branch.principale[0].branch` : cette
+# dernière n'existe pas quand la branche déclarée est `main`. La dépendance d'ordre est
+# portée par `depends_on`, qui tolère une ressource à `count = 0`.
+#
+# ⚠️ LIMITE DITE : si un dépôt adopté déclare une branche par défaut qui N'EXISTE PAS
+# chez lui, l'apply échoue — GitHub refuse de pointer le défaut sur une branche absente.
+# C'est un refus JUSTE et lisible au plan, pas un défaut à masquer.
 resource "github_branch_default" "principale" {
-  count = var.default_branch != "main" ? 1 : 0
-
   repository = github_repository.this.name
-  branch     = github_branch.principale[0].branch
+  branch     = var.default_branch
+
+  depends_on = [github_branch.principale]
+}
+
+# Le retrait du `count` change l'ADRESSE de la ressource dans l'état. Aucune instance
+# vivante n'est concernée (les trois déclarent `main`, donc `count` valait 0 et la
+# ressource n'existait dans aucun état — vérifié avant d'écrire). Mais un dépôt ayant
+# déclaré une autre branche AURAIT `…principale[0]` : sans ce bloc, la montée de version
+# lui afficherait une DESTRUCTION au plan. Alarmant, et inutile.
+moved {
+  from = github_branch_default.principale[0]
+  to   = github_branch_default.principale
 }
 
 # ── Les branches de travail ──────────────────────────────────────────────────────
