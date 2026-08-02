@@ -135,7 +135,7 @@ spec:
               # Pousse le Template scaffolder et la fiche de la promesse. AUCUNE
               # adaptation terraform : c'est le conteneur partagé, tel quel.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:307c7088e45ac4ab150c9f39f8862d5f96007ce4c85b515d6afcc3d288fd374e
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:1652130538819f7c9ab5febbc2a7984a856764bcf7aaf70bf4b59e0bf4bd74bc
 
     resource:
       configure:
@@ -235,6 +235,6 @@ spec:
               # TOUTE la sortie — c'est ce qui doit labelliser la ressource Terraform
               # SANS une ligne écrite pour terraform.
               - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:307c7088e45ac4ab150c9f39f8862d5f96007ce4c85b515d6afcc3d288fd374e
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:1652130538819f7c9ab5febbc2a7984a856764bcf7aaf70bf4b59e0bf4bd74bc
             rbac: {}
             jobOptions: {}
