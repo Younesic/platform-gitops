@@ -1,0 +1,40 @@
+# RE-VÉRIFIER — le droit de demander un nouveau plan sur une ressource GARÉE.
+#
+# ⚠️ POURQUOI CE DROIT EXISTE. Une ressource Observée ou Gouvernée se GARE après son
+# premier plan (« Reconciliation is stopped to wait for manual operations », constaté
+# LG2) : elle ne replanifie JAMAIS d'elle-même. Le re-diff est un GESTE, et l'onglet
+# Plan le promettait depuis LG6 sans qu'aucun chemin ne le rende possible.
+#
+# ⚠️ CLUSTERROLE SÉPARÉ, JAMAIS UN ÉLARGISSEMENT DE `backstage-readonly` : ce rôle
+# s'appelle « readonly » et doit le rester. Élargir un rôle nommé pour sa retenue est
+# un glissement qu'on ne voit plus six mois après (leçon TN4, re-appliquée en AU6).
+#
+# ⚠️ CE QUE CE DROIT NE DONNE PAS, et c'est le point : aucun accès au SPEC. Le geste
+# patche le SOUS-RESSOURCE STATUS (vider les marqueurs de plan) puis une ANNOTATION.
+# Un patch de status ne se bat jamais avec ArgoCD, qui ne gère que le spec — c'est ce
+# qui rend le geste sûr sur un objet GitOps. Pas de create, pas de delete : on ne peut
+# ni fabriquer ni détruire une ressource avec ce rôle.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-replan
+rules:
+  - apiGroups: ['infra.contrib.fluxcd.io']
+    resources: ['terraforms']
+    verbs: ['get', 'patch']          # patch = poser l'annotation `requestedAt`
+  - apiGroups: ['infra.contrib.fluxcd.io']
+    resources: ['terraforms/status']
+    verbs: ['get', 'patch']          # patch = vider les marqueurs de plan
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-replan
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-replan
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
