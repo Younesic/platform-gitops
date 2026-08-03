@@ -230,7 +230,7 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:1652130538819f7c9ab5febbc2a7984a856764bcf7aaf70bf4b59e0bf4bd74bc
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
             env:
             - name: CONTRACTS_REV
@@ -254,7 +254,7 @@ spec:
               value: XHarborProject
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:1652130538819f7c9ab5febbc2a7984a856764bcf7aaf70bf4b59e0bf4bd74bc
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
           jobOptions: {}
           rbac: {}
