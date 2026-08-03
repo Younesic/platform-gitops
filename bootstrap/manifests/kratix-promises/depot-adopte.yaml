@@ -41,7 +41,7 @@ metadata:
     # (run.py:adoption_ui_layer) ; cette promesse-ci est écrite MAIN, d'où la donnée.
     # ⚠️ Format EMBALLÉ obligatoire ({"properties": …}) : à plat, l'annotation est
     # silencieusement INERTE (le bug d'héritage payé 3 semaines).
-    backstage.example.io/ui-schema: '{"properties": {"mode": {"title": "Niveau d''adoption", "ui:title": "Niveau d''adoption", "ui:enumNames": ["Observed", "Governed", "Managed"]}, "import_id": {"title": "Élément existant à lier", "ui:title": "Élément existant à lier", "ui:placeholder": "nom du dépôt existant (ex. patrimoine-legacy-1)"}}, "ui:order": ["mode", "import_id", "*"]}'
+    backstage.example.io/ui-schema: '{"properties": {"mode": {"title": "Niveau d''adoption", "ui:title": "Niveau d''adoption", "ui:enumNames": ["Observé", "Gouverné", "Géré"]}, "import_id": {"title": "Élément existant à lier", "ui:title": "Élément existant à lier", "ui:placeholder": "nom du dépôt existant (ex. patrimoine-legacy-1)"}}, "ui:order": ["mode", "import_id", "*"]}'
     # La famille des objets rendus, pour l'onglet Kubernetes (mécanisme BR3, donnée pure).
     platform.kratix.io/operator-group: infra.contrib.fluxcd.io
     # Sorties étiquetées (aucune n'est sensible dans ce module — décision de conception).
