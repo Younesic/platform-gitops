@@ -45,8 +45,19 @@ spec:
               valueFrom: { secretKeyRef: { name: backstage-oidc-client, key: attribute.client_secret } }
             # --- GitHub (BR16 : App = charge ; fine-grained RO = proxy + fallback ;
             #     le PAT classic n'est PLUS référencé -> révocable) ---
+            # ⚠️ optional: cette clé n'est PAS dans le SealedSecret — elle avait été
+            #    posée à la main dans le Secret (BR16), et une réconciliation du
+            #    contrôleur sealed-secrets l'a effacée : le portail ne démarrait plus
+            #    du tout pour un jeton qui ne sert qu'au proxy /github-api du Studio.
+            #    Sans elle le portail tourne ; seuls les pickers de dépôts/tags du
+            #    Studio répondront en erreur. Pour la rétablir durablement, elle doit
+            #    entrer dans le SealedSecret, jamais dans le Secret vivant.
             - name: GITHUB_PROXY_TOKEN
-              valueFrom: { secretKeyRef: { name: backstage-secrets, key: GITHUB_PROXY_TOKEN } }
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: GITHUB_PROXY_TOKEN
+                  optional: true
             # --- AWX (proxy /awx-api) : jeton de LECTURE de `portail-lecture`,
             #     fabriqué DANS le cluster par awx/12-jeton-portail.yaml et jamais
             #     affiché. ⚠️ Le secret doit exister AVANT ce câblage, sinon la
