@@ -41,7 +41,12 @@ controller:
     enabled: true
     minAvailable: 1
   resources:
-    requests: { cpu: 250m, memory: 1Gi }
+    # requests 1Gi -> 512Mi (2026-08-04) : la RESERVATION ne sert qu'au PLACEMENT.
+    # Avec deux noeuds hors service (kubelets figes), le seul noeud sain etait a 96%
+    # et le controleur restait Pending -> plus aucun sync GitOps. La LIMITE reste a
+    # 2Gi, donc aucun risque d'OOM nouveau : on cesse seulement de reserver ce qui
+    # n'est pas consomme. A remonter a 1Gi quand la capacite du pool est retablie.
+    requests: { cpu: 250m, memory: 512Mi }
     # 1Gi -> 2Gi (2026-07-25) : CrashLoopBackOff OOMKilled toutes les ~30s (18 restarts),
     # AUCUN sync ne pouvait aboutir — le compare du repo recursif kratix-destination
     # + le parc actuel depassent 1Gi. Patch break-glass applique puis grave ici.
