@@ -175,7 +175,14 @@ spec:
                         ] | @tsv' /tmp/pool.json | while IFS="$TAB" read -r RN RNS GEN CLAIMS REFS; do
                       # pire état des CLAIMS de l'arbre + fautif éventuel
                       WORST=$(printf '%s' "$CLAIMS" | jq -r 'map(.s) | if any(.=="unhealthy") then "unhealthy" elif any(.=="degraded") then "degraded" elif any(.=="unknown") then "unknown" else "healthy" end')
-                      REASON=$(printf '%s' "$CLAIMS" | jq -r '[.[]|select(.s=="unhealthy" or .s=="degraded")][0] // empty | .k+" "+.n+" : "+(.r // .s)')
+                      # ⚠️ `.r // .s` NE SUFFIT PAS : en jq, `//` ne remplace que `null`
+                      #    et `false` — une chaîne VIDE passe. `reasonof` rend "" dès qu'il
+                      #    n'y a pas de condition `Reconciled=False` (cas d'un `degraded`
+                      #    venu de `ConfigureWorkflowCompleted`), et l'écran affichait alors
+                      #    « HarborProject vente-harbor : » — un badge « à traiter » incapable
+                      #    de dire pourquoi, constaté en production sur vente-harbor.
+                      #    On retombe donc explicitement sur l'ÉTAT quand la raison est vide.
+                      REASON=$(printf '%s' "$CLAIMS" | jq -r '[.[]|select(.s=="unhealthy" or .s=="degraded")][0] // empty | .k+" "+.n+" : "+(if ((.r // "") | length) == 0 then .s else .r end)')
                       # refs provisionnées (XR crossplane…) : Synced/Ready=False = unhealthy + fautif nommé
                       for REF in $REFS; do
                         RG=$(printf '%s' "$REF" | cut -d, -f1); RK=$(printf '%s' "$REF" | cut -d, -f2)
