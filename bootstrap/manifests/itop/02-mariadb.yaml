@@ -86,7 +86,7 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 5
           resources:
-            requests: { cpu: 200m, memory: 768Mi }
+            requests: { cpu: 200m, memory: 256Mi }
             limits:   { cpu: "1",  memory: 1536Mi }
       volumes:
         - name: config
