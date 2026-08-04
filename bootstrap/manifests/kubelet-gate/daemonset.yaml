@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GATE `WatchListClient` SUR LE KUBELET DE CHAQUE NŒUD
+#
+# POURQUOI. Sur ce cluster, les reflectors en watch-list (client-go >= 0.36) ne
+# synchronisent jamais leur cache : ils PENDENT sans erreur. On l'a déjà payé sur
+# cilium, CNPG, le manager Kratix et le source-controller — à chaque fois le
+# remède a été la variable d'environnement `KUBE_FEATURE_WatchListClient=false`.
+#
+# Le KUBELET souffre du même mal, et c'est le plus coûteux : son gestionnaire de
+# secrets/configmaps ne se synchronise plus, donc TOUT montage échoue avec
+# « MountVolume.SetUp failed … failed to sync {secret,configmap} cache: timed
+# out » — y compris `kube-api-access`. Le nœud reste Ready (son Lease part bien,
+# c'est une écriture courte), il continue de faire tourner ce qu'il connaît
+# déjà, mais il n'accepte plus AUCUN pod nouveau. Un nœud à moitié mort qui
+# s'annonce sain.
+#
+# ⚠️ Scaleway REFUSE `kubelet-args.feature-gates` (« not available for this
+# version ») : le seul chemin est l'environnement systemd du kubelet, donc un
+# DaemonSet privilégié. Le drop-in ne survit pas au recyclage d'un nœud — d'où
+# un DaemonSet plutôt qu'un geste manuel : tout nœud neuf est traité à sa
+# naissance, sans intervention.
+#
+# ⚠️⚠️ IDEMPOTENCE, ET POURQUOI ELLE EST VITALE ICI : on ne redémarre le kubelet
+# QUE si le gate n'est pas déjà dans son environnement. Un restart inutile n'est
+# pas neutre — un kubelet qui redémarre SANS le gate déjà en place devient
+# aveugle (constaté : il ne prend plus aucun pod, et on ne peut alors même plus
+# y poser le correctif). Le drop-in est donc TOUJOURS écrit AVANT tout restart,
+# et le restart est conditionné à sa prise en compte.
+#
+# ⚠️ Le pod ne monte AUCUN volume (`automountServiceAccountToken: false`) : c'est
+# ce qui lui permet de démarrer sur un nœud dont les montages sont justement
+# cassés. Ne pas y ajouter de secret, de configmap ni de token.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-watchlist-gate
+  namespace: kube-system
+  labels: { app: kubelet-watchlist-gate }
+spec:
+  selector:
+    matchLabels: { app: kubelet-watchlist-gate }
+  template:
+    metadata:
+      labels: { app: kubelet-watchlist-gate }
+    spec:
+      hostPID: true
+      hostNetwork: true
+      automountServiceAccountToken: false
+      priorityClassName: system-node-critical
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: gate
+          image: busybox:1.36
+          securityContext: { privileged: true }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          command: ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "sh", "-c"]
+          args:
+            - |
+              DROPIN=/etc/systemd/system/kubelet.service.d/99-watchlist.conf
+              VOULU='[Service]
+              Environment="KUBE_FEATURE_WatchListClient=false"'
+              while true; do
+                # 1) le drop-in est écrit AVANT toute décision de restart
+                if [ ! -f "$DROPIN" ] || ! grep -q 'KUBE_FEATURE_WatchListClient=false' "$DROPIN"; then
+                  mkdir -p /etc/systemd/system/kubelet.service.d
+                  printf '[Service]\nEnvironment="KUBE_FEATURE_WatchListClient=false"\n' > "$DROPIN"
+                  systemctl daemon-reload
+                  echo "$(date -Iseconds) drop-in ecrit"
+                fi
+                # 2) restart SEULEMENT si le kubelet ne porte pas encore le gate
+                # ⚠️ On lit l'environnement du PROCESSUS EN COURS (/proc/<pid>/environ),
+                #    PAS `systemctl show` : après un `daemon-reload`, systemd annonce
+                #    déjà la variable au niveau de l'UNITÉ alors que le kubelet tourne
+                #    encore sans elle. La sonde concluait « gate déjà actif » et ne
+                #    redémarrait jamais — un contrôle qui mesurait autre chose que ce
+                #    qu'il prétendait mesurer.
+                KPID=$(pidof kubelet 2>/dev/null | tr ' ' '\n' | head -1)
+                if [ -n "$KPID" ] && tr '\0' '\n' < "/proc/$KPID/environ" 2>/dev/null | grep -q 'KUBE_FEATURE_WatchListClient=false'; then
+                  echo "$(date -Iseconds) gate deja actif — aucun restart"
+                else
+                  echo "$(date -Iseconds) gate absent de l environnement — restart du kubelet"
+                  systemctl restart kubelet
+                  sleep 15
+                  echo "$(date -Iseconds) kubelet=$(systemctl is-active kubelet)"
+                fi
+                sleep 300
+              done
