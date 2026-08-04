@@ -57,6 +57,18 @@ spec:
   web_readiness_timeout: 5
   web_readiness_failure_threshold: 3
 
+  # ── EN VEILLE ───────────────────────────────────────────────────────────────
+  # ⚠️ AWX est mis en veille, PAS supprimé. Le moteur ansible a été abandonné le
+  # 2026-07-28 (décision actée) ; ses deux gros déploiements — web et task —
+  # réservaient à eux seuls ~1,5 Gio sur un cluster où 17,4 Gio étaient déjà
+  # réservés pour 18,9 Gio de capacité. Le portail ne pouvait plus démarrer :
+  # « Insufficient memory » sur les quatre nœuds.
+  #
+  # Ce que la veille NE fait PAS : elle ne supprime ni la base, ni ses données, ni
+  # les volumes, ni le CR. Remettre `1` suffit à tout rallumer.
+  web_replicas: 0
+  task_replicas: 0
+
   # ── Ordonnancement et taille ────────────────────────────────────────────────
   control_plane_priority_class: platform-high
   # Les nœuds sont déjà réservés à ~90 % en mémoire : on dimensionne pour de vrai.
