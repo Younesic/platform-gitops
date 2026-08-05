@@ -25,7 +25,13 @@ rules:
   - apiGroups: [argoproj.io]
     resources: [applications]
     verbs: [get]
-    resourceNames: [adoption-observe, adoption-gouverne]
+    # ⚠️ kratix-destination ajouté (CL12-QUATER) : la dérive d'un GÉRÉ helm/operator
+    # vit dans SA destination (AU1 — ArgoCD est la dernière couche avant le réel pour
+    # ces moteurs, à tous les barreaux). Sans ce nom, la couche lisait un 403, l'index
+    # restait vide et la colonne disait « je ne sais pas » — trouvé par la mesure
+    # finale dans le pod, pas par les tests (le RBAC ne se teste qu'en vrai).
+    # Toujours du GET nominatif : la retenue du rôle ne change pas.
+    resourceNames: [adoption-observe, adoption-gouverne, kratix-destination]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
