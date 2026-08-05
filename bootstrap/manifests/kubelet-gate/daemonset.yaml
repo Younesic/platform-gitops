@@ -80,7 +80,47 @@ spec:
                 #    qu'il prétendait mesurer.
                 KPID=$(pidof kubelet 2>/dev/null | tr ' ' '\n' | head -1)
                 if [ -n "$KPID" ] && tr '\0' '\n' < "/proc/$KPID/environ" 2>/dev/null | grep -q 'KUBE_FEATURE_WatchListClient=false'; then
-                  echo "$(date -Iseconds) gate deja actif — aucun restart"
+                  # 3) LE GATE NE SUFFIT PAS : GUÉRIR AUSSI UN KUBELET GELÉ MALGRÉ LUI.
+                  #
+                  # ⚠️⚠️ CONSTATÉ LE 2026-08-05 sur 853472cb : kubelet né AVEC le gate,
+                  # et pourtant gelé 8 h — « failed to sync {secret,configmap} cache »
+                  # en continu (118 occurrences / 5 min), AUCUNE erreur de watch ni de
+                  # connexion dans le journal, mémoire et disque sains. Les reflectors
+                  # du gestionnaire d'objets pendent SANS erreur (connexions zombies) ;
+                  # le gate empêche la récidive du bug watch-list, il ne dégèle pas un
+                  # kubelet déjà figé. Cette branche disait « aucun restart » et le
+                  # nœud n'était donc JAMAIS soigné — le remède restait un geste
+                  # manuel, découvert des heures plus tard par les pods bloqués.
+                  #
+                  # DÉTECTION PAR LA SIGNATURE, PAS PAR UNE HUMEUR : des erreurs de
+                  # sync FRAÎCHES (3 dernières minutes) au-dessus d'un seuil qui ignore
+                  # le blip isolé (un nœud gelé en produit ~100/5 min ; un incident
+                  # passager, 1 ou 2). Le restart est PROUVÉ comme remède (37ce45fa le
+                  # 2026-08-04 : montage KO avant, OK 20 s après ; 853472cb ce jour :
+                  # MONTAGE-OK 8 s après) et bénin pour les charges (les conteneurs
+                  # continuent, le kubelet se rattache).
+                  #
+                  # GARDE-FOU ANTI-BOUCLE : au plus un restart toutes les 20 min
+                  # (marqueur epoch à côté du drop-in — il survit au restart du
+                  # kubelet ; un recyclage du nœud le remet à zéro, comme tout le
+                  # reste). Si un nœud gèle plus vite que ça, le journal du DaemonSet
+                  # le DIT à chaque tour au lieu de marteler des restarts.
+                  MARQUEUR=/etc/systemd/system/kubelet.service.d/.derniere-guerison
+                  RECENTES=$(journalctl -u kubelet --since "3 minutes ago" --no-pager 2>/dev/null | grep -c 'failed to sync secret cache\|failed to sync configmap cache')
+                  if [ "${RECENTES:-0}" -ge 5 ]; then
+                    MAINTENANT=$(date +%s); DERNIERE=$(cat "$MARQUEUR" 2>/dev/null || echo 0)
+                    if [ $((MAINTENANT - DERNIERE)) -ge 1200 ]; then
+                      echo "$(date -Iseconds) GEL DETECTE ($RECENTES erreurs de sync en 3 min, gate pourtant actif) — restart de guerison"
+                      echo "$MAINTENANT" > "$MARQUEUR"
+                      systemctl restart kubelet
+                      sleep 15
+                      echo "$(date -Iseconds) kubelet=$(systemctl is-active kubelet)"
+                    else
+                      echo "$(date -Iseconds) GEL DETECTE ($RECENTES erreurs) mais guerison recente ($((MAINTENANT - DERNIERE)) s < 1200) — on attend, un noeud qui regele si vite merite des yeux humains"
+                    fi
+                  else
+                    echo "$(date -Iseconds) gate actif, aucun gel ($RECENTES erreur(s) recente(s))"
+                  fi
                 else
                   echo "$(date -Iseconds) gate absent de l environnement — restart du kubelet"
                   systemctl restart kubelet
