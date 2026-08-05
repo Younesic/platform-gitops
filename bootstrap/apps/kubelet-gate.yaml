@@ -1,0 +1,26 @@
+# App-of-apps : gate + guérison du kubelet sur chaque nœud.
+#
+# ⚠️ POURQUOI CETTE APP EXISTE — TROU DÉCOUVERT LE 2026-08-05 : le DaemonSet
+# vivait dans le repo (bootstrap/manifests/kubelet-gate/) mais AUCUNE app ne
+# l'appliquait — il n'était sur le cluster que par le kubectl apply du
+# 2026-08-04. Ses évolutions ne se déployaient donc jamais, et rien ne le
+# restaurerait après une fausse manœuvre. Un correctif d'infrastructure qui ne
+# vit que par un geste manuel n'est pas un correctif : c'est un souvenir.
+#
+# prune: false — ce DaemonSet est le FILET DE SÉCURITÉ des nœuds (sans lui, un
+# nœud neuf naît sans le gate et gèle au premier montage). Le retirer doit être
+# un geste délibéré en deux temps, jamais l'effet de bord d'un déplacement de
+# fichier.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: kubelet-gate, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:Younesic/platform-gitops.git
+    targetRevision: main
+    path: bootstrap/manifests/kubelet-gate
+  destination: { server: https://kubernetes.default.svc, namespace: kube-system }
+  syncPolicy:
+    automated: { selfHeal: true, prune: false }
+    syncOptions: [ ServerSideApply=true ]
