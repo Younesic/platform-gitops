@@ -306,30 +306,46 @@ noms qualifiés anti-collision.
 3. Les libellés français du §1 sont LA référence d'affichage (sous réserve de validation
    utilisateur finale).
 
-## 6. Le legacy SANS API — et le TEST D'ENTRÉE qui l'encadre
+## 6. L'aiguillage d'entrée — où vit le contrat, et le TEST qui l'encadre
 
-L'échelle des §2-§4 ne couvre que ce qui a **une API pilotable**. Pour le reste — procédures
-humaines, systèmes fermés, consoles web sans API — la plateforme offre une **promesse-ticket**
-(objectif LG10) : le contrat self-service d'abord (un formulaire, une demande tracée, une
-référence rendue), l'exécution HUMAINE derrière, et l'automatisation plus tard **derrière le
-même contrat**.
+L'échelle des §2-§4 ne couvre que ce qui a **une API pilotable**. Il reste deux familles,
+chacune avec sa voie : l'**automatisable dont le contrat ne vit nulle part** — script shell,
+API REST sans spec, procédure stockée, CLI propriétaire — où le contrat est **DÉCLARÉ**
+(moteur `script`, § « Le contrat déclaré » du PROMISE-STANDARD) ; et le
+**non-automatisable** — procédures humaines, systèmes fermés, consoles web sans API — où la
+plateforme offre une **promesse-ticket** (objectif LG10) : le contrat self-service d'abord
+(un formulaire, une demande tracée, une référence rendue), l'exécution HUMAINE derrière, et
+l'automatisation plus tard **derrière le même contrat**.
 
 **L'aiguillage** — on y entre par constat, jamais par déclaration :
 
-| Ce que le système expose | → le bon barreau |
+| Ce que le système expose | → la voie |
 |---|---|
 | une API pilotable (écriture) | un moteur : terraform, crossplane, helm, operator |
+| une exécution possible mais **un contrat ILLISIBLE** — CONSTATÉ | le moteur **`script`** (contrat DÉCLARÉ) — ressource ou action **selon les VERBES** |
 | une API en LECTURE seule | Répertorié (§2 niveau 0) ou Observé (§2 niveau 1) |
 | **aucune API — CONSTATÉE** | **la promesse-ticket** (LG10), classe « Action » |
 
-⚠️ **« Constatée » veut dire mesurée, pas affirmée.** L'exemple de référence : la création
-d'une organisation GitHub — `POST /admin/organizations` rend **404** sur github.com (l'appel
-n'existe que sur GitHub Enterprise Server). C'est ce genre de trace qu'on exige avant d'admettre
-une promesse-ticket.
+Deux précisions de frontière :
 
-**Pourquoi cette exigence.** Sans elle, le motif devient l'échappatoire de qui n'a pas envie
-d'écrire un module — et la plateforme institutionnaliserait le travail manuel qu'elle est censée
-réduire. Le ticket est un aveu d'absence d'API, pas un raccourci.
+- un **survey AWX** est un contrat déclaré **dans un système tiers lisible par API** — même
+  famille que la déclaration, servie par les **actions AWX** (`spec.type: awx-action`) ;
+- une **spec OpenAPI/Swagger constatée** rend le contrat **DÉRIVABLE** — c'est la PREMIÈRE
+  ligne (famille des moteurs qui LISENT), pas la deuxième ; moteur futur, cadré dans
+  `backstage-platform/Objectives/contrat-declare/NOTE-OPENAPI.md`.
+
+⚠️ **« Constaté » veut dire mesuré, pas affirmé — pour les DEUX lignes qui en portent la
+mention.** « Aucune API » : l'exemple de référence est la création d'une organisation
+GitHub — `POST /admin/organizations` rend **404** sur github.com (l'appel n'existe que sur
+GitHub Enterprise Server). « Contrat illisible » se démontre pareil : pas de schéma dans
+l'artefact, pas de spec, pas de système tiers qui le porte — sinon le moteur `script`
+deviendrait l'échappatoire de qui n'a pas envie d'écrire son schéma, exactement comme le
+ticket serait l'échappatoire de qui n'a pas envie d'écrire un module.
+
+**Pourquoi cette exigence.** Sans elle, ces motifs institutionnaliseraient le travail
+manuel — ou le contrat au rabais — que la plateforme est censée réduire. Le ticket est un
+aveu d'absence d'API ; la déclaration est un aveu d'absence de schéma lisible. Ni l'un ni
+l'autre n'est un raccourci.
 
 **Et ce que la promesse-ticket ne promet PAS**, écrit sur la carte, dans la description et dans
 le corps du ticket : elle ne surveille rien, ne se répare pas, et retirer la demande ne défait
@@ -363,3 +379,8 @@ n'offre pas la même garantie que ses voisines doit se voir comme telle.
 | La dérive se VOIT dans la console | dérive provoquée → la fiche affiche « dérive détectée », sans correction | AU6 (f) |
 | Rétrograder ne détruit JAMAIS | gere→observe : les fichiers quittent l'app prune:true, l'objet SURVIT (ceinture) | AU3 (f) |
 | Promotion k8s = reprise, pas recréation | UID identiques avant/après le premier apply | AU3 (d) · AU7 (c) |
+| Une action ne défait rien à la suppression | delete du claim → le geste RESTE fait | CD2 (d) |
+| Un échec de script est un échec de demande | script en code ≠ 0 → statut ROUGE, cause lisible — jamais un vert menteur | CD2 (f) · CD3 (e) |
+| Une ressource `script` ne s'auto-guérit pas | dérive manuelle → PAS corrigée, et la fiche le dit | CD3 (b) |
+| Sans `observe.sh`, aucune surface de dérive | fiche SANS badge (ni « alignée » ni « je ne sais pas ») — la surface n'existe pas | CD3 (g) · CD4 |
+| La classe suit les verbes | `run.sh` seul ne peut produire qu'une ACTION ; `apply`+`destroy` qu'une RESSOURCE | CD4 (a) · CD5 (c) |

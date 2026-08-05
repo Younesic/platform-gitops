@@ -404,6 +404,107 @@ prunée et l'exécuteur reste intact ; `git revert` restaure tout.
 ⚠️ Et au niveau d'une ressource : **supprimer la SOURCE avant la ressource BLOQUE le
 finalizer** — il lui faut le module pour jouer le destroy. Remède : recréer la source.
 
+## 9quater. Le contrat DÉCLARÉ — promesses `script` et actions (moteur 7)
+
+> **Statut : standard écrit AVANT le code (set CD, 2026-08-06)** — comme le contrat des
+> niveaux l'a été avant l'adoption. L'implémentation = objectifs CD2→CD5 ; chaque garantie
+> ci-dessous a son test de falsification dans la table §7 d'ADOPTION-STANDARD. Rien de ce §
+> n'est promis à un demandeur tant que la preuve correspondante n'est pas jouée.
+
+**Le cas** : un exécutable réel — script shell, appel d'API sans spec, procédure stockée —
+dont le contrat ne vit **nulle part**. Aucune dérivation possible ; l'inférence (deviner
+depuis `--help`, des exemples) est écartée : un contrat deviné est pire qu'un déclaré.
+**Le principe** : *là où le contrat ne peut pas être LU, il est DÉCLARÉ — une fois,
+co-localisé avec l'artefact — et tout l'aval dérive de la déclaration comme s'il l'avait
+lue.* (C'est ce que font les mieux placés ailleurs : KubeVela et kro déclarent co-localisé
+et dérivent ; Syntasso écrit l'API à la main — notre plancher ; Backstage/Port déclarent
+côté portail — la déclaration y pourrit loin du code, d'où la co-localisation.)
+
+### La convention `contract.schema.json`
+
+- **JSON Schema plat autoportant, LE MÊME dialecte que `values.schema.json`** (celui que
+  `schema-to-crd.py` consomme : bornes, patterns, enums, `x-kubernetes-*` pour le CEL,
+  `x-kratix-internal` pour les knobs) → la chaîne aval est INCHANGÉE.
+- Co-localisé avec l'exécutable dans le dépôt git, **pinné par tag** (le pin de
+  gouvernance, comme un module terraform).
+- Précédence : **fichier source > `spec.api` inline du claim** (règle CT5) — le Studio
+  sait composer la déclaration (« le stylo », l'ApiEditor) quand le fichier manque ; si
+  le fichier apparaît ensuite, IL gagne.
+
+### Les verbes sont des FICHIERS — la classe suit les verbes, jamais le marketing
+
+La présence déclare, structurellement — un dossier ne peut pas mentir sur ce qu'il
+contient :
+
+| Fichiers présents | Classe | La phrase de carte (GELÉE — reprise telle quelle à l'écran) |
+|---|---|---|
+| `run.sh` seul | **ACTION** | « Une exécution qui se termine — ne surveille rien, ne répare rien ; supprimer la demande ne défait rien. » |
+| `apply.sh` + `destroy.sh` | **RESSOURCE** | « Converge au changement déclaré · destruction pilotée · pas d'auto-guérison. » |
+| + `observe.sh` (optionnel) | ouvre la dérive | **Étage 2, GATÉ** — sa présence est SIGNALÉE, jamais câblée ni promise en v1. |
+
+- `run.sh` **XOR** (`apply.sh` + `destroy.sh`) : le mélange est REFUSÉ à la génération,
+  fichiers trouvés et attendus nommés dans le refus.
+- *« Le guichet peut être unique, la GARANTIE ne peut pas l'être »* (décision d'abandon
+  Ansible) — ici la garantie est portée par la STRUCTURE : `run.sh` seul ne peut pas
+  devenir une ressource, `apply`+`destroy` ne peuvent pas se présenter en action.
+- Sans `observe.sh`, **aucune surface de dérive n'existe** sur la fiche — ni « alignée »
+  ni « je ne sais pas » (règle CL12 : encadrer une surface qu'on n'observe pas lui
+  donnerait un statut qu'elle n'a pas).
+- Une ACTION n'apparaît **JAMAIS dans la console de suivi** — elle ne possède rien à
+  suivre (cadrage §3.2 : la console suit des ressources — santé, cycle de vie) ; son
+  résultat vit sur sa fiche, et pour AWX dans le journal du job.
+- `apply.sh` doit être **IDEMPOTENT** (re-run sans changement = zéro effet) — c'est SA
+  moitié du contrat ; celle de la plateforme est de ne le rejouer qu'au changement
+  déclaré.
+
+### Le contrat d'exécution du runner (ce que le script peut supposer)
+
+- Chaque champ du contrat arrive en variable **`SPEC_<CHAMP>`** (majuscules).
+- Les identifiants du système cible arrivent par l'ENVIRONNEMENT (`credsSecret` déclaré
+  par la promesse, monté par la plateforme) — **jamais en argument** (un argument finit
+  dans les journaux).
+- Les sorties à publier s'écrivent en `clé=valeur` dans le fichier pointé par
+  **`$SORTIES`** ; le runner les porte au `status` du claim.
+- **Un code de sortie ≠ 0 est un échec de la demande, VISIBLE** — jamais un succès qui
+  ment.
+- Le runner est une image **PARTAGÉE, digest-pinnée** (jamais une image par produit — le
+  levier de la plateforme) : elle clone la source à la ref pinnée et exécute le verbe.
+  ⚠️ Limite dite : un script qui exige un outil absent de l'image partagée n'est pas
+  couvert en v1 (l'image par-source déclarée = extension gatée).
+
+### La frontière de sécurité — trois verrous
+
+1. Une promesse `script` ne déclare **JAMAIS** de `Permissions` Kratix : aucun droit
+   cluster n'est accordé au pipeline.
+2. L'image runner n'embarque **PAS kubectl**.
+3. Le périmètre est **l'EXTÉRIEUR du cluster** (les systèmes cibles) — ce qui vit DANS le
+   cluster a déjà quatre moteurs. Écrit sur l'offre.
+
+### La gouvernance — rien de spécifique, par construction
+
+Demande = PR sur portal-templates → portier iTop → merge humain. Actions comprises.
+⚠️ Fait Kratix à dire sur la carte d'une ACTION : **modifier la demande ré-exécute le
+geste** (le pipeline re-tourne au changement de spec).
+
+### Les actions AWX — le même moteur, le contrat déclaré AILLEURS
+
+Un **survey AWX** est un contrat déclaré dans un système tiers lisible par API : une
+action AWX est une promesse ACTION dont le `run` — fourni par la plateforme — lance LE job
+template déclaré et attend sa fin (`status` = résultat + URL du journal AWX).
+`spec.type: awx-action` réutilise le bloc `automation` existant et ses CEL (jobTemplate
+UNIQUE · cible déclarée `inventory` XOR `allowedLimits` · `awxTokenSecret` par
+fournisseur — un jeton déclaré GAGNE toujours sur le jeton de lancement par défaut de la
+plateforme). Le formulaire vient du survey — écrit une fois, chez le client ; un champ
+`password` de survey est **EXCLU** (un secret n'entre jamais dans un claim git).
+Ceci EXÉCUTE la Partie 3 de `DECISION-ABANDON.md` (le cadrage AWX-comme-actions) : les
+actions remplacent l'usage du moteur ansible §9bis, le moteur réconciliant reste
+abandonné.
+
+### Slugs figés
+
+`script` · `awx-action` · `run` / `apply` / `destroy` / `observe` ·
+`contract.schema.json` · `SPEC_<CHAMP>` · `SORTIES`.
+
 ## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
 
 **Règle d'or : un champ dont UNE SEULE valeur est valide dans le contexte d'usage ne
