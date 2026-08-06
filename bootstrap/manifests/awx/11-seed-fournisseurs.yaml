@@ -9,6 +9,35 @@
 # la barrière de conception ; celui-ci est la barrière d'exécution.
 #
 # Rejouable : chaque objet est cherché par son nom avant d'être créé.
+---
+# Le seed vit dans `awx` ; les jetons des fournisseurs doivent AUSSI atterrir dans
+# `default`, le namespace où Kratix exécute les pipelines de ressource — donc où le
+# moteur AWX (CD7) les LIT. Mêmes bornes que partout ailleurs : `create` ne peut pas
+# être restreint par nom (Kubernetes décide avant que le nom existe), le reste l'est,
+# et la liste est NOMINATIVE — elle ne s'élargit pas toute seule.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: awx-jetons-fournisseurs
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [awx-token-cloud, awx-token-indus]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-jetons-fournisseurs
+  namespace: default
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: awx-jetons-fournisseurs }
+subjects:
+  - { kind: ServiceAccount, name: awx-seed, namespace: awx }
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -167,7 +196,8 @@ spec:
                 # Jeton valide ? On le garde. Sinon on en cree un AVEC L'IDENTITE
                 # du fournisseur (jamais celle de l'administrateur).
                 BESOIN=1
-                if kubectl -n awx get secret "$SEC" >/dev/null 2>&1; then
+                if kubectl -n awx get secret "$SEC" >/dev/null 2>&1 \
+                   && kubectl -n default get secret "$SEC" >/dev/null 2>&1; then
                   T=$(kubectl -n awx get secret "$SEC" -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
                   if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
                     echo "  jeton existant valide -> inchange (idempotent)"; BESOIN=0
@@ -179,8 +209,16 @@ spec:
                     -d '{"description":"operateur ansible du fournisseur","scope":"write"}' \
                     "$API/tokens/" | jq -j '.token // empty' > /tmp/token
                   [ -s /tmp/token ] || { echo "ERREUR: creation du jeton pour $USER"; exit 1; }
-                  kubectl -n awx create secret generic "$SEC" --from-file=token=/tmp/token \
-                    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                  # ⚠️ DEUX namespaces, et ce n'est pas une duplication gratuite :
+                  # `awx` = là où vivaient les opérateurs ansible (moteur retiré) ;
+                  # `default` = là où Kratix exécute les pipelines de ressource, donc
+                  # là où le moteur AWX (CD7) LIT ce jeton. Un secret qui n'est pas
+                  # dans le namespace du lecteur est un secret absent : le volume
+                  # `optional` monte le vide et le lancement échoue sans jeton.
+                  for NS in awx default; do
+                    kubectl -n "$NS" create secret generic "$SEC" --from-file=token=/tmp/token \
+                      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                  done
                   rm -f /tmp/token
                   echo "  $SEC cree/renouvele (valeur jamais affichee)"
                 fi
