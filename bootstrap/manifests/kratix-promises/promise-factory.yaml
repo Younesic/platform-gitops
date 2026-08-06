@@ -463,7 +463,7 @@ spec:
             # ⚠️ NE JAMAIS pinner `0.7.32-awx` = arm64 (construite sans
             #    --platform linux/amd64) : `exec format error` sur ce cluster x86,
             #    et les frappes de jeton s'arrêtent avec elle. 0.7.33 = même code, amd64.
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.34-awx@sha256:6010b7639f766b6680ad1ca9ef9123d72eb567d454b971820164c8c5f1aa97f2
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.35-awx@sha256:da326f0fa963abc2bb098ab1e0449afa4ebce09b8f3680690e46e12b9b0c4b87
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
