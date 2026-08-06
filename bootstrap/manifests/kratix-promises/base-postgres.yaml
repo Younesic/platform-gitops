@@ -1,0 +1,166 @@
+# PROMESSE PILOTE DU MOTEUR « CONTRAT DÉCLARÉ » — LA PORTE RESSOURCE (objectif CD3).
+#
+# ÉCRITE À LA MAIN, exprès (la démarche CD2/annonce-github) : CD3 teste la variante
+# RESSOURCE — verbes apply.sh + destroy.sh — sur un système réel, SANS toucher la
+# fabrique (CD4 prouvera l'équivalence machine ≍ main contre ce manifeste).
+#
+# GARANTIE de la classe (PROMISE-STANDARD §9quater, gelée) :
+#   « Converge au changement déclaré · destruction pilotée · pas d'auto-guérison. »
+# Pas d'observe.sh dans la source ⇒ AUCUNE surface de dérive sur la fiche (règle
+# CL12 : à qui n'observe pas, la surface n'existe pas).
+#
+# Décor : l'instance CNPG dependency-track-db (hors chemin critique) ; identifiants
+# = Secret default/cd3-postgres-creds (rôle cd3_provisioner LOGIN CREATEDB
+# CREATEROLE, créé une fois à la main — le décor du pilote, documenté dans
+# proofs/CD3-evidence.txt).
+#
+# ⚠️ Le champ `dependencies` ne s'écrit PAS quand il est vide : `dependencies: []`
+# fait boucler le contrôleur Kratix à l'infini (gotcha payé en CD2 — la révision
+# stockée omet la clé, le live la porte, la comparaison ne converge jamais).
+#
+# Verrous §9quater tenus : rbac: {} (aucune Permission), image runner sans kubectl,
+# le geste vise l'EXTÉRIEUR du plan de contrôle (une base de données), identifiants
+# par credsSecret → environnement (jamais en argument).
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: base-postgres
+  labels:
+    kratix.io/promise-version: v0.1.0
+  annotations:
+    platform.kratix.io/provider: platform
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: "true"
+    # RESSOURCE (pas d'entry-kind: action) : elle possède, converge au changement
+    # déclaré, se détruit au retrait de la demande — et sa fiche entre dans la
+    # console, hors échelle d'adoption (« sans objet » en dérive : conforme).
+    backstage.example.io/ui-schema: '{"properties": {"nom": {"title": "Nom de la base", "ui:title": "Nom de la base", "ui:placeholder": "ventes_reporting"}, "proprietaire": {"title": "Rôle propriétaire", "ui:title": "Rôle propriétaire", "ui:placeholder": "equipe_ventes"}, "commentaire": {"title": "Commentaire (COMMENT ON DATABASE)", "ui:title": "Commentaire (COMMENT ON DATABASE)"}}, "ui:order": ["nom", "proprietaire", "commentaire", "*"]}'
+spec:
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+
+  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
+  # Transcription MAIN de sources/script/base-postgres/contract.schema.json
+  # (+ l'injection du champ plateforme `team`). CD4 dérivera ce bloc du fichier.
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: basespostgres.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: BasePostgres
+        plural: basespostgres
+        singular: basepostgres
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [nom, proprietaire, team]
+                  properties:
+                    nom:
+                      type: string
+                      pattern: ^[a-z][a-z0-9_]{2,29}$
+                      description: >-
+                        Nom de la base à créer (minuscules, chiffres, _). Une base
+                        existante qui n'appartient pas au propriétaire déclaré fait
+                        ÉCHOUER la demande — la plateforme ne s'approprie rien.
+                    proprietaire:
+                      type: string
+                      pattern: ^[a-z][a-z0-9_]{2,29}$
+                      description: >-
+                        Rôle propriétaire de la base (créé s'il n'existe pas, sans
+                        droit de connexion).
+                    commentaire:
+                      type: string
+                      default: ""
+                      maxLength: 200
+                      description: >-
+                        Commentaire posé sur la base — le champ qui prouve la
+                        convergence au changement déclaré.
+                    team:
+                      type: string
+                      description: Équipe demandeuse (posée par le portail).
+
+  workflows:
+    config: {}
+
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            volumes:
+              - name: pg-creds
+                secret:
+                  secretName: cd3-postgres-creds
+                  optional: true
+                  defaultMode: 256
+            containers:
+              - name: geste
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.1.1@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+                env:
+                  - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
+                  - { name: SOURCE_REF, value: "v0.25.0" }
+                  - { name: SOURCE_PATH, value: "sources/script/base-postgres" }
+                  - { name: VERBE, value: "apply" }
+                volumeMounts:
+                  - name: pg-creds
+                    mountPath: /kratix/secrets/creds
+                    readOnly: true
+              # La fiche d'INSTANCE — une ressource entre au catalogue et dans la
+              # console (contrairement à une action, CD2). bc pousse la fiche via
+              # le work de la Destination backstage, prunée au retrait du claim.
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+            rbac: {}
+            jobOptions: {}
+
+      delete:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-delete
+          spec:
+            volumes:
+              - name: pg-creds
+                secret:
+                  secretName: cd3-postgres-creds
+                  optional: true
+                  defaultMode: 256
+            containers:
+              - name: geste-destroy
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.1.1@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+                env:
+                  - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
+                  - { name: SOURCE_REF, value: "v0.25.0" }
+                  - { name: SOURCE_PATH, value: "sources/script/base-postgres" }
+                  - { name: VERBE, value: "destroy" }
+                volumeMounts:
+                  - name: pg-creds
+                    mountPath: /kratix/secrets/creds
+                    readOnly: true
+            rbac: {}
+            jobOptions: {}

@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["nom", "proprietaire"],
+  "properties": {
+    "nom": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,29}$",
+      "description": "Nom de la base à créer (minuscules, chiffres, _). Une base existante qui n'appartient pas au propriétaire déclaré fait ÉCHOUER la demande — la plateforme ne s'approprie rien."
+    },
+    "proprietaire": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,29}$",
+      "description": "Rôle propriétaire de la base (créé s'il n'existe pas, sans droit de connexion)."
+    },
+    "commentaire": {
+      "type": "string",
+      "default": "",
+      "maxLength": 200,
+      "description": "Commentaire posé sur la base (COMMENT ON DATABASE) — le champ qui prouve la convergence au changement déclaré."
+    }
+  }
+}
