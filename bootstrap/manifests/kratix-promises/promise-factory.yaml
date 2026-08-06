@@ -473,7 +473,10 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.32-awx@sha256:2dab3e99bad7210adc6edf29e32cd010acbd1c592345e993bf4168d8f307b1b0
+            # ⚠️ NE JAMAIS pinner `0.7.32-awx` = arm64 (construite sans
+            #    --platform linux/amd64) : `exec format error` sur ce cluster x86,
+            #    et les frappes de jeton s'arrêtent avec elle. 0.7.33 = même code, amd64.
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.33-awx@sha256:25469f10e4422aba738859e47cec12a809a16b60d4a6f123d11a0f978891409d
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
