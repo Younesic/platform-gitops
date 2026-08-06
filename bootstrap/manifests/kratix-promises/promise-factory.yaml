@@ -35,12 +35,12 @@ metadata:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","terraform","script","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","terraform","script","contract","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script","contract"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -221,6 +221,10 @@ spec:
                         type: string
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
                         description: 'Secret portant les identifiants du système CIBLE, montés et lus en VARIABLES D''ENVIRONNEMENT par le runner — jamais en argument (un argument finit dans les journaux). Omis = le script ne doit avoir besoin d''aucun identifiant.'
+                  contract:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    description: 'script (CD5) : le contrat COMPOSÉ au Studio (« le stylo »), pour l''auteur qui a un exécutable mais PAS de contract.schema.json. C''est un PONT, pas une destination — la précédence est SOURCE > CLAIM : le jour où la source est re-pinnée sur une ref qui porte le fichier, il gagne et la bascule se fait toute seule. Même dialecte que contract.schema.json (JSON Schema plat).'
                   placement:
                     type: string
                     pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
@@ -449,7 +453,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.30-script@sha256:5a733d5142838423a8dda77b6ab573e110ba820f6a4158a4ef56b9be6d7accff
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.31-stylo@sha256:835eb1475f65684559e1d2a5cd11084e0e7a6a2a451f3dd972c315a8c4fe2f84
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
