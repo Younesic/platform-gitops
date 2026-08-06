@@ -378,6 +378,42 @@ data:
           # Owner v1 = team-platform (le « bac de triage » : le mapping fin viendra du
           # CMDB, décision D4). Les annotations adoption-prefill-* nourrissent le geste
           # « Adopter » pré-rempli de la console.
+          # CD7 — l'inventaire des job templates AWX, SANS recopie.
+          # Point 1 du cadrage « AWX comme des actions » : le fournisseur ne
+          # re-tape pas ce qui existe déjà chez lui. Ces entrées sont un
+          # RÉPERTOIRE (niveau 0) : elles disent ce qui existe, elles ne
+          # promettent rien — aucune n'est demandable tant qu'une offre ne la
+          # porte pas, et la carte ne propose donc aucune adoption en un clic.
+          #
+          # ⚠️ PAGINATION : AWX ne pose PAS de header `Link` — il pagine par un
+          # champ `next` du CORPS (la forme de toutes les API Django-REST).
+          # Sans `nextPath`, le parc serait TRONQUÉ en silence au-delà de la
+          # première page : exactement l'anti-pattern que la pagination existe
+          # pour empêcher.
+          awxJobTemplates:
+            url: http://awx-service.awx.svc.cluster.local/api/v2/job_templates/?page_size=100
+            auth:
+              type: bearer
+              token: ${AWX_API_TOKEN}
+            itemsPath: results
+            nextPath: next
+            entity:
+              kind: Component
+              name: 'awx-{name}'
+              title: '{name}'
+              spec:
+                type: kratix-repertorie
+                lifecycle: production
+                owner: group:default/team-platform
+              annotations:
+                platform.kratix.io/adoption-niveau: repertorie
+                platform.kratix.io/awx-job-template: '{name}'
+                platform.kratix.io/awx-inventaire: '{summary_fields.inventory.name}'
+                platform.kratix.io/awx-survey: '{survey_enabled}'
+            schedule:
+              frequency: { minutes: 30 }
+              timeout: { minutes: 5 }
+              initialDelay: { seconds: 60 }
           githubOrgRepos:
             url: https://api.github.com/orgs/YounesicCo/repos?per_page=100
             auth:
