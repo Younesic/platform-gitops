@@ -330,10 +330,20 @@ spec:
     - kind: ServiceAccount
       name: service-legacy-operator
       namespace: awx
+# ⚠️ CADENCE RAMENÉE DE 120s À 24h — MESURE CONSERVATOIRE (CD8, 2026-08-06).
+# Le moteur ansible est ABANDONNÉ depuis le 2026-07-28, et sa décision d'abandon
+# condamne NOMMÉMENT cette cadence : « 120 s inconditionnel = 720 jobs/jour/ressource,
+# 262 800/an … pour au plus 1 exécution utile sur 720 ». MESURÉ ici le 2026-08-06 :
+# 4 CR vivants produisaient ~6 jobs AWX par 90 s (la boucle se ré-amorce sur ses
+# propres écritures de statut) — c'est la pression disque qui a gelé les kubelets.
+# Ce que la mesure NE change PAS : un changement du claim déclenche toujours une
+# réconciliation IMMÉDIATE (le produit converge comme avant). Ce qu'elle retire :
+# le re-jeu à vide toutes les deux minutes. Temporaire jusqu'à la migration en
+# `awx-action` (CD7) ; réversible par `git revert`.
   - apiVersion: v1
     data:
       watches.yaml: "- version: v1alpha1\n  group: ansible.example.io\n  kind: ServiceLegacy\n\
-        \  playbook: /opt/ansible/generic/provision.yml\n  reconcilePeriod: 120s\n\
+        \  playbook: /opt/ansible/generic/provision.yml\n  reconcilePeriod: 24h\n\
         \  finalizer:\n    name: ansible.example.io/deprovision\n    playbook: /opt/ansible/generic/deprovision.yml\n"
     kind: ConfigMap
     metadata:
