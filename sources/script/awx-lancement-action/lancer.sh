@@ -16,6 +16,9 @@
 #   AWX_ETAT_VAR      la variable d'état, pour les RESSOURCES (vide pour une action)
 #   AWX_TIMEOUT       borne du suivi, en secondes — dite, jamais infinie
 #   ETAT              posé par le verbe : present (apply) | absent (destroy)
+#   CHECK             posé par observe.sh (CD9) : 1 = lancer en `job_type: check`
+#                     (le « lire sans écrire » d'Ansible) — exige que le template
+#                     accepte le job_type au lancement, ce que la GÉNÉRATION gate
 #   token             le jeton AWX, monté par credsSecret (clé `token`)
 #
 # ⚠️ AWX refuse les extra_vars hors survey quand `ask_variables_on_launch` est faux :
@@ -31,6 +34,7 @@ API="${AWX_URL%/}/api/v2"
 WEB="${AWX_WEB:-}"
 TIMEOUT="${AWX_TIMEOUT:-1800}"
 ETAT="${ETAT:-}"
+CHECK="${CHECK:-}"
 
 aw() { curl -sS -H "Authorization: Bearer $JETON" -H 'Content-Type: application/json' "$@"; }
 
@@ -71,11 +75,18 @@ if [ "$ASK_VARS" = true ] && [ -n "${NOM_DEMANDE:-}" ]; then
   VARS=$(printf '%s' "$VARS" | jq -c --arg v "$NOM_DEMANDE" '. + {portail_demande: $v}')
 fi
 
-echo "lancement de « $AWX_JOB_TEMPLATE » (id $JT)${ETAT:+ · etat=$ETAT} · $(printf '%s' "$VARS" | jq -r 'keys | join(", ")')"
+echo "lancement de « $AWX_JOB_TEMPLATE » (id $JT)${ETAT:+ · etat=$ETAT}${CHECK:+ · MODE CHECK (lecture seule)} · $(printf '%s' "$VARS" | jq -r 'keys | join(", ")')"
 
+# Le mode check : Ansible simule et RAPPORTE, sans toucher la cible. C'est le
+# lecteur du barreau Observé — jamais envoyé si le template ne l'accepte pas
+# (l'offre n'est alors pas adoptable, gaté à la génération).
+CORPS=$(jq -nc --argjson v "$VARS" '{extra_vars: $v}')
+if [ -n "$CHECK" ]; then
+  CORPS=$(printf '%s' "$CORPS" | jq -c '. + {job_type: "check"}')
+fi
 REP=$(curl -sS -o /tmp/launch.json -w '%{http_code}' -X POST \
       -H "Authorization: Bearer $JETON" -H 'Content-Type: application/json' \
-      -d "$(jq -nc --argjson v "$VARS" '{extra_vars: $v}')" "$API/job_templates/$JT/launch/")
+      -d "$CORPS" "$API/job_templates/$JT/launch/")
 JOB=$(jq -r '.id // empty' /tmp/launch.json 2>/dev/null || true)
 if [ "$REP" != 201 ] || [ -z "$JOB" ]; then
   echo "ECHEC : AWX a refuse le lancement (HTTP $REP)" >&2
@@ -110,6 +121,13 @@ done
   [ -n "$LIEN" ] && echo "journal=$LIEN"
   echo "jobTemplate=$AWX_JOB_TEMPLATE"
   [ -n "$ETAT" ] && echo "etat=$ETAT"
+  if [ -n "$CHECK" ]; then
+    # Le relevé du check : la somme des « changed » par hôte = ce qui DIVERGERAIT.
+    # 0 = aligné au déclaré ; N = l'écart, détaillé dans le journal AWX.
+    CH=$(aw "$API/jobs/$JOB/job_host_summaries/" | jq '[.results[].changed] | add // 0')
+    echo "modeCheck=true"
+    echo "changements=${CH}"
+  fi
 } >> "${SORTIES:-/dev/null}"
 
 if [ "$ST" != successful ]; then

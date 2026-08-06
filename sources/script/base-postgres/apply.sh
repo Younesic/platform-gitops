@@ -3,7 +3,8 @@
 # propriétaire sur une instance Postgres EXISTANTE, via psql.
 #
 # GARANTIE de la classe (gelée) : « Converge au changement déclaré · destruction
-# pilotée · pas d'auto-guérison. » — pas d'observe.sh : aucune surface de dérive.
+# pilotée · pas d'auto-guérison. » — et observe.sh (CD9) ouvre le barreau Observé :
+# l'offre est ADOPTABLE parce que CE fichier existe, pas parce qu'on l'a déclaré.
 #
 # IDEMPOTENT par GARDES (sa moitié du contrat) : re-run sans changement = zéro
 # effet, et le journal le DIT. Une base existante qui n'appartient pas au
