@@ -281,7 +281,16 @@ picker repo/tag/dossier + Select « CRD contrat » alimenté par l'aperçu deriv
 
 ---
 
-## 10. Variante ansible — le rôle EST le contrat (parc SANS API Kubernetes)
+## 10. Variante ansible — ⛔ ABANDONNÉE (conservée pour mémoire)
+
+> **N'utilisez plus `kratix new-ansible-promise`.** Moteur abandonné le 2026-07-28,
+> retrait en cours depuis le 2026-08-06 (objectif CD8) : voir PROMISE-STANDARD
+> §9bis pour l'état exact du retrait, et **§9quater** pour le remplacement — une
+> automatisation AWX s'expose en **ACTION**, son formulaire dérivé du **survey**.
+> La section ci-dessous décrit ce qui a été construit ; ses gotchas restent utiles
+> à quiconque touche encore aux 2 produits survivants.
+
+### (historique) le rôle EST le contrat
 
 Pour tout ce que Kubernetes ne sait pas décrire : VM, middleware, appliances,
 Windows, legacy. **AAP exécute, Kubernetes réconcilie.**

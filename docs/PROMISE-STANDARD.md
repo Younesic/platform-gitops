@@ -185,7 +185,31 @@ l'opérateur revient (destination re-sync).
 
 ---
 
-## 9bis. Promesses ANSIBLE (moteur 5 — le parc SANS API Kubernetes)
+## 9bis. Promesses ANSIBLE — ⛔ MOTEUR ABANDONNÉ (conservé pour mémoire)
+
+> **STATUT : ABANDONNÉ le 2026-07-28** (`backstage-platform/Objectives/ansible/
+> DECISION-ABANDON.md`), **retrait EN COURS depuis le 2026-08-06 (objectif CD8)**.
+> **N'écrivez plus de promesse `ansible`.** Le remplacement est le **§9quater** :
+> une automatisation AWX s'expose en **ACTION** (`spec.type: awx-action`), dont le
+> formulaire se dérive du **survey** — le contrat déclaré dans un système tiers.
+>
+> **La raison, à ne pas re-litiger** : *« le guichet peut être unique, la GARANTIE
+> ne peut pas l'être »* — une entrée du catalogue qui signifie « un job a rendu 0 »
+> ne peut pas voisiner avec des entrées qui signifient « la plateforme connaît
+> l'état et l'y ramène ». Trois défauts mesurés l'ont confirmé : un verrou de cible
+> qui n'existait sur AUCUN produit livré, une santé qui ne sait pas mourir, et une
+> cadence de 120 s (262 800 exécutions/an/demande) dont le coût a **gelé les
+> kubelets du cluster dans la nuit du 2026-08-06** — c'est ce qui a déclenché CD8.
+>
+> **État du retrait** : les 2 promesses TÉMOINS retirées (2026-08-06) · les 2
+> produits RÉELS (`service-legacy`, `service-account`) conservés et ralentis à 24 h
+> **jusqu'à leur migration en `awx-action`** (on ne retire pas une capacité
+> demandée sans l'avoir remplacée) · le slot `ansible` du contrat, du form-switch
+> et du Studio reste ouvert jusque-là — le retirer avant invaliderait leurs claims
+> et **gèlerait l'application de TOUTES les demandes**.
+>
+> Ce qui suit décrit le moteur tel qu'il a été construit : c'est de l'histoire, pas
+> une recommandation.
 
 Les quatre autres moteurs visent des objets dotés d'une API déclarative. Dans une
 banque, c'est la **minorité** du parc : VM, middleware, bases sur VM, appliances,
