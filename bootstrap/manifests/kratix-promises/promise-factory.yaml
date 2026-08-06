@@ -40,7 +40,7 @@ metadata:
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script","contract"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script","contract"],"awx":["automation"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -94,6 +94,14 @@ spec:
                 # blocs `variable` — l'auteur n'écrit aucune CRD.
                 - rule: self.type != 'terraform' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
                   message: 'type terraform : source.url (dépôt du module), source.version (tag ou SHA) et source.path (chemin du module) sont requis (pin de gouvernance)'
+                # awx (CD7) : un survey EST un contrat déclaré ailleurs. L'offre ne
+                # déclare que DEUX choses — QUOI lancer, et OÙ. Le formulaire vient du
+                # survey ; la source des verbes est fournie par la plateforme ; le jeton
+                # a un défaut (CD6), et celui du FOURNISSEUR gagne s'il est déclaré.
+                - rule: self.type != 'awx' || (has(self.automation) && has(self.automation.jobTemplate))
+                  message: 'type awx : automation.jobTemplate est requis — c''est le SEUL job template que cette offre pourra lancer'
+                - rule: self.type != 'awx' || (has(self.automation) && (has(self.automation.inventory) || (has(self.automation.allowedLimits) && size(self.automation.allowedLimits) > 0)))
+                  message: 'type awx : la cible doit être déclarée — automation.inventory (l''offre la fixe) OU automation.allowedLimits (l''offre ouvre le choix, dans cette liste et elle seule). Verrouiller le job template sans verrouiller la machine ne verrouille rien.'
                 # Moteur du CONTRAT DÉCLARÉ (§9quater). Rien de plus n'est exigé : la
                 # CLASSE (action ou ressource) se déduit des VERBES, qui sont des
                 # FICHIERS de la source — elle ne se déclare pas, donc elle ne peut pas
@@ -103,7 +111,7 @@ spec:
                 properties:
                   type:
                     type: string
-                    description: Moteur de la future promesse (helm, crossplane, operator, compound, terraform, script ; ansible = ABANDONNÉ, en retrait — voir PROMISE-STANDARD §9bis)
+                    description: Moteur de la future promesse (helm, crossplane, operator, compound, terraform, script, awx ; ansible = ABANDONNÉ, en retrait — voir PROMISE-STANDARD §9bis)
                     enum:
                     - helm
                     - crossplane
@@ -112,6 +120,7 @@ spec:
                     - compound
                     - ansible
                     - script
+                    - awx
                     default: helm
                   kind:
                     type: string
