@@ -1,0 +1,147 @@
+# PROMESSE PILOTE DU MOTEUR « CONTRAT DÉCLARÉ » — LA PORTE ACTION (objectif CD2).
+#
+# ÉCRITE À LA MAIN, exprès (la démarche depot-adopte/LG2) : CD2 teste si le motif
+# « action mince exécutée par la plateforme » tient sur un cas réel SANS toucher la
+# fabrique. La fabrique n'apprendra le type `script` qu'en CD4, l'équivalence
+# machine ≍ main se prouvera CONTRE ce manifeste.
+#
+# Contrat de référence : docs/PROMISE-STANDARD.md §9quater — les verbes sont des
+# FICHIERS. La source (sources/script/annonce-github @ v0.24.0) ne contient que
+# `run.sh` → cette offre EST une ACTION : « une exécution qui se termine — ne
+# surveille rien, ne répare rien ; supprimer la demande ne défait rien. »
+#
+# ⚠️ Nom `annonce-github` choisi LOIN de `depot-adopte` (l'utilisateur a confondu les
+# deux pendant la conception — la collision de noms est un défaut d'UX à part entière).
+#
+# CE QUE CE MANIFESTE NE FAIT PAS, à dessein :
+#   - AUCUN document rendu dans /kratix/output : une action ne possède rien, rien
+#     n'est déposé sur une Destination, rien à pruner.
+#   - PAS de pipeline resource.delete : rien à défaire (la préuve CD2-d le joue).
+#   - PAS de conteneur backstage-component sur le pipeline RESOURCE : une fiche
+#     d'instance `kratix-resource` entrerait dans la console de suivi, or une action
+#     n'y a pas sa place (§9quater ; cadrage AWX §3.2). Le résultat vit sur le STATUS
+#     du claim. Le rendu portail du résultat = CD7.
+#   - AUCUNE Permission Kratix (rbac: {}) : verrou 1 du §9quater — pas de droit
+#     cluster ; l'image runner n'a pas kubectl (verrou 2) ; le geste vise l'EXTÉRIEUR
+#     (l'API GitHub) avec l'identité d'App de la plateforme (verrou 3).
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: annonce-github
+  labels:
+    kratix.io/promise-version: v0.1.0
+  annotations:
+    platform.kratix.io/provider: platform
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: "true"
+    # LA CLASSE — le discriminant de LG9, porté par le bus de curation : le
+    # marketplace range cette offre dans la section ACTIONS, jamais parmi les
+    # ressources. Ici la donnée est posée main (promesse écrite main) ; en CD4 la
+    # fabrique la posera toute seule quand la source n'a que `run.sh`.
+    platform.kratix.io/entry-kind: action
+    # Libellés FR du formulaire. ⚠️ Format EMBALLÉ obligatoire ({"properties": …}) :
+    # à plat, l'annotation est silencieusement INERTE (le bug d'héritage payé).
+    backstage.example.io/ui-schema: '{"properties": {"repo": {"title": "Dépôt qui reçoit l''annonce", "ui:title": "Dépôt qui reçoit l''annonce", "ui:placeholder": "Younesic/itop-gate-demo"}, "titre": {"title": "Titre de l''annonce", "ui:title": "Titre de l''annonce"}, "corps": {"title": "Texte de l''annonce", "ui:title": "Texte de l''annonce", "ui:widget": "textarea"}}, "ui:order": ["repo", "titre", "corps", "*"]}'
+spec:
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+
+  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
+  # Écrit à la main ici = la transcription de sources/script/annonce-github/
+  # contract.schema.json (+ l'injection du champ plateforme `team`, comme la
+  # fabrique le fait pour terraform). CD4 fera dériver ce bloc du fichier — l'écart
+  # éventuel sera le témoin d'équivalence.
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: annoncegithubs.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: AnnonceGithub
+        plural: annoncegithubs
+        singular: annoncegithub
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [repo, titre, team]
+                  properties:
+                    repo:
+                      type: string
+                      pattern: ^Younesic/[A-Za-z0-9._-]+$
+                      description: >-
+                        Dépôt de l'organisation qui reçoit l'annonce. L'App de la
+                        plateforme doit le couvrir — un dépôt hors de sa portée fait
+                        ÉCHOUER la demande (visiblement).
+                    titre:
+                      type: string
+                      minLength: 5
+                      maxLength: 120
+                      description: Titre de l'annonce.
+                    corps:
+                      type: string
+                      default: ""
+                      maxLength: 4000
+                      description: Texte de l'annonce (optionnel).
+                    team:
+                      type: string
+                      description: Équipe demandeuse (posée par le portail).
+
+  # ── AUCUNE dépendance : une action n'installe rien ────────────────────────────
+  dependencies: []
+
+  workflows:
+    config: {}
+
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            volumes:
+              # L'identité git/API de la plateforme (jeton d'App frappé par le
+              # CronJob github-token). OPTIONNEL : un jeton pas encore frappé ne
+              # doit pas empêcher le pod de NAÎTRE — le geste échouera alors avec
+              # une cause nommée, ce qui est le comportement voulu.
+              - name: github-token
+                secret:
+                  secretName: github-app-token
+                  optional: true
+                  defaultMode: 256
+            containers:
+              - name: geste
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.1.0@sha256:d3eba8a20aa1d285160d4d3958cd60c4b563f3db40dd685f8b05523fa24c5d38
+                env:
+                  - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
+                  - { name: SOURCE_REF, value: "v0.24.0" }
+                  - { name: SOURCE_PATH, value: "sources/script/annonce-github" }
+                  - { name: VERBE, value: "run" }
+                volumeMounts:
+                  - name: github-token
+                    mountPath: /kratix/secrets/github
+                    readOnly: true
+            rbac: {}
+            jobOptions: {}

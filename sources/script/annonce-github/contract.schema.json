@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["repo", "titre"],
+  "properties": {
+    "repo": {
+      "type": "string",
+      "pattern": "^Younesic/[A-Za-z0-9._-]+$",
+      "description": "Dépôt de l'organisation qui reçoit l'annonce. L'App de la plateforme doit le couvrir — un dépôt hors de sa portée fait ÉCHOUER la demande (visiblement)."
+    },
+    "titre": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 120,
+      "description": "Titre de l'annonce."
+    },
+    "corps": {
+      "type": "string",
+      "default": "",
+      "maxLength": 4000,
+      "description": "Texte de l'annonce (optionnel)."
+    }
+  }
+}
