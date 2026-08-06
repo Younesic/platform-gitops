@@ -98,7 +98,11 @@ spec:
                       description: Équipe demandeuse (posée par le portail).
 
   # ── AUCUNE dépendance : une action n'installe rien ────────────────────────────
-  dependencies: []
+  # ⚠️ Et le champ ne s'écrit PAS : `dependencies: []` (tableau VIDE) fait boucler le
+  # contrôleur Kratix à l'infini — la révision stockée OMET la clé (marshalling Go),
+  # le live la porte, la comparaison ne converge jamais (« promiserevision already
+  # exists » en boucle, 0 workflow lancé). Vécu ICI le 2026-08-06 — même classe que
+  # le gotcha `creationTimestamp: null`. L'absence de clé EST « aucune dépendance ».
 
   workflows:
     config: {}
