@@ -1,0 +1,250 @@
+# Jeton AWX du PORTAIL — ÉCRITURE (lancement de jobs).
+#
+# Pourquoi ce fichier existe : le cadrage « AWX comme des actions »
+# (backstage-platform/Objectives/ansible/DECISION-ABANDON.md §3.5) n'avait qu'UN
+# point ouvert — « quel jeton lance les jobs, avec quelle portée, et qui l'audite ».
+# Le jeton du portail (12-jeton-portail.yaml) est délibérément en LECTURE SEULE :
+# il propose les job templates au Studio, il ne peut rien lancer. Lancer exige un
+# credential d'écriture. La question se pose ICI, une seule fois, pas une fois par
+# produit — c'est précisément ce qui avait coûté cher au moteur ansible abandonné.
+#
+# ── CE QUE CE COMPTE PEUT, ET CE QU'IL NE PEUT PAS ─────────────────────────────
+#   PEUT    : lancer les job templates NOMMÉS ci-dessous (rôle Execute sur chacun).
+#   NE PEUT PAS : créer/modifier un projet, un inventaire, un credential, un
+#                 utilisateur — ni MODIFIER les job templates qu'il peut lancer.
+#   N'EST PAS : superuser, ni auditeur système.
+#
+# ⚠️ POURQUOI PAS LE RÔLE « Execute » DE L'ORGANISATION (il existe, id 2, mesuré) :
+# il rendrait lançable par le portail TOUT job template présent ou FUTUR de
+# l'organisation, sans que personne ne l'ait décidé. C'est exactement le glissement
+# qu'on ne voit plus six mois après. Ici la liste est DÉCLARÉE : ajouter une action
+# lançable est un geste git, relu — le prix est une ligne, la contrepartie est que
+# la plateforme ne gagne jamais un droit d'exécution en silence.
+#
+# ── ARTICULATION AVEC LE JETON PAR FOURNISSEUR (figée ici) ─────────────────────
+# La règle des PRODUITS ne change pas : `automation.awxTokenSecret` — le credential
+# AWX est celui du FOURNISSEUR (11-seed-fournisseurs.yaml en frappe un par
+# fournisseur, avec Execute sur SON seul job template). `portail-lancement` est le
+# jeton par DÉFAUT des actions dont le fournisseur n'a pas déclaré le sien ; un
+# `awxTokenSecret` déclaré GAGNE toujours. Deux niveaux, zéro ambiguïté.
+#
+# ── AUDIT ET RÉVOCATION ───────────────────────────────────────────────────────
+#   · Qui l'utilise : les pipelines de lancement des promesses `awx-action`
+#     (namespace `default`), et personne d'autre. Le portail ne le voit pas :
+#     le proxy /awx-api reste câblé sur le jeton de LECTURE.
+#   · Où il vit : Secret `default/awx-jeton-lancement`, clé `token`. Il n'est
+#     jamais affiché — ni dans le journal de ce Job, ni dans Git.
+#   · Traçabilité : chaque lancement apparaît dans AWX sous l'identité
+#     `portail-lancement`, et CD7 y joint la référence de la demande en extra_var.
+#   · Révoquer : supprimer le jeton côté AWX (API /tokens/) ET le Secret ; ce Job
+#     étant idempotent, la prochaine synchro en refrappe un neuf. Retirer
+#     durablement le droit = retirer le nom du job template de JT_LANCABLES.
+#
+# ⚠️ Le Secret est posé en SERVER-SIDE APPLY : un `kubectl apply` classique
+# recopierait le jeton EN CLAIR dans l'annotation last-applied-configuration
+# (défaut constaté sur awx-api-token).
+---
+# Le compte du seed vit dans `awx` ; ce jeton doit atterrir dans `default`, le
+# namespace où Kratix exécute les pipelines de ressource. Mêmes bornes que le
+# jeton de lecture : `create` ne peut pas être restreint par nom (Kubernetes
+# décide avant que le nom existe — limite, pas relâchement), le reste l'est.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: awx-jeton-lancement
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [awx-jeton-lancement]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: awx-jeton-lancement
+  namespace: default
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: awx-jeton-lancement }
+subjects:
+  - { kind: ServiceAccount, name: awx-seed, namespace: awx }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: awx-jeton-lancement
+  namespace: awx
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    # Après le jeton de lecture (wave 3) : deux Jobs qui frappent l'API au même
+    # instant n'apportent rien et brouillent les journaux.
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: awx-seed
+      volumes:
+        - name: admin
+          secret:
+            secretName: awx-admin-password
+      containers:
+        - name: jeton
+          image: alpine/k8s@sha256:097aa60cbef561146757c7494468e9d7b04d843597ad1a1515ed09d0708c8014 # alpine/k8s:1.35.3
+          volumeMounts:
+            - { name: admin, mountPath: /creds, readOnly: true }
+          env:
+            - { name: AWX_HOST, value: "http://awx-service.awx.svc.cluster.local" }
+            - { name: USER, value: "portail-lancement" }
+            - { name: SECRET_NS, value: "default" }
+            - { name: SECRET_NOM, value: "awx-jeton-lancement" }
+            - { name: ORG_NAME, value: "Plateforme" }
+            # LA LISTE DES DROITS D'EXÉCUTION — le cœur de ce fichier.
+            # Exactement les job templates que des actions du portail lancent.
+            # `legacy-motd` en est ABSENT à dessein : sa promesse témoin a été
+            # retirée (CD8-A) ; accorder un droit dont personne n'a l'usage, c'est
+            # de la surface d'attaque gratuite.
+            - { name: JT_LANCABLES, value: "legacy-service compte-service" }
+            # Le TÉMOIN de l'exclusion : un job template qui ne doit JAMAIS être
+            # lançable par ce compte. Mesuré : sans le rôle Execute, AWX ne le rend
+            # même pas VISIBLE — la sonde ci-dessous rend donc la décision
+            # « pas de rôle Execute d'organisation » auto-gardée : si quelqu'un
+            # l'accordait un jour, ce Job échouerait au lieu de se taire.
+            - { name: JT_INTERDIT, value: "legacy-motd" }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              API="$AWX_HOST/api/v2"
+              AUTH="admin:$(cat /creds/password)"
+              gen() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24; }
+              find_id() { curl -sS -u "$AUTH" -G --data-urlencode "$3=$2" "$API/$1/" | jq -r '.results[0].id // empty'; }
+
+              i=0
+              until curl -sf "$API/ping/" 2>/dev/null | jq -e '.version' >/dev/null 2>&1; do
+                i=$((i+1)); [ "$i" -lt 60 ] || { echo "ERREUR: AWX ne repond pas apres 5 min"; exit 1; }
+                sleep 5
+              done
+
+              ORG=$(find_id organizations "$ORG_NAME" name)
+              [ -n "$ORG" ] || { echo "ERREUR: organisation $ORG_NAME introuvable"; exit 1; }
+
+              # ── Le compte ────────────────────────────────────────────────────
+              # Le mot de passe ne sert qu'ici, une fois, pour que l'utilisateur
+              # frappe SON propre jeton. Il n'est ni affiche ni conserve.
+              MDP=$(gen)
+              UID_=$(find_id users "$USER" username)
+              if [ -z "$UID_" ]; then
+                UID_=$(curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg u "$USER" --arg p "$MDP" '{username:$u, password:$p, first_name:"Portail", last_name:"lancement", is_superuser:false}')" \
+                  "$API/organizations/$ORG/users/" | jq -r '.id // empty')
+                [ -n "$UID_" ] || { echo "ERREUR: creation de l'utilisateur $USER"; exit 1; }
+                echo "compte $USER cree"
+              else
+                curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg p "$MDP" '{password:$p}')" "$API/users/$UID_/" >/dev/null
+                echo "compte $USER deja present"
+              fi
+
+              # Explicitement NI superuser NI auditeur : si quelqu'un l'a eleve a
+              # la main, cette synchro le redescend. Un droit ne remonte jamais par
+              # oubli.
+              curl -sS -u "$AUTH" -X PATCH -H 'Content-Type: application/json' \
+                -d '{"is_superuser":false,"is_system_auditor":false}' "$API/users/$UID_/" >/dev/null
+              curl -sS -u "$AUTH" "$API/users/$UID_/" \
+                | jq -e '.is_superuser == false and .is_system_auditor == false' >/dev/null \
+                || { echo "ERREUR: le compte n'est pas redescendu a l'etat non-privilegie"; exit 1; }
+
+              # ── Le SEUL droit : executer les job templates NOMMES ────────────
+              for JT in $JT_LANCABLES; do
+                JTID=$(find_id job_templates "$JT" name)
+                [ -n "$JTID" ] || { echo "ERREUR: job template $JT introuvable — job templates presents :"; \
+                  curl -sS -u "$AUTH" "$API/job_templates/" | jq -r '.results[].name'; exit 1; }
+                ROLE=$(curl -sS -u "$AUTH" "$API/job_templates/$JTID/object_roles/" | jq -r '.results[] | select(.name=="Execute") | .id')
+                [ -n "$ROLE" ] || { echo "ERREUR: role Execute introuvable sur $JT"; exit 1; }
+                curl -sS -u "$AUTH" -X POST -H 'Content-Type: application/json' -d "{\"id\":$ROLE}" "$API/users/$UID_/roles/" >/dev/null || true
+                echo "  droit d'execution accorde sur $JT (id $JTID)"
+              done
+
+              # ── Le jeton ─────────────────────────────────────────────────────
+              # Valide ? On le garde (idempotence). Sinon on en frappe un AVEC
+              # L'IDENTITE du compte de lancement, jamais celle de l'administrateur :
+              # un jeton frappe par admin porterait les droits de l'admin.
+              BESOIN=1
+              if kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" >/dev/null 2>&1; then
+                T=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
+                if [ -n "$T" ] && curl -sf -o /dev/null -H "Authorization: Bearer $T" "$API/me/"; then
+                  echo "jeton existant valide -> inchange (idempotent)"; BESOIN=0
+                fi
+              fi
+              if [ "$BESOIN" = 1 ]; then
+                curl -sS -u "$USER:$MDP" -X POST -H 'Content-Type: application/json' \
+                  -d '{"description":"lancement des job templates par les actions du portail","scope":"write"}' \
+                  "$API/tokens/" | jq -j '.token // empty' > /tmp/token
+                [ -s /tmp/token ] || { echo "ERREUR: creation du jeton pour $USER"; exit 1; }
+                kubectl -n "$SECRET_NS" create secret generic "$SECRET_NOM" --from-file=token=/tmp/token \
+                  --dry-run=client -o yaml | kubectl apply --server-side --force-conflicts -f - >/dev/null
+                rm -f /tmp/token
+                echo "jeton frappe et depose dans $SECRET_NS/$SECRET_NOM"
+              fi
+              T=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NOM" -o jsonpath='{.data.token}' | base64 -d | tr -d '\r\n')
+
+              # ── LA PORTEE SE PROUVE, ELLE NE SE DECLARE PAS ─────────────────
+              # 1) Il PEUT lancer : c'est AWX lui-meme qui repond, par le champ
+              #    `user_capabilities.start` calcule pour le porteur du jeton.
+              #    Aucun job n'est demarre — une preuve de droit ne doit pas avoir
+              #    d'effet de bord sur une machine reelle.
+              for JT in $JT_LANCABLES; do
+                JTID=$(find_id job_templates "$JT" name)
+                curl -sS -H "Authorization: Bearer $T" "$API/job_templates/$JTID/" \
+                  | jq -e '.summary_fields.user_capabilities.start == true' >/dev/null \
+                  || { echo "ERREUR: le jeton ne peut PAS lancer $JT"; exit 1; }
+                # 2) ... et il ne peut pas le MODIFIER. Meme objet, droit oppose :
+                #    c'est la sonde la plus tranchante du fichier.
+                code=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bearer $T" \
+                  -H 'Content-Type: application/json' -d '{"description":"interdit"}' "$API/job_templates/$JTID/")
+                case "$code" in
+                  40[13]) echo "  $JT : lancer OUI, modifier NON ($code)";;
+                  *) echo "ERREUR: modification de $JT acceptee ou ambigue ($code)"; exit 1;;
+                esac
+              done
+
+              # 3) Il n'ADMINISTRE rien. Charges utiles VALIDES a dessein : un 400
+              #    ne prouverait rien (on ne saurait pas si c'est le droit ou la
+              #    forme qui a ete refuse). Seuls 401/403 sont acceptes comme preuve.
+              refus() {
+                code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $T" \
+                  -H 'Content-Type: application/json' -d "$2" "$API/$1/")
+                case "$code" in
+                  40[13]) echo "  $1 : creation refusee ($code)";;
+                  2*) echo "ERREUR: le jeton a CREE un objet dans $1 ($code) — portee trop large"; exit 1;;
+                  *) echo "ERREUR: refus non concluant sur $1 ($code) — une sonde ambigue ne prouve rien"; exit 1;;
+                esac
+              }
+              refus inventories "$(jq -nc --argjson o "$ORG" '{name:"sonde-interdite", organization:$o}')"
+              refus projects    "$(jq -nc --argjson o "$ORG" '{name:"sonde-interdite", organization:$o, scm_type:"manual", local_path:"legacy-playbooks"}')"
+              refus credentials "$(jq -nc --argjson o "$ORG" '{name:"sonde-interdite", organization:$o, credential_type:1}')"
+              refus users       '{"username":"sonde-interdite","password":"Sonde-Interdite-1234"}'
+
+              # 4) ... et un job template HORS LISTE lui reste inaccessible.
+              #    Si le template n'existe plus, il n'y a rien a prouver : on le DIT
+              #    plutot que de faire echouer une synchro sur une absence legitime.
+              JTX=$(find_id job_templates "$JT_INTERDIT" name)
+              if [ -z "$JTX" ]; then
+                echo "  temoin d'exclusion : $JT_INTERDIT absent d'AWX — rien a prouver"
+              else
+                VU=$(curl -sS -H "Authorization: Bearer $T" "$API/job_templates/$JTX/" \
+                  | jq -r '.summary_fields.user_capabilities.start // "invisible"')
+                case "$VU" in
+                  invisible|false) echo "  temoin d'exclusion : $JT_INTERDIT non lancable ($VU)";;
+                  *) echo "ERREUR: $JT_INTERDIT est lancable alors qu'il n'est PAS dans JT_LANCABLES"; \
+                     echo "        (un role Execute d'ORGANISATION a-t-il ete accorde ?)"; exit 1;;
+                esac
+              fi
+
+              echo "jeton de lancement en place dans $SECRET_NS/$SECRET_NOM"
