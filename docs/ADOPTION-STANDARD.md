@@ -136,6 +136,7 @@ ROUTAGE — C'EST CE QUE LE MOTEUR REND.** Deux cas, et un seul les sépare :
 | **compound** | rien en propre | **délègue** : chaque enfant applique SON porteur |
 | **crossplane** | l'**ENTRÉE** d'un contrôleur (un XR, qui porte un finalizer) | **`managementPolicies` sans `Delete`** sur la ressource managée (table AU4) |
 | **terraform** | l'**ENTRÉE** d'un contrôleur (un objet `Terraform`, finalizer `finalizers.tf.contrib.fluxcd.io`) | **`destroyResourcesOnDeletion: false`** sur l'objet `Terraform` |
+| **script / awx** (échelle gatée : CD9) | **rien dans le cluster** — le réel vit à l'EXTÉRIEUR (base, compte, geste sur un système cible) | **moteur** : le runner SAUTE `destroy` si `est_adopte` (mode ≠ `gere` OU marqueur durable) — gaté, CD9 phase B |
 | répertorié | rien n'est rendu | sans objet |
 
 **LA RÈGLE, en une phrase** : *si le moteur offre un levier de non-destruction, on
@@ -276,7 +277,19 @@ geste humain) · géré = destruction pilotée.
 - Cas particulier conservé : un dépôt git CLIENT existant (legacy externe) suit la même
   échelle en pointant SON dépôt — même mot, même sens.
 
-### La matrice complète — 5 moteurs × 4 niveaux, aucune case vide (AU1)
+### script · awx (moteur 7) — l'échelle GATÉE sur un fait (CD9)
+
+L'Observé exige un LECTEUR que la v1 n'a pas : `observe.sh` pour `script` (l'auteur
+agit), le mode check pour `awx` (`ask_job_type_on_launch: true` — le client agit, mesuré
+`false` sur les templates réels). L'échelle est donc **gatée, et c'est DIT** — conditions
+de déblocage, refus du barreau déclaratif et déclencheur au **§9quater de
+PROMISE-STANDARD (bloc « L'échelle d'adoption »)**. Quand elle ouvrira : **2 barreaux**
+(`observe` | `gere`) — Gouverné non offert par conception (aucune notion de plan), comme
+crossplane. Non-destruction d'un adopté : porteur **moteur** (§3bis). En attendant, les
+deux bouts servent : Répertorié (déclarer sans confier) et Géré (le premier apply
+confronte la déclaration au réel — CD3).
+
+### La matrice complète — 7 moteurs × 4 niveaux, aucune case vide (AU1)
 
 | Moteur \ Niveau | Répertorié (0) | Observé (1) | Gouverné (2) | Géré (3) |
 |---|---|---|---|---|
@@ -285,6 +298,8 @@ geste humain) · géré = destruction pilotée.
 | helm | catalogue (par source) | app sans sync (le diff) ✅ AU2+AU3 (pilote produit : alignement 0-création, UID inchangés, reprise en place) | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
 | operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
 | compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
+| script | catalogue (par source git) | **gaté** — `observe.sh` (l'AUTEUR agit) → CD9-B | **non offert** (pas de plan — comme crossplane, l'enum diffère par conception) | l'actuel ✅ CD3 (premier apply = la confrontation ; garde d'appropriation du script) |
+| awx | catalogue (par source AWX ✅ CD7) | **gaté** — mode check (`ask_job_type_on_launch`, le CLIENT agit) → CD9-B | **non offert** (idem) | l'actuel ✅ CD8-B (`apply`=present · `destroy`=absent, identité du fournisseur) |
 
 Une case « → AUx » = mécanisme DÉFINI, preuve à jouer dans l'objectif nommé. Un badge ne
 s'affiche pour un moteur QUE quand sa case est prouvée — jamais d'affichage en avance sur la
@@ -329,7 +344,8 @@ l'automatisation plus tard **derrière le même contrat**.
 Deux précisions de frontière :
 
 - un **survey AWX** est un contrat déclaré **dans un système tiers lisible par API** — même
-  famille que la déclaration, servie par les **actions AWX** (`spec.type: awx-action`) ;
+  famille que la déclaration, servie par le moteur **`awx`** (`spec.type: awx` ; la classe
+  action/ressource se déduit de la variable d'état du survey — décision CD7) ;
 - une **spec OpenAPI/Swagger constatée** rend le contrat **DÉRIVABLE** — c'est la PREMIÈRE
   ligne (famille des moteurs qui LISENT), pas la deuxième ; moteur futur, cadré dans
   `backstage-platform/Objectives/contrat-declare/NOTE-OPENAPI.md`.

@@ -190,7 +190,7 @@ l'opérateur revient (destination re-sync).
 > **STATUT : ABANDONNÉ le 2026-07-28** (`backstage-platform/Objectives/ansible/
 > DECISION-ABANDON.md`), **retrait EN COURS depuis le 2026-08-06 (objectif CD8)**.
 > **N'écrivez plus de promesse `ansible`.** Le remplacement est le **§9quater** :
-> une automatisation AWX s'expose en **ACTION** (`spec.type: awx-action`), dont le
+> une automatisation AWX s'expose via le moteur `awx` (`spec.type: awx` — la classe se déduit de la variable d'état du survey), dont le
 > formulaire se dérive du **survey** — le contrat déclaré dans un système tiers.
 >
 > **La raison, à ne pas re-litiger** : *« le guichet peut être unique, la GARANTIE
@@ -203,7 +203,7 @@ l'opérateur revient (destination re-sync).
 >
 > **État du retrait** : les 2 promesses TÉMOINS retirées (2026-08-06) · les 2
 > produits RÉELS (`service-legacy`, `service-account`) conservés et ralentis à 24 h
-> **jusqu'à leur migration en `awx-action`** (on ne retire pas une capacité
+> **jusqu'à leur migration en `awx`** (on ne retire pas une capacité
 > demandée sans l'avoir remplacée) · le slot `ansible` du contrat, du form-switch
 > et du Studio reste ouvert jusque-là — le retirer avant invaliderait leurs claims
 > et **gèlerait l'application de TOUTES les demandes**.
@@ -464,7 +464,7 @@ contient :
 |---|---|---|
 | `run.sh` seul | **ACTION** | « Une exécution qui se termine — ne surveille rien, ne répare rien ; supprimer la demande ne défait rien. » |
 | `apply.sh` + `destroy.sh` | **RESSOURCE** | « Converge au changement déclaré · destruction pilotée · pas d'auto-guérison. » |
-| + `observe.sh` (optionnel) | ouvre la dérive | **Étage 2, GATÉ** — sa présence est SIGNALÉE, jamais câblée ni promise en v1. |
+| + `observe.sh` (optionnel) | ouvre la dérive | **Étage 2, GATÉ** — sa présence est SIGNALÉE, jamais câblée ni promise en v1 (déblocage : CD9 phase B). |
 
 - `run.sh` **XOR** (`apply.sh` + `destroy.sh`) : le mélange est REFUSÉ à la génération,
   fichiers trouvés et attendus nommés dans le refus.
@@ -510,23 +510,80 @@ Demande = PR sur portal-templates → portier iTop → merge humain. Actions com
 ⚠️ Fait Kratix à dire sur la carte d'une ACTION : **modifier la demande ré-exécute le
 geste** (le pipeline re-tourne au changement de spec).
 
-### Les actions AWX — le même moteur, le contrat déclaré AILLEURS
+### Les offres AWX — le même moteur, le contrat déclaré AILLEURS (construit : CD7/CD8-B)
 
-Un **survey AWX** est un contrat déclaré dans un système tiers lisible par API : une
-action AWX est une promesse ACTION dont le `run` — fourni par la plateforme — lance LE job
-template déclaré et attend sa fin (`status` = résultat + URL du journal AWX).
-`spec.type: awx-action` réutilise le bloc `automation` existant et ses CEL (jobTemplate
-UNIQUE · cible déclarée `inventory` XOR `allowedLimits` · `awxTokenSecret` par
-fournisseur — un jeton déclaré GAGNE toujours sur le jeton de lancement par défaut de la
-plateforme). Le formulaire vient du survey — écrit une fois, chez le client ; un champ
-`password` de survey est **EXCLU** (un secret n'entre jamais dans un claim git).
-Ceci EXÉCUTE la Partie 3 de `DECISION-ABANDON.md` (le cadrage AWX-comme-actions) : les
-actions remplacent l'usage du moteur ansible §9bis, le moteur réconciliant reste
-abandonné.
+Un **survey AWX** est un contrat déclaré dans un système tiers lisible par API : une offre
+AWX est une promesse de CE moteur dont le contrat vient du survey, et dont les verbes —
+fournis par la plateforme, pinnés comme toute source — lancent LE job template déclaré et
+attendent sa fin (`status` = résultat + **URL du journal AWX**).
+
+🔑 **La classe suit les verbes ici aussi — et les verbes sont une VARIABLE D'ÉTAT du
+survey** (un choix fermé `present`/`absent`, reconnu à sa FORME, jamais à son nom) :
+- variable d'état présente → **RESSOURCE** (`apply` = lancer avec `present` · `destroy` =
+  lancer avec `absent`) — migrer en « action » un template qui sait défaire PERDRAIT la
+  destruction, un recul déguisé en garantie plus honnête ;
+- absente → **ACTION** (`run`).
+
+D'où le type **`awx`** — PAS `awx-action` : un type nommé « action » qui produit des
+ressources serait le marketing que ce § interdit (décision CD7, prise sur les templates
+RÉELS — ils portent tous une variable d'état).
+
+`spec.type: awx` réutilise le bloc `automation` et ses CEL : jobTemplate **UNIQUE** ·
+cible déclarée `inventory` XOR `allowedLimits` — **et le verrou S'EXÉCUTE** : déclarer une
+cible que le template n'accepte pas au lancement (`ask_limit_on_launch: false`) est REFUSÉ
+à la génération, avec les sorties nommées (le défaut n°1 du moteur abandonné, fermé à la
+racine) · `awxTokenSecret` par fournisseur — un jeton déclaré **GAGNE toujours** sur le
+jeton de lancement par défaut de la plateforme (CD6). Le formulaire vient du survey —
+écrit une fois, chez le client ; un champ `password` est **EXCLU** (un secret n'entre
+jamais dans un claim git). **Prouvé en production** (CD7/CD8-B) : migration ansible→awx
+sans un octet changé sur le réel, jobs lancés sous l'identité du FOURNISSEUR.
+Ceci EXÉCUTE la Partie 3 de `DECISION-ABANDON.md` ; le moteur réconciliant reste
+abandonné (slot `ansible` retiré, CD8-B).
+
+
+### L'échelle d'adoption — gatée sur un FAIT, jamais déclarée (CD9)
+
+**État v1 : `script` et `awx` ne sont PAS adoptables — c'est un CHOIX, le voici.**
+L'Observé promet *« la plateforme lit et compare, ne modifie rien »* ; il exige un
+LECTEUR, et chaque moteur a le sien :
+
+- `script` → **`observe.sh`** (l'étage gaté du tableau des verbes) — **qui agit :
+  l'AUTEUR de la source** ;
+- `awx` → le **mode check** d'Ansible (`job_type: check`), qui exige
+  `ask_job_type_on_launch: true` sur le job template — **qui agit : le CLIENT, côté AWX**
+  (mesuré `false` sur les templates réels au 2026-08-06).
+
+Sans lecteur, pas d'Observé ; sans Observé, pas d'échelle. **La capacité se DÉDUIT de ce
+fait** — personne ne coche jamais « adoptable » — et publier un Observé que le moteur ne
+peut pas exécuter est **REFUSÉ à la génération** (un contrôle décoratif est pire qu'un
+contrôle absent).
+
+**L'échelle, quand elle ouvrira : 2 barreaux (`observe` | `gere`).** Gouverné n'existe
+pas pour ces moteurs — aucune notion de plan, tout passe déjà par commit + merge — comme
+crossplane ne l'offre pas : *l'enum diffère par moteur PAR CONCEPTION*.
+
+**⛔ Le barreau DÉCLARATIF est REFUSÉ (décision utilisateur, 2026-08-06)** — « déclarer à
+la main l'état existant, sans lecture » ne sera PAS un niveau. *Une déclaration ne vaut
+que si quelque chose la CONFRONTE* : le contrat déclaré (ce §) marche parce qu'il est
+exécuté en permanence — génération, admission, runner — et qu'une erreur s'y voit tout de
+suite ; un ÉTAT déclaré ne serait confronté à rien — le réel bouge, la déclaration reste,
+et elle peut mentir pour toujours. Le client prudent, cible du barreau, n'y gagnerait
+rien : la plateforme lui répéterait ce qu'il lui a dit lui-même. Les deux bouts existent
+déjà et suffisent :
+
+- **déclarer sans confier** → **Répertorié** (fiche « déclaré le X — jamais vérifié ») ;
+- **déclarer et confier** → **Géré** : le PREMIER APPLY confronte la déclaration au
+  réel — il converge ou échoue visiblement (CD3 : oid stable ; la garde d'appropriation
+  du script décide la politique).
+
+**Déclencheur de l'implémentation (CD9 phase B) : un besoin réel CONSTATÉ** — un
+consommateur qui exige de « regarder avant de confier » sur une offre de ces moteurs.
+Rien ne se construit d'avance. Non-destruction d'un adopté : porteur **moteur** (le
+runner SAUTE `destroy` si `est_adopte`) — déclinaison au §3bis d'ADOPTION-STANDARD.
 
 ### Slugs figés
 
-`script` · `awx-action` · `run` / `apply` / `destroy` / `observe` ·
+`script` · `awx` · `run` / `apply` / `destroy` / `observe` ·
 `contract.schema.json` · `SPEC_<CHAMP>` · `SORTIES`.
 
 ## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
