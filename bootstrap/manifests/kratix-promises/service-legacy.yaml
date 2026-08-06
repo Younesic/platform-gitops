@@ -65,7 +65,7 @@ spec:
         spec:
           containers:
           - name: backstage
-            image: ''
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             env:
             - name: CURATION_REV
               value: 1cc1f5a4af7a
@@ -119,7 +119,7 @@ spec:
               mountPath: /kratix/secrets/creds
               readOnly: true
           - name: backstage
-            image: ''
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
           rbac: {}
           jobOptions: {}
       delete:
