@@ -460,9 +460,20 @@ spec:
               secretName: registry-credentials
               optional: true
               defaultMode: 256
+          # CD7 — le jeton AWX en LECTURE, pour dériver le survey d'un job template.
+          # C'est le MÊME jeton que le lancement (CD6) : il ne voit que les templates
+          # dont le droit d'exécution est déclaré en git, donc la porte est unique —
+          # on ne peut pas publier une offre pour un template qu'on ne pourra pas
+          # lancer. Optionnel comme les autres : un secret pas encore frappé ne doit
+          # pas empêcher la fabrique de démarrer pour TOUS les autres moteurs.
+          - name: awx-token
+            secret:
+              secretName: awx-jeton-lancement
+              optional: true
+              defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.31-stylo@sha256:835eb1475f65684559e1d2a5cd11084e0e7a6a2a451f3dd972c315a8c4fe2f84
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.32-awx@sha256:2dab3e99bad7210adc6edf29e32cd010acbd1c592345e993bf4168d8f307b1b0
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
@@ -471,6 +482,9 @@ spec:
             - name: HELM_REGISTRY_CONFIG
               value: /kratix/secrets/registry/.dockerconfigjson
             volumeMounts:
+            - name: awx-token
+              mountPath: /kratix/secrets/awx
+              readOnly: true
             - name: github-token
               mountPath: /kratix/secrets/github
               readOnly: true
