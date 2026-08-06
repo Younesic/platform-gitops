@@ -172,6 +172,9 @@ spec:
                         type: string
                         description: 'Secret portant le jeton AWX DU FOURNISSEUR (clé : token). Un jeton commun ferait s''arrêter la lignée du fournisseur à la frontière d''AAP.'
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                      adoption:
+                        type: boolean
+                        description: 'awx (CD9) : EXIGER que l''offre soit adoptable (barreau Observé via le mode check d''Ansible). Refusée à la génération si le job template n''accepte pas le job_type au lancement (ask_job_type_on_launch) — jamais un Observé décoratif. Omis = l''adoptabilité se déduit du fait, silencieusement.'
                       stateVar:
                         type: string
                         description: 'Variable d''état du job template (défaut : marker_state), utilisée quand il n''y a pas de job template de retrait.'
@@ -463,7 +466,7 @@ spec:
             # ⚠️ NE JAMAIS pinner `0.7.32-awx` = arm64 (construite sans
             #    --platform linux/amd64) : `exec format error` sur ce cluster x86,
             #    et les frappes de jeton s'arrêtent avec elle. 0.7.33 = même code, amd64.
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.35-awx@sha256:da326f0fa963abc2bb098ab1e0449afa4ebce09b8f3680690e46e12b9b0c4b87
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.36-adoption@sha256:c2bd1222032c0e7ae6f5220e07c918e38eaa4d5810c4cb6bdbc0243dbec60497
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant

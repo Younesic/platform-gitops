@@ -306,6 +306,12 @@ spec:
               fi
               echo "job template=$JT"
               [ -z "$EE" ] || patch "/job_templates/$JT/" "$(jq -nc --argjson e "$EE" '{execution_environment:$e}')" > /dev/null
+              # CD9 — le GESTE DU CLIENT, joué sur la scène de répétition et déclaré
+              # ici : autoriser le job_type au lancement ouvre le MODE CHECK (« lire
+              # sans écrire »), donc le barreau Observé de l'offre du portail. Sur un
+              # vrai AAP client, c'est « Prompt on launch » sur Job Type — coché par
+              # LUI, sur SON template. Idempotent (patch d'un booléen).
+              patch "/job_templates/$JT/" '{"ask_job_type_on_launch":true}' > /dev/null
               # Rattachement de l'identifiant (idempotent : AWX ignore un doublon).
               post "/job_templates/$JT/credentials/" "$(jq -nc --argjson c "$CRED" '{id:$c}')" > /dev/null || true
 

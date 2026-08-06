@@ -31,10 +31,12 @@ metadata:
     platform.kratix.io/provider: platform
     platform.kratix.io/exposure: product
     platform.kratix.io/public: "true"
+    # CD9 : dérivée de la PRÉSENCE d'observe.sh dans la source (jamais cochée).
+    platform.kratix.io/adoptable: "true"
     # RESSOURCE (pas d'entry-kind: action) : elle possède, converge au changement
     # déclaré, se détruit au retrait de la demande — et sa fiche entre dans la
     # console, hors échelle d'adoption (« sans objet » en dérive : conforme).
-    backstage.example.io/ui-schema: '{"properties": {"nom": {"title": "Nom de la base", "ui:title": "Nom de la base", "ui:placeholder": "ventes_reporting"}, "proprietaire": {"title": "Rôle propriétaire", "ui:title": "Rôle propriétaire", "ui:placeholder": "equipe_ventes"}, "commentaire": {"title": "Commentaire (COMMENT ON DATABASE)", "ui:title": "Commentaire (COMMENT ON DATABASE)"}}, "ui:order": ["nom", "proprietaire", "commentaire", "*"]}'
+    backstage.example.io/ui-schema: '{"properties": {"nom": {"title": "Nom de la base", "ui:title": "Nom de la base", "ui:placeholder": "ventes_reporting"}, "proprietaire": {"title": "Rôle propriétaire", "ui:title": "Rôle propriétaire", "ui:placeholder": "equipe_ventes"}, "commentaire": {"title": "Commentaire (COMMENT ON DATABASE)", "ui:title": "Commentaire (COMMENT ON DATABASE)"}}, "ui:order": ["mode", "nom", "proprietaire", "commentaire", "*"]}'
 spec:
   destinationSelectors:
     - matchLabels:
@@ -87,6 +89,19 @@ spec:
                       description: >-
                         Commentaire posé sur la base — le champ qui prouve la
                         convergence au changement déclaré.
+                    # CD9 — le barreau d'adoption. Présent parce qu'observe.sh
+                    # EXISTE dans la source à v0.27.0 : la capacité se déduit du
+                    # fichier, personne ne l'a cochée. 2 barreaux — Gouverné non
+                    # offert (pas de plan), comme crossplane.
+                    mode:
+                      type: string
+                      enum: [observe, gere]
+                      default: gere
+                      description: >-
+                        Niveau d'adoption. observe = la plateforme lit et compare
+                        (observe.sh, lecture seule), ne modifie rien · gere =
+                        converge au changement déclaré. Un adopté n'est jamais
+                        détruit à la suppression de la demande (§3bis).
                     team:
                       type: string
                       description: Équipe demandeuse (posée par le portail).
@@ -120,10 +135,10 @@ spec:
                   defaultMode: 256
             containers:
               - name: geste
-                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.1.1@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.2.0@sha256:e04188641bf1494d180483ad44802e0438ab9f62b614ccaf5f11c1b5f026d72f
                 env:
                   - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
-                  - { name: SOURCE_REF, value: "v0.25.0" }
+                  - { name: SOURCE_REF, value: "v0.27.0" }
                   - { name: SOURCE_PATH, value: "sources/script/base-postgres" }
                   - { name: VERBE, value: "apply" }
                 volumeMounts:
@@ -152,10 +167,10 @@ spec:
                   defaultMode: 256
             containers:
               - name: geste-destroy
-                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.1.1@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.2.0@sha256:e04188641bf1494d180483ad44802e0438ab9f62b614ccaf5f11c1b5f026d72f
                 env:
                   - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
-                  - { name: SOURCE_REF, value: "v0.25.0" }
+                  - { name: SOURCE_REF, value: "v0.27.0" }
                   - { name: SOURCE_PATH, value: "sources/script/base-postgres" }
                   - { name: VERBE, value: "destroy" }
                 volumeMounts:
