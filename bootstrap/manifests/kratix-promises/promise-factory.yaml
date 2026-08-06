@@ -35,12 +35,12 @@ metadata:
     # KS6 — lignée provider EXPLICITE (véridique : la méta-promesse est team-platform) —
     # ferme le verdict « legacy » du gate d'écriture Studio.
     platform.kratix.io/provider: platform
-    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","terraform","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
+    backstage.example.io/ui-schema: '{"ui:order":["type","kind","plural","group","source","automation","terraform","script","recipe","placement","uiSchema","usageHints","*"],"properties":{"source":{"ui:order":["url","version","chartName","path","apiSchemaFrom"]},"recipe":{"ui:field":"CompoundComposer"},"uiSchema":{"ui:field":"LeafPresentationComposer"},"usageHints":{"ui:field":"UsageHintsComposer"}}}'
     # hide par branche RÉACTIVÉ avec backstage-component ≥0.4.9 : le masquage
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"ansible":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"automation"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -94,10 +94,16 @@ spec:
                 # blocs `variable` — l'auteur n'écrit aucune CRD.
                 - rule: self.type != 'terraform' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
                   message: 'type terraform : source.url (dépôt du module), source.version (tag ou SHA) et source.path (chemin du module) sont requis (pin de gouvernance)'
+                # Moteur du CONTRAT DÉCLARÉ (§9quater). Rien de plus n'est exigé : la
+                # CLASSE (action ou ressource) se déduit des VERBES, qui sont des
+                # FICHIERS de la source — elle ne se déclare pas, donc elle ne peut pas
+                # mentir. `spec.script` est OPTIONNEL (il ne porte que les identifiants).
+                - rule: self.type != 'script' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
+                  message: 'type script : source.url (dépôt de la source), source.version (tag ou SHA) et source.path (dossier portant contract.schema.json et les verbes) sont requis (pin de gouvernance)'
                 properties:
                   type:
                     type: string
-                    description: Moteur de la future promesse (helm, crossplane, operator, compound et ansible implémentés ; terraform = slot)
+                    description: Moteur de la future promesse (helm, crossplane, operator, compound, terraform, script ; ansible = ABANDONNÉ, en retrait — voir PROMISE-STANDARD §9bis)
                     enum:
                     - helm
                     - crossplane
@@ -105,6 +111,7 @@ spec:
                     - operator
                     - compound
                     - ansible
+                    - script
                     default: helm
                   kind:
                     type: string
@@ -206,6 +213,14 @@ spec:
                         type: string
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
                         description: 'Secret portant les identifiants du provider, lus en VARIABLES D''ENVIRONNEMENT par le runner. Jamais des variables terraform : une variable atterrit dans l''état ET dans le plan, et « sensitive » masque l''affichage, pas le stockage.'
+                  script:
+                    type: object
+                    description: 'script : ce que le produit DÉCLARE de son exécution. Tout le reste se LIT dans la source — le contrat dans contract.schema.json, la classe dans la présence des verbes (run.sh = action ; apply.sh + destroy.sh = ressource ; observe.sh = signalé, gaté).'
+                    properties:
+                      credsSecret:
+                        type: string
+                        pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                        description: 'Secret portant les identifiants du système CIBLE, montés et lus en VARIABLES D''ENVIRONNEMENT par le runner — jamais en argument (un argument finit dans les journaux). Omis = le script ne doit avoir besoin d''aucun identifiant.'
                   placement:
                     type: string
                     pattern: ^[A-Za-z0-9]([A-Za-z0-9._/-]*[A-Za-z0-9])?=[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
@@ -434,7 +449,7 @@ spec:
               defaultMode: 256
           containers:
           - name: factory
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.29-fr@sha256:05a195326e49afb6c8aeff19f8752c59f57fc3cba38042ad0284c849cae1c6ef
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.7.30-script@sha256:5a733d5142838423a8dda77b6ab573e110ba820f6a4158a4ef56b9be6d7accff
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
