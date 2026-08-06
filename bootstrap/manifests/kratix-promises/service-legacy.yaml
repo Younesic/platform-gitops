@@ -1,29 +1,22 @@
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
-  labels:
-    kratix.io/promise-version: v0.0.1
   name: service-legacy
+  labels:
+    kratix.io/promise-version: v0.1.0
   annotations:
-    platform.kratix.io/status-schema: "{\"conditions\": {\"path\": \".status.conditions\"\
-      , \"label\": \"Conditions \xE9crites par le runtime \xE0 chaque r\xE9conciliation.\"\
-      , \"type\": \"array\"}, \"awxJobId\": {\"path\": \".status.awxJobId\", \"label\"\
-      : \"Identifiant du job AWX de la derni\xE8re ex\xE9cution.\", \"type\": \"integer\"\
-      }, \"awxJobStatus\": {\"path\": \".status.awxJobStatus\", \"label\": \"Statut\
-      \ du dernier job AWX (successful, failed\u2026).\", \"type\": \"string\"}, \"\
-      lastRunAt\": {\"path\": \".status.lastRunAt\", \"label\": \"Horodatage de fin\
-      \ de la derni\xE8re ex\xE9cution.\", \"type\": \"string\"}, \"serviceState\"\
-      : {\"path\": \".status.serviceState\", \"label\": \"\xC9tat constat\xE9 sur\
-      \ la machine cible.\", \"type\": \"string\"}}"
-    platform.kratix.io/operator-group: ansible.example.io
     platform.kratix.io/provider: cloud
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: 'false'
 spec:
+  destinationSelectors:
+  - matchLabels:
+      environment: platform
   api:
     apiVersion: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
     metadata:
       name: servicelegacies.platform.example.io
-      namespace: default
     spec:
       group: platform.example.io
       names:
@@ -32,451 +25,35 @@ spec:
         singular: servicelegacy
       scope: Namespaced
       versions:
-      - additionalPrinterColumns:
-        - jsonPath: .status.awxJobId
-          name: Job AWX
-          type: integer
-        - jsonPath: .status.awxJobStatus
-          name: Dernier etat
-          type: string
-        - jsonPath: .metadata.creationTimestamp
-          name: Age
-          type: date
-        name: v1alpha1
+      - name: v1alpha1
+        served: true
+        storage: true
         schema:
           openAPIV3Schema:
-            description: Un service configure sur une machine du parc legacy
+            type: object
             properties:
-              apiVersion:
-                enum:
-                - platform.example.io/v1alpha1
-                type: string
-              kind:
-                enum:
-                - ServiceLegacy
-                type: string
-              metadata:
-                type: object
               spec:
+                type: object
                 properties:
-                  markerContent:
-                    default: gere par la plateforme
-                    description: Message inscrit dans le fichier de configuration
-                      du service.
-                    type: string
                   serviceName:
-                    description: Nom technique du service sur la machine cible.
+                    description: Identifiant technique du service sur la cible
                     type: string
+                    minLength: 1
+                    maxLength: 63
+                    default: legacy-app
+                  markerContent:
+                    description: Ecrit dans le fichier de configuration du service
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                    default: gere par la plateforme
                   team:
-                    description: "Squad propri\xE9taire de la demande. Renseign\xE9\
-                      e automatiquement depuis l'identit\xE9 du demandeur ; jamais\
-                      \ transmise \xE0 AWX."
-                    pattern: ^[a-z][a-z0-9-]*$
                     type: string
+                    description: "\xC9quipe propri\xE9taire de la demande."
                 required:
                 - markerContent
                 - serviceName
-                type: object
-              status:
-                properties:
-                  awxJobId:
-                    description: "Identifiant du job AWX de la derni\xE8re ex\xE9\
-                      cution."
-                    type: integer
-                  awxJobStatus:
-                    description: "Statut du dernier job AWX (successful, failed\u2026\
-                      )."
-                    type: string
-                  conditions:
-                    description: "Conditions \xE9crites par le runtime \xE0 chaque\
-                      \ r\xE9conciliation."
-                    items:
-                      properties:
-                        ansibleResult:
-                          type: object
-                          x-kubernetes-preserve-unknown-fields: true
-                        lastTransitionTime:
-                          type: string
-                        message:
-                          type: string
-                        reason:
-                          type: string
-                        status:
-                          type: string
-                        type:
-                          type: string
-                      type: object
-                    type: array
-                  lastRunAt:
-                    description: "Horodatage de fin de la derni\xE8re ex\xE9cution."
-                    type: string
-                  serviceState:
-                    description: "\xC9tat constat\xE9 sur la machine cible."
-                    type: string
-                type: object
-            type: object
-        served: true
-        storage: true
-        subresources:
-          status: {}
-    status:
-      acceptedNames:
-        kind: ''
-        plural: ''
-      conditions: null
-      storedVersions: null
-  dependencies:
-  - apiVersion: apiextensions.k8s.io/v1
-    kind: CustomResourceDefinition
-    metadata:
-      name: servicelegacys.ansible.example.io
-      namespace: default
-    spec:
-      group: ansible.example.io
-      names:
-        kind: ServiceLegacy
-        listKind: ServiceLegacyList
-        plural: servicelegacys
-        singular: servicelegacy
-      scope: Namespaced
-      versions:
-      - additionalPrinterColumns:
-        - jsonPath: .status.awxJobId
-          name: Job AWX
-          type: integer
-        - jsonPath: .status.awxJobStatus
-          name: Dernier etat
-          type: string
-        - jsonPath: .metadata.creationTimestamp
-          name: Age
-          type: date
-        name: v1alpha1
-        schema:
-          openAPIV3Schema:
-            description: Un service configure sur une machine du parc legacy
-            properties:
-              apiVersion:
-                type: string
-              kind:
-                type: string
-              metadata:
-                type: object
-              spec:
-                properties:
-                  markerContent:
-                    default: gere par la plateforme
-                    description: Message inscrit dans le fichier de configuration
-                      du service.
-                    type: string
-                  serviceName:
-                    description: Nom technique du service sur la machine cible.
-                    type: string
-                  team:
-                    description: "Squad propri\xE9taire de la demande. Renseign\xE9\
-                      e automatiquement depuis l'identit\xE9 du demandeur ; jamais\
-                      \ transmise \xE0 AWX."
-                    pattern: ^[a-z][a-z0-9-]*$
-                    type: string
-                required:
-                - markerContent
-                - serviceName
-                type: object
-              status:
-                properties:
-                  awxJobId:
-                    description: "Identifiant du job AWX de la derni\xE8re ex\xE9\
-                      cution."
-                    type: integer
-                  awxJobStatus:
-                    description: "Statut du dernier job AWX (successful, failed\u2026\
-                      )."
-                    type: string
-                  conditions:
-                    description: "Conditions \xE9crites par le runtime \xE0 chaque\
-                      \ r\xE9conciliation."
-                    items:
-                      properties:
-                        ansibleResult:
-                          type: object
-                          x-kubernetes-preserve-unknown-fields: true
-                        lastTransitionTime:
-                          type: string
-                        message:
-                          type: string
-                        reason:
-                          type: string
-                        status:
-                          type: string
-                        type:
-                          type: string
-                      type: object
-                    type: array
-                  lastRunAt:
-                    description: "Horodatage de fin de la derni\xE8re ex\xE9cution."
-                    type: string
-                  serviceState:
-                    description: "\xC9tat constat\xE9 sur la machine cible."
-                    type: string
-                type: object
-            type: object
-        served: true
-        storage: true
-        subresources:
-          status: {}
-  - apiVersion: v1
-    kind: ServiceAccount
-    metadata:
-      name: service-legacy-operator
-      namespace: awx
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: Role
-    metadata:
-      name: service-legacy-operator-leader-election
-      namespace: awx
-    rules:
-    - apiGroups:
-      - coordination.k8s.io
-      resources:
-      - leases
-      verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    - apiGroups:
-      - ''
-      resources:
-      - configmaps
-      - events
-      verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: RoleBinding
-    metadata:
-      name: service-legacy-operator-leader-election
-      namespace: awx
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: Role
-      name: service-legacy-operator-leader-election
-    subjects:
-    - kind: ServiceAccount
-      name: service-legacy-operator
-      namespace: awx
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRole
-    metadata:
-      name: service-legacy-operator
-      namespace: default
-    rules:
-    - apiGroups:
-      - ansible.example.io
-      resources:
-      - servicelegacys
-      - servicelegacys/status
-      - servicelegacys/finalizers
-      verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    - apiGroups:
-      - ''
-      resources:
-      - events
-      verbs:
-      - create
-      - patch
-    - apiGroups:
-      - platform.kratix.io
-      resources:
-      - healthrecords
-      verbs:
-      - get
-      - list
-      - create
-      - update
-      - patch
-      - delete
-    - apiGroups:
-      - platform.example.io
-      resources:
-      - servicelegacies
-      verbs:
-      - get
-      - list
-      - watch
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRoleBinding
-    metadata:
-      name: service-legacy-operator
-      namespace: default
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: service-legacy-operator
-    subjects:
-    - kind: ServiceAccount
-      name: service-legacy-operator
-      namespace: awx
-# ⚠️ CADENCE RAMENÉE DE 120s À 24h — MESURE CONSERVATOIRE (CD8, 2026-08-06).
-# Le moteur ansible est ABANDONNÉ depuis le 2026-07-28, et sa décision d'abandon
-# condamne NOMMÉMENT cette cadence : « 120 s inconditionnel = 720 jobs/jour/ressource,
-# 262 800/an … pour au plus 1 exécution utile sur 720 ». MESURÉ ici le 2026-08-06 :
-# 4 CR vivants produisaient ~6 jobs AWX par 90 s (la boucle se ré-amorce sur ses
-# propres écritures de statut) — c'est la pression disque qui a gelé les kubelets.
-# Ce que la mesure NE change PAS : un changement du claim déclenche toujours une
-# réconciliation IMMÉDIATE (le produit converge comme avant). Ce qu'elle retire :
-# le re-jeu à vide toutes les deux minutes. Temporaire jusqu'à la migration en
-# `awx-action` (CD7) ; réversible par `git revert`.
-  - apiVersion: v1
-    data:
-      watches.yaml: "- version: v1alpha1\n  group: ansible.example.io\n  kind: ServiceLegacy\n\
-        \  playbook: /opt/ansible/generic/provision.yml\n  reconcilePeriod: 24h\n\
-        \  finalizer:\n    name: ansible.example.io/deprovision\n    playbook: /opt/ansible/generic/deprovision.yml\n"
-    kind: ConfigMap
-    metadata:
-      name: service-legacy-watches
-      namespace: awx
-  - apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      labels:
-        app: service-legacy-operator
-      name: service-legacy-operator
-      namespace: awx
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          app: service-legacy-operator
-      template:
-        metadata:
-          annotations:
-            roles-revision: '4'
-          labels:
-            app: service-legacy-operator
-        spec:
-          containers:
-          - args:
-            - run
-            - --watches-file=/opt/ansible/produit/watches.yaml
-            - --leader-election-id=service-legacy-operator
-            command:
-            - ansible-operator
-            env:
-            - name: WATCH_NAMESPACE
-              value: ''
-            - name: ANSIBLE_ROLES_PATH
-              value: /opt/ansible/roles
-            - name: ANSIBLE_LOCAL_TEMP
-              value: /tmp/ansible
-            - name: ANSIBLE_REMOTE_TEMP
-              value: /tmp/ansible
-            - name: AWX_URL
-              value: http://awx-service.awx.svc.cluster.local
-            - name: AWX_JOB_TEMPLATE
-              value: legacy-service
-            - name: AWX_TIMEOUT_SECONDS
-              value: '600'
-            - name: AWX_ALLOWED_LIMITS
-              value: ''
-            - name: AWX_INVENTORY
-              value: Parc legacy
-            - name: AWX_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  key: token
-                  name: awx-token-cloud
-            - name: OPERAND_GROUP
-              value: ansible.example.io
-            - name: OPERAND_VERSION
-              value: v1alpha1
-            - name: OPERAND_PLURAL
-              value: servicelegacys
-            - name: CLAIM_API_VERSION
-              value: platform.example.io/v1alpha1
-            - name: CLAIM_PLURAL
-              value: servicelegacies
-            - name: AWX_STATE_VAR
-              value: marker_state
-            - name: AWX_STATE_PRESENT
-              value: present
-            - name: AWX_STATE_ABSENT
-              value: absent
-            image: quay.io/operator-framework/ansible-operator@sha256:96053ae3e045c4eb57350cbf1995dece22bf7d3bfe4cf875a20d8853963a3731
-            livenessProbe:
-              httpGet:
-                path: /healthz
-                port: 6789
-              initialDelaySeconds: 20
-              periodSeconds: 30
-            name: operator
-            readinessProbe:
-              httpGet:
-                path: /readyz
-                port: 6789
-              initialDelaySeconds: 10
-              periodSeconds: 15
-            resources:
-              limits:
-                cpu: '1'
-                memory: 512Mi
-              requests:
-                cpu: 50m
-                memory: 128Mi
-            volumeMounts:
-            - mountPath: /opt/ansible/roles
-              name: roles
-              readOnly: true
-            - mountPath: /opt/ansible/generic
-              name: generic
-              readOnly: true
-            - mountPath: /opt/ansible/produit
-              name: produit
-              readOnly: true
-            - mountPath: /tmp
-              name: runner
-          priorityClassName: platform-high
-          serviceAccountName: service-legacy-operator
-          volumes:
-          - configMap:
-              items:
-              - key: awx-contrat.yml
-                path: awx-contrat/tasks/main.yml
-              - key: awx-runner.yml
-                path: awx-runner/tasks/main.yml
-              - key: awx-remover.yml
-                path: awx-remover/tasks/main.yml
-              name: ansible-operator-roles
-            name: roles
-          - configMap:
-              items:
-              - key: provision.yml
-                path: provision.yml
-              - key: deprovision.yml
-                path: deprovision.yml
-              name: ansible-operator-roles
-            name: generic
-          - configMap:
-              name: service-legacy-watches
-            name: produit
-          - emptyDir: {}
-            name: runner
-  destinationSelectors:
-  - matchLabels:
-      environment: platform
+                - team
   workflows:
     config: {}
     promise:
@@ -487,8 +64,8 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
-            name: backstage
+          - name: backstage
+            image: ''
             env:
             - name: CURATION_REV
               value: 1cc1f5a4af7a
@@ -499,21 +76,99 @@ spec:
         metadata:
           name: instance-configure
         spec:
+          volumes:
+          - name: github-token
+            secret:
+              secretName: github-app-token
+              optional: true
+              defaultMode: 256
+          - name: creds
+            secret:
+              secretName: awx-token-cloud
+              optional: true
+              defaultMode: 256
           containers:
-          - env:
-            - name: OPERATOR_GROUP
-              value: ansible.example.io
-            - name: OPERATOR_VERSION
-              value: v1alpha1
-            - name: OPERATOR_KIND
-              value: ServiceLegacy
-            image: harbor.212-47-226-56.nip.io/platform/from-api-to-operator@sha256:0a5975c3f74e82f5f635810115a667ec38cbad9954e052d7168c2c6d450862bd
-            name: from-api-to-operator
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
-            name: backstage
-          jobOptions: {}
+          - name: geste
+            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+            env:
+            - name: SOURCE_URL
+              value: https://github.com/Younesic/platform-gitops
+            - name: SOURCE_REF
+              value: v0.26.0
+            - name: SOURCE_PATH
+              value: sources/script/awx-lancement-ressource
+            - name: VERBE
+              value: apply
+            - name: AWX_URL
+              value: http://awx-service.awx.svc.cluster.local
+            - name: AWX_WEB
+              value: https://awx.212-47-226-56.nip.io
+            - name: AWX_JOB_TEMPLATE
+              value: legacy-service
+            - name: AWX_VAR_MAP
+              value: '{"service_name": "SERVICENAME", "marker_content": "MARKERCONTENT"}'
+            - name: AWX_ETAT_VAR
+              value: marker_state
+            - name: AWX_TIMEOUT
+              value: '1800'
+            volumeMounts:
+            - name: github-token
+              mountPath: /kratix/secrets/github
+              readOnly: true
+            - name: creds
+              mountPath: /kratix/secrets/creds
+              readOnly: true
+          - name: backstage
+            image: ''
           rbac: {}
-status:
-  workflows: 0
-  workflowsFailed: 0
-  workflowsSucceeded: 0
+          jobOptions: {}
+      delete:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: instance-delete
+        spec:
+          volumes:
+          - name: github-token
+            secret:
+              secretName: github-app-token
+              optional: true
+              defaultMode: 256
+          - name: creds
+            secret:
+              secretName: awx-token-cloud
+              optional: true
+              defaultMode: 256
+          containers:
+          - name: geste-destroy
+            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+            env:
+            - name: SOURCE_URL
+              value: https://github.com/Younesic/platform-gitops
+            - name: SOURCE_REF
+              value: v0.26.0
+            - name: SOURCE_PATH
+              value: sources/script/awx-lancement-ressource
+            - name: VERBE
+              value: destroy
+            - name: AWX_URL
+              value: http://awx-service.awx.svc.cluster.local
+            - name: AWX_WEB
+              value: https://awx.212-47-226-56.nip.io
+            - name: AWX_JOB_TEMPLATE
+              value: legacy-service
+            - name: AWX_VAR_MAP
+              value: '{"service_name": "SERVICENAME", "marker_content": "MARKERCONTENT"}'
+            - name: AWX_ETAT_VAR
+              value: marker_state
+            - name: AWX_TIMEOUT
+              value: '1800'
+            volumeMounts:
+            - name: github-token
+              mountPath: /kratix/secrets/github
+              readOnly: true
+            - name: creds
+              mountPath: /kratix/secrets/creds
+              readOnly: true
+          rbac: {}
+          jobOptions: {}
