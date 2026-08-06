@@ -111,10 +111,11 @@ spec:
             # de la surface d'attaque gratuite.
             - { name: JT_LANCABLES, value: "legacy-service compte-service" }
             # Le TÉMOIN de l'exclusion : un job template qui ne doit JAMAIS être
-            # lançable par ce compte. Mesuré : sans le rôle Execute, AWX ne le rend
-            # même pas VISIBLE — la sonde ci-dessous rend donc la décision
-            # « pas de rôle Execute d'organisation » auto-gardée : si quelqu'un
-            # l'accordait un jour, ce Job échouerait au lieu de se taire.
+            # lançable par ce compte. MESURÉ sur ce cluster : sans le rôle Execute,
+            # AWX rend 403 sur son détail ET l'omet de la liste (count = 2 pour les
+            # deux accordés). La sonde ci-dessous rend donc la décision « pas de rôle
+            # Execute d'ORGANISATION » auto-gardée : si quelqu'un l'accordait un
+            # jour, ce Job échouerait au lieu de se taire.
             - { name: JT_INTERDIT, value: "legacy-motd" }
           command: ["/bin/sh", "-c"]
           args:
@@ -238,13 +239,23 @@ spec:
               if [ -z "$JTX" ]; then
                 echo "  temoin d'exclusion : $JT_INTERDIT absent d'AWX — rien a prouver"
               else
-                VU=$(curl -sS -H "Authorization: Bearer $T" "$API/job_templates/$JTX/" \
-                  | jq -r '.summary_fields.user_capabilities.start // "invisible"')
-                case "$VU" in
-                  invisible|false) echo "  temoin d'exclusion : $JT_INTERDIT non lancable ($VU)";;
-                  *) echo "ERREUR: $JT_INTERDIT est lancable alors qu'il n'est PAS dans JT_LANCABLES"; \
-                     echo "        (un role Execute d'ORGANISATION a-t-il ete accorde ?)"; exit 1;;
-                esac
+                # ⚠️ On lit le CODE, pas seulement le champ : en jq, `//` retombe
+                #    aussi sur `false`, donc « absent » et « present mais faux » se
+                #    confondraient — deux faits differents. MESURE : hors liste, AWX
+                #    rend 403 ET n'inclut pas le template dans la liste.
+                CODE=$(curl -s -o /tmp/jtx.json -w '%{http_code}' -H "Authorization: Bearer $T" "$API/job_templates/$JTX/")
+                VU=$(jq -r 'if (.summary_fields.user_capabilities.start? // null) == null then "absent" else (.summary_fields.user_capabilities.start|tostring) end' /tmp/jtx.json 2>/dev/null || echo absent)
+                rm -f /tmp/jtx.json
+                if [ "$CODE" = 403 ] || [ "$CODE" = 404 ]; then
+                  echo "  temoin d'exclusion : $JT_INTERDIT inaccessible ($CODE)"
+                elif [ "$CODE" = 200 ] && [ "$VU" = false ]; then
+                  echo "  temoin d'exclusion : $JT_INTERDIT visible mais NON lancable"
+                else
+                  echo "ERREUR: $JT_INTERDIT accessible/lancable (HTTP $CODE, start=$VU) alors qu'il"
+                  echo "        n'est PAS dans JT_LANCABLES — un role Execute d'ORGANISATION"
+                  echo "        a-t-il ete accorde a $USER ?"
+                  exit 1
+                fi
               fi
 
               echo "jeton de lancement en place dans $SECRET_NS/$SECRET_NOM"
