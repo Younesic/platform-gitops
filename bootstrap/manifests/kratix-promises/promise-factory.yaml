@@ -67,9 +67,20 @@ spec:
                 required:
                 - kind
                 - type
+                # ⚠️ L'APPROBATION EST OBLIGATOIRE DEPUIS QU'ON A MESURÉ CE QUE SON
+                # ABSENCE COÛTE : une offre reprenant le patrimoine d'un client est
+                # sortie NON GOUVERNÉE parce que personne n'avait posé la question.
+                # « aucune » reste une réponse valide — le silence, non.
+                - approval
                 # validation par type (CEL). ⚠️ source n'est plus requis globalement
                 # (compound inline) → chaque règle DOIT garder has(self.source).
                 x-kubernetes-validations:
+                # ⚠️ PAS de règle CEL pour l'ABSENCE de `approval` : `required` est
+                # évalué par la validation STRUCTURELLE, qui passe AVANT CEL — une
+                # telle règle ne s'exécuterait jamais, et quelqu'un finirait par
+                # croire qu'elle protège. Le refus est donc sec (« Required value ») ;
+                # ce qui ORIENTE vit dans la description du champ, que le formulaire
+                # affiche et que `kubectl explain` rend. Mesuré au banc jetable.
                 # ⚠️ DEUX CHAMPS PORTANT LE MÊME MOT, C'EST LE DÉFAUT QU'ON FERME.
                 # `spec.api.approval` règle le MOTEUR (le approvePlan de terraform) ;
                 # celui-ci règle la GOUVERNANCE. Les confondre a coûté une preuve.
