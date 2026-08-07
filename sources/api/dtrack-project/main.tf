@@ -2,10 +2,10 @@
 #
 # Source du contrat : la spec PINNÉE à côté (`spec.json`) — la plateforme ne la lit
 # jamais à chaud. Source des verbes : la DÉSIGNATION, qui ne se devine pas :
-#   create → PUT    /v1/project
-#   read   → GET    /v1/project/{uuid}
-#   update → PATCH  /v1/project/{uuid}
-#   delete → DELETE /v1/project/{uuid}
+#   create → PUT    /api/v1/project
+#   read   → GET    /api/v1/project/{uuid}
+#   update → PATCH  /api/v1/project/{uuid}
+#   delete → DELETE /api/v1/project/{uuid}
 
 terraform {
   required_providers {
@@ -85,11 +85,11 @@ variable "import_id" {
 }
 
 resource "restful_resource" "objet" {
-  path          = "/v1/project"
+  path          = "/api/v1/project"
   create_method = "PUT"
-  read_path     = "/v1/project/$(body.uuid)"
+  read_path     = "/api/v1/project/$(body.uuid)"
   update_method = "PATCH"
-  update_path   = "/v1/project/$(body.uuid)"
+  update_path   = "/api/v1/project/$(body.uuid)"
 
   # Un champ optionnel non renseigné n'est PAS envoyé : l'API applique alors son
   # propre défaut, ce que le demandeur a voulu en laissant le champ vide.
@@ -110,8 +110,8 @@ import {
   for_each = toset(var.import_id == "" ? [] : [var.import_id])
   to       = restful_resource.objet
   id = jsonencode({
-    id            = "/v1/project/${each.value}"
-    path          = "/v1/project"
+    id            = "/api/v1/project/${each.value}"
+    path          = "/api/v1/project"
     create_method = "PUT"
     body = {
 
