@@ -96,6 +96,32 @@ roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-see
 subjects:
   - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
 ---
+# OA7 — MÊME droit, pour l'AUTRE lecteur : le portail, qui répertorie les projets
+# existants (niveau 0). Le droit est dupliqué namespace par namespace, jamais élargi
+# en ClusterRole : un seed n'a aucune raison d'écrire un secret n'importe où.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dtrack-api-seed-write
+  namespace: backstage
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["dtrack-api-creds"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dtrack-api-seed-write
+  namespace: backstage
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-seed-write }
+subjects:
+  - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -129,6 +155,10 @@ spec:
             - { name: PERMS, value: "PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO VIEW_VULNERABILITY" }
             - { name: SECRET_NAME, value: "dtrack-api-creds" }
             - { name: SECRET_NS, value: "default" }
+            # Les AUTRES lecteurs de cette clé (séparés par des espaces).
+            # Aujourd'hui : le portail, pour le niveau 0 de l'échelle
+            # d'adoption — les projets simplement RÉPERTORIÉS.
+            - { name: EXTRA_NS, value: "backstage" }
             - { name: TMP_CLIENT, value: "dtrack-bootstrap" }
           command: ["sh", "-c"]
           args:
@@ -262,6 +292,18 @@ spec:
                   --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
                   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
                 echo "clé déposée dans $SECRET_NS/$SECRET_NAME"
+                # OA7 — le NIVEAU 0 : le portail répertorie les projets existants, et
+                # il lit cette clé DANS SON PROPRE namespace. Un secret hors du
+                # namespace de son lecteur est un secret ABSENT — la leçon a déjà été
+                # payée sur les jetons AWX (CD8-B). On dépose donc chez les deux.
+                for NS_LECTEUR in $EXTRA_NS; do
+                  kubectl -n "$NS_LECTEUR" create secret generic "$SECRET_NAME" \
+                    --from-literal=DTRACK_API_KEY="$KEY" \
+                    --from-literal=DTRACK_URL="$DT" \
+                    --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
+                    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                  echo "clé déposée dans $NS_LECTEUR/$SECRET_NAME"
+                done
               else
                 KEY=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
               fi
