@@ -12,6 +12,7 @@ metadata:
     platform.kratix.io/adoptable: 'true'
     backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
       Observ\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"]}"
+    platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
 spec:
   destinationSelectors:
   - matchLabels:
@@ -84,7 +85,7 @@ spec:
             - name: UI_SCHEMA_REV
               value: 632f21d86a44
             - name: CURATION_REV
-              value: 1cc1f5a4af7a
+              value: e089b7b5c945
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
