@@ -150,7 +150,13 @@ spec:
                     echo " $ACTUELLES " | grep -q " $P " || MANQUANTES="$MANQUANTES $P"
                   done
                   if [ -z "$MANQUANTES" ]; then
-                    echo "clé en place, valide, et l'équipe porte les permissions déclarées — rien à faire"
+                    # ⚠️ Les données NON SECRÈTES du Secret (les adresses) se mettent à
+                    # niveau ICI, sans fenêtre d'administration et sans toucher à la clé :
+                    # ajouter une adresse ne doit pas coûter une refabrication
+                    # d'identifiant (défaut attrapé en ajoutant l'adresse publique).
+                    kubectl -n "$SECRET_NS" patch secret "$SECRET_NAME" --type merge -p \
+                      "{\"stringData\":{\"DTRACK_URL\":\"$DT\",\"DTRACK_PUBLIC_URL\":\"$DT_PUBLIC\"}}" >/dev/null
+                    echo "clé en place, valide, permissions déclarées portées — adresses mises à niveau"
                     exit 0
                   fi
                   echo "clé valide mais permissions MANQUANTES :$MANQUANTES — on les ajoute"
