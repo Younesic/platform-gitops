@@ -137,7 +137,7 @@ spec:
         spec:
           containers:
           - name: rendu-terraform
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:dea4f6181901804d3a1c9445b1c683da3b472142be0b371e2d63ef0f76f0d544
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
             env:
             - name: MODULE_PATH
               value: ./sources/api/dtrack-project

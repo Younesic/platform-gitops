@@ -271,6 +271,19 @@ spec:
                         type: string
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
                         description: 'Secret portant les identifiants de l''API, montés en FICHIERS et lus par le module. Jamais des variables : une variable atterrit dans l''état ET dans le plan lisible, et « sensitive » masque l''affichage, pas le stockage.'
+                      credsKeys:
+                        type: object
+                        description: 'Les NOMS des clés dans le secret d''identifiants. La plateforme a une CONVENTION (API_URL, API_TOKEN, API_USER) ; déclarez ici les vôtres quand elles diffèrent. ⚠️ Ce n''est pas un détail : le générateur ne peut PAS lire le secret, et un nom qui ne correspond pas fait échouer le PLAN à chaque tour — sur un message de terraform qui parle d''un fichier absent, jamais du secret.'
+                        properties:
+                          url:
+                            type: string
+                            description: 'Clé portant l''adresse de base de l''API (défaut API_URL).'
+                          token:
+                            type: string
+                            description: 'Clé portant le jeton ou la clé d''API (défaut API_TOKEN).'
+                          user:
+                            type: string
+                            description: 'Clé portant l''identifiant, pour l''authentification basic (défaut API_USER).'
                       authFamille:
                         type: string
                         enum: [apikey, bearer, basic, oauth2cc]
@@ -534,7 +547,7 @@ spec:
             # ⚠️ NE JAMAIS pinner `0.7.32-awx` = arm64 (construite sans
             #    --platform linux/amd64) : `exec format error` sur ce cluster x86,
             #    et les frappes de jeton s'arrêtent avec elle. 0.7.33 = même code, amd64.
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.2-motifs@sha256:03b20bacf3808c94dcd9a146bb75c774d1cea580bd7d266ee2d438beed39831b
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.3-cles@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
