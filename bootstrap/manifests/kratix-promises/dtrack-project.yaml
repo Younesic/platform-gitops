@@ -1,17 +1,3 @@
-# PROMESSE PILOTE DU MOTEUR `api` (objectif OA2 — la porte du set OA).
-#
-# ÉCRITE À LA MAIN, exprès (la démarche de harbor-tf/TN3 et depot-adopte/LG2) : la
-# porte éprouve la MÉCANIQUE avant toute industrialisation. La fabrique n'apprendra le
-# type `api` qu'en OA5, et cette promesse sera alors son point de comparaison.
-#
-# Ce que le moteur `api` fait : une spec OpenAPI PINNÉE donne le contrat, une
-# DÉSIGNATION donne les verbes, et l'exécution est celle du moteur terraform — dont on
-# hérite l'état, le plan lisible, l'approbation, la dérive et l'échelle d'adoption
-# entière. Détail : PROMISE-STANDARD §9quinquies · sources/api/dtrack-project/README.md
-#
-# ⚠️ CADENCE DU PILOTE : 5m (le plancher) pour OBSERVER les tours pendant la preuve.
-# Ce n'est PAS le défaut du contrat (un Observé se règle à 24h). Dit ici pour que
-# personne ne recopie cette valeur comme un modèle.
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
@@ -21,37 +7,21 @@ metadata:
   annotations:
     platform.kratix.io/provider: platform
     platform.kratix.io/exposure: product
-    platform.kratix.io/public: "true"
-    # L'offre est ADOPTABLE : son contrat porte `mode` + `import_id` (la liaison de ce
-    # moteur = l'identifiant de l'objet dans l'API). Le marketplace lui ouvre les deux
-    # portes, « Provisionner » et « Adopter l'existant ».
-    platform.kratix.io/adoptable: "true"
-    # ADOPTION-STANDARD §3bis — l'objet Terraform est l'ENTRÉE d'un contrôleur : son
-    # porteur de non-destruction est `destroyResourcesOnDeletion`, jamais la ceinture
-    # (qui en ferait un orphelin vivant, replanifiant sans demandeur).
-    platform.kratix.io/adoption-non-destruction: moteur
-    # Libellés FR du cycle. ⚠️ Format EMBALLÉ obligatoire ({"properties": …}) : à plat,
-    # l'annotation est silencieusement INERTE (bug d'héritage payé 3 semaines).
-    backstage.example.io/ui-schema: '{"properties": {"mode": {"title": "Niveau d''adoption", "ui:title": "Niveau d''adoption", "ui:enumNames": ["Observé", "Gouverné", "Géré"]}, "import_id": {"title": "Projet existant à reprendre", "ui:title": "Projet existant à reprendre", "ui:placeholder": "UUID du projet Dependency-Track existant"}, "nom": {"title": "Nom du projet", "ui:title": "Nom du projet"}, "version_projet": {"title": "Version", "ui:title": "Version"}, "classifier": {"title": "Nature du composant", "ui:title": "Nature du composant"}}, "ui:order": ["mode", "import_id", "nom", "version_projet", "classifier", "*"]}'
-    # La famille des objets rendus, pour l'onglet Kubernetes (mécanisme BR3, donnée pure).
+    platform.kratix.io/public: 'true'
     platform.kratix.io/operator-group: infra.contrib.fluxcd.io
-    # Sorties étiquetées. Aucune n'est sensible : la spec ne marque ni `writeOnly` ni
-    # `format: password` sur le schéma Project (vérifié) — sinon elles seraient exclues
-    # du sélecteur, comme le robot_secret de TN5.
-    platform.kratix.io/status-schema: '{"uuid": {"path": ".status.availableOutputs.uuid", "label": "UUID du projet dans Dependency-Track (la liaison d''adoption).", "type": "string"}, "nom": {"path": ".status.availableOutputs.nom", "label": "Nom du projet.", "type": "string"}}'
+    platform.kratix.io/adoption-non-destruction: moteur
+    platform.kratix.io/adoptable: 'true'
+    platform.kratix.io/status-schema: "{\"uuid\": {\"path\": \".status.availableOutputs.uuid\"\
+      , \"label\": \"Identifiant de l'objet dans l'API \u2014 la liaison d'adoption.\"\
+      , \"type\": \"string\"}}"
+    backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
+      Observ\xE9\",\"Gouvern\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"\
+      ]}"
+    platform.kratix.io/tier: standard
 spec:
   destinationSelectors:
-    - matchLabels:
-        environment: platform
-
-  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
-  # Écrit à la main ici = ce que le dériveur d'OA4 produira depuis `spec.json` + la
-  # désignation. L'écart éventuel sera le témoin d'équivalence machine ≍ main.
-  #
-  # ⚠️ LES `required` MENTEURS DE LA SPEC : le schéma `Project` déclare
-  # `required: [lastBomImport, name, uuid]`. `uuid` et `lastBomImport` sont produits
-  # PAR LE SERVEUR — les exposer donnerait un formulaire que personne ne peut
-  # soumettre. Ils sont donc absents de ce contrat, et le §9quinquies dit pourquoi.
+  - matchLabels:
+      environment: platform
   api:
     apiVersion: apiextensions.k8s.io/v1
     kind: CustomResourceDefinition
@@ -65,203 +35,206 @@ spec:
         singular: dtrackproject
       scope: Namespaced
       versions:
-        - name: v1alpha1
-          served: true
-          storage: true
-          schema:
-            openAPIV3Schema:
-              type: object
-              properties:
-                spec:
-                  type: object
-                  required: [nom, team]
-                  properties:
-                    nom:
-                      type: string
-                      minLength: 1
-                      maxLength: 255
-                      description: Nom du projet dans Dependency-Track.
-                    team:
-                      type: string
-                      description: Équipe propriétaire de la demande.
-                    version_projet:
-                      type: string
-                      default: ""
-                      description: Version du projet — une même application peut en avoir plusieurs.
-                    classifier:
-                      type: string
-                      enum: [APPLICATION, FRAMEWORK, LIBRARY, CONTAINER, OPERATING_SYSTEM, DEVICE, FIRMWARE, FILE, PLATFORM, DEVICE_DRIVER, MACHINE_LEARNING_MODEL, DATA]
-                      default: APPLICATION
-                      description: Nature du composant (énumération de la spec).
-                    description:
-                      type: string
-                      default: ""
-                      description: Description libre du projet.
-                    import_id:
-                      type: string
-                      default: ""
-                      pattern: ^$|^[0-9a-fA-F-]{36}$
-                      description: >-
-                        ADOPTION — UUID d'un projet Dependency-Track EXISTANT à
-                        reprendre au lieu d'en créer un. Vide = création classique.
-                    mode:
-                      type: string
-                      enum: [observe, gouverne, gere]
-                      default: gere
-                      description: >-
-                        Niveau d'adoption. Observé = la plateforme lit et compare, ne
-                        modifie rien. Gouverné = chaque changement attend une
-                        approbation. Géré = la plateforme est la source de vérité
-                        (défaut, comportement classique).
-
-  # ── LA SOURCE : le module ET la spec pinnée, installés UNE FOIS ───────────────
+      - name: v1alpha1
+        served: true
+        storage: true
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              spec:
+                type: object
+                required:
+                - team
+                properties:
+                  classifier:
+                    type: string
+                    enum:
+                    - NONE
+                    - APPLICATION
+                    - FRAMEWORK
+                    - LIBRARY
+                    - CONTAINER
+                    - OPERATING_SYSTEM
+                    - DEVICE
+                    - FIRMWARE
+                    - FILE
+                    - PLATFORM
+                    - DEVICE_DRIVER
+                    - MACHINE_LEARNING_MODEL
+                    - DATA
+                    - ''
+                    default: ''
+                  description:
+                    type: string
+                    maxLength: 255
+                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
+                    default: ''
+                  name:
+                    type: string
+                    maxLength: 255
+                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
+                    default: ''
+                  versionValeur:
+                    type: string
+                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
+                    default: ''
+                  importId:
+                    type: string
+                    description: "Identifiant d'un objet EXISTANT \xE0 reprendre au\
+                      \ lieu d'en cr\xE9er un. Vide = cr\xE9ation."
+                    default: ''
+                  team:
+                    type: string
+                    description: "\xC9quipe propri\xE9taire de la demande."
+                  mode:
+                    type: string
+                    enum:
+                    - observe
+                    - gouverne
+                    - gere
+                    default: gere
+                    description: "Niveau d'adoption. Observ\xE9 = la plateforme lit\
+                      \ et compare, ne modifie rien. Gouvern\xE9 = chaque changement\
+                      \ attend une approbation. G\xE9r\xE9 = la plateforme est la\
+                      \ source de v\xE9rit\xE9 (d\xE9faut)."
   dependencies:
-    - apiVersion: source.toolkit.fluxcd.io/v1
-      kind: GitRepository
-      metadata:
-        name: dtrack-project-module
-        namespace: default
-      spec:
-        interval: 10m
-        url: https://github.com/Younesic/platform-gitops
-        ref:
-          tag: v0.28.0
-        provider: github
-        secretRef:
-          name: github-app
-        sparseCheckout:
-          - sources/api/dtrack-project
-
+  - apiVersion: source.toolkit.fluxcd.io/v1
+    kind: GitRepository
+    metadata:
+      name: dtrack-project-module
+      namespace: default
+    spec:
+      interval: 10m
+      url: https://github.com/Younesic/platform-gitops
+      ref:
+        commit: '7351c33d93911abeb99cf4ea4a9f6eb32ba70182'
+      provider: github
+      secretRef:
+        name: github-app
+      sparseCheckout:
+      - sources/api/dtrack-project
   workflows:
     config: {}
-
     promise:
       configure:
-        - apiVersion: platform.kratix.io/v1alpha1
-          kind: Pipeline
-          metadata:
-            name: promise-configure
-          spec:
-            containers:
-              - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
-
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: promise-configure
+        spec:
+          containers:
+          - name: backstage
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+            env:
+            - name: UI_SCHEMA_REV
+              value: 3a415027514a
+            - name: CURATION_REV
+              value: aa48971ae711
     resource:
       configure:
-        - apiVersion: platform.kratix.io/v1alpha1
-          kind: Pipeline
-          metadata:
-            name: instance-configure
-          spec:
-            containers:
-              - name: rendu-terraform
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.0-api@sha256:f34d1410c7a40834209acf38f95eddfb6835a437c3be5f4f5a5fe6ef3e726eaf
-                env:
-                  - { name: MODULE_PATH, value: ./sources/api/dtrack-project }
-                  - { name: SOURCE_NAME, value: dtrack-project-module }
-                  - { name: SOURCE_NAMESPACE, value: default }
-                  - { name: CIBLE_NAMESPACE, value: default }
-                  # ⚠️ Les identifiants de l'API arrivent par un VOLUME, pas par
-                  # l'environnement : le provider `restful` n'a aucun support de
-                  # variables d'environnement (base_url requis en configuration), et
-                  # une variable terraform voyagerait dans le plan lisible. Le module
-                  # les lit avec file() — le plan ne garde que l'expression.
-                  - { name: CREDS_SECRET_NAME, value: dtrack-api-creds }
-                  - { name: CREDS_MOUNT_PATH, value: /dtrack }
-                  - { name: CHIFFREMENT_SECRET, value: terraform-chiffrement }
-                  - { name: TF_INTERVAL, value: 5m }
-                  - name: VAR_MAP
-                    value: '{"nom":"nom","version_projet":"version_projet","classifier":"classifier","description":"description","import_id":"import_id"}'
-                command: [python, -c]
-                args:
-                  - |
-                    import json, os, pathlib, yaml
-
-                    o = yaml.safe_load(pathlib.Path("/kratix/input/object.yaml").read_text())
-                    nom  = o["metadata"]["name"]
-                    spec = o.get("spec") or {}
-
-                    # Les variables du module — un champ absent n'est PAS émis (le
-                    # module applique alors son défaut). `mode` et `team` ne sont PAS
-                    # dans VAR_MAP : champs de PLATEFORME, jamais transmis à terraform.
-                    variables = []
-                    for champ, var in json.loads(os.environ["VAR_MAP"]).items():
-                        if champ in spec and spec[champ] is not None:
-                            variables.append({"name": var, "value": spec[champ]})
-
-                    tf = {
-                      "apiVersion": "infra.contrib.fluxcd.io/v1alpha2",
-                      "kind": "Terraform",
-                      "metadata": {"name": nom, "namespace": os.environ["CIBLE_NAMESPACE"]},
-                      "spec": {
-                        "interval": os.environ["TF_INTERVAL"],
-                        "path": os.environ["MODULE_PATH"],
-                        "sourceRef": {
-                          "kind": "GitRepository",
-                          "name": os.environ["SOURCE_NAME"],
-                          "namespace": os.environ["SOURCE_NAMESPACE"],
-                        },
-                        "storeReadablePlan": "human",
-                        "writeOutputsToSecret": {"name": nom + "-sorties"},
-                        "vars": variables,
-                        "runnerPodTemplate": {
-                          "spec": {
-                            "volumes": [
-                              {"name": "dtrack",
-                               # ⚠️ 0444 et non 0400 : le fichier d'un volume de Secret
-                               # appartient à root, et le runner terraform tourne en
-                               # NON-root — à 0400 il obtient « permission denied » sur
-                               # sa propre configuration (mesuré). Sans conséquence :
-                               # seul ce pod voit ce montage.
-                               "secret": {"secretName": os.environ["CREDS_SECRET_NAME"],
-                                          "defaultMode": 292}},
-                            ],
-                            "volumeMounts": [
-                              {"name": "dtrack",
-                               "mountPath": os.environ["CREDS_MOUNT_PATH"],
-                               "readOnly": True},
-                            ],
-                            # Le chiffrement de l'état : décision de PLATEFORME,
-                            # optionnel (un défaut visible vaut mieux qu'un pod qui
-                            # refuse de naître).
-                            "envFrom": [
-                              {"secretRef": {"name": os.environ.get("CHIFFREMENT_SECRET", "terraform-chiffrement"),
-                                             "optional": True}},
-                            ],
-                          }
-                        },
-                      },
-                    }
-
-                    # ── LE NIVEAU D'ADOPTION → les réglages du moteur (§4) ──────────
-                    mode = str(spec.get("mode") or "gere")
-                    if mode == "observe":
-                        tf["spec"]["planOnly"] = True
-                        tf["spec"]["destroyResourcesOnDeletion"] = False
-                    elif mode == "gouverne":
-                        # approvePlan ABSENT = le plan ATTEND une approbation.
-                        tf["spec"]["destroyResourcesOnDeletion"] = False
-                    else:
-                        tf["spec"]["approvePlan"] = "auto"
-                        tf["spec"]["destroyResourcesOnDeletion"] = True
-
-                    # §3bis — LA NON-DESTRUCTION D'UN ADOPTÉ, quel que soit le niveau :
-                    # ce que la plateforme n'a pas créé, elle ne le détruit pas en
-                    # partant. Cette ligne a le DERNIER mot sur la branche `gere`.
-                    adopte = mode != "gere" or bool(str(spec.get("import_id") or ""))
-                    if adopte:
-                        tf["spec"]["destroyResourcesOnDeletion"] = False
-
-                    pathlib.Path("/kratix/output/terraform.yaml").write_text(
-                        yaml.safe_dump(tf, sort_keys=False, allow_unicode=True))
-                    print("rendu : Terraform/" + nom + " · mode=" + mode
-                          + " · adopte=" + str(adopte)
-                          + " (" + str(len(variables)) + " variable(s))")
-
-              - name: backstage
-                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
-                env:
-                  - name: ADOPTION_NON_DESTRUCTION
-                    value: moteur
-            rbac: {}
-            jobOptions: {}
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: instance-configure
+        spec:
+          containers:
+          - name: rendu-terraform
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:5bfbe69d0e89278d84e4aaa882fa646a10ab48171a329bc3b9e6985625d7d63e
+            env:
+            - name: MODULE_PATH
+              value: ./sources/api/dtrack-project
+            - name: SOURCE_NAME
+              value: dtrack-project-module
+            - name: CIBLE_NAMESPACE
+              value: default
+            - name: CREDS_SECRET
+              value: dtrack-api-creds
+            - name: CHIFFREMENT_SECRET
+              value: terraform-chiffrement
+            - name: TF_INTERVAL
+              value: 1h
+            - name: APPROBATION
+              value: auto
+            - name: ADOPTION_FIELD
+              value: mode
+            - name: TF_INTERVAL_OBSERVE
+              value: 24h
+            - name: ADOPTION_LIAISON_FIELD
+              value: importId
+            - name: VAR_MAP
+              value: '{"classifier": "classifier", "description": "description", "name":
+                "name", "versionValeur": "version_valeur", "importId": "import_id"}'
+            command:
+            - python
+            - -c
+            args:
+            - "import json, os, pathlib, yaml\n\no = yaml.safe_load(pathlib.Path(\"\
+              /kratix/input/object.yaml\").read_text())\nnom  = o[\"metadata\"][\"\
+              name\"]\nspec = o.get(\"spec\") or {}\n\n# Les variables du module,\
+              \ d\xE9riv\xE9es du spec de la demande.\n# Un champ absent n'est PAS\
+              \ \xE9mis : le d\xE9faut du module s'applique.\nvariables = []\nfor\
+              \ champ, var in json.loads(os.environ[\"VAR_MAP\"]).items():\n    if\
+              \ champ in spec and spec[champ] is not None:\n        variables.append({\"\
+              name\": var, \"value\": spec[champ]})\n\ntf = {\n  \"apiVersion\": \"\
+              infra.contrib.fluxcd.io/v1alpha2\",\n  \"kind\": \"Terraform\",\n  \"\
+              metadata\": {\"name\": nom, \"namespace\": os.environ[\"CIBLE_NAMESPACE\"\
+              ]},\n  \"spec\": {\n    \"interval\": os.environ[\"TF_INTERVAL\"],\n\
+              \    \"path\": os.environ[\"MODULE_PATH\"],\n    \"sourceRef\": {\n\
+              \      \"kind\": \"GitRepository\",\n      \"name\": os.environ[\"SOURCE_NAME\"\
+              ],\n      \"namespace\": os.environ[\"CIBLE_NAMESPACE\"],\n    },\n\
+              \    # \u26A0\uFE0F vaut FALSE par d\xE9faut : sans cette ligne, supprimer\
+              \ une demande ne\n    # d\xE9truirait RIEN et laisserait la ressource\
+              \ orpheline.\n    \"destroyResourcesOnDeletion\": True,\n    \"storeReadablePlan\"\
+              : \"human\",\n    \"writeOutputsToSecret\": {\"name\": nom + \"-sorties\"\
+              },\n    \"vars\": variables,\n    # DEUX secrets d'environnement : les\
+              \ identifiants du FOURNISSEUR (d\xE9clar\xE9s par\n    # le produit)\
+              \ et le CHIFFREMENT DE L'\xC9TAT (d\xE9cision de PLATEFORME).\n    #\
+              \ \u26A0\uFE0F Aucun des deux n'est une variable terraform : une variable\
+              \ atterrit dans\n    # l'\xE9tat ET dans le plan, et `sensitive` masque\
+              \ l'affichage, pas le stockage.\n    # Le second est OPTIONNEL : sans\
+              \ lui le runner d\xE9marre quand m\xEAme et l'\xE9tat\n    # repart\
+              \ en clair \u2014 un d\xE9faut visible vaut mieux qu'un pod qui refuse\
+              \ de na\xEEtre.\n    \"runnerPodTemplate\": {\n      \"spec\": {\"envFrom\"\
+              : [\n        {\"secretRef\": {\"name\": os.environ[\"CREDS_SECRET\"\
+              ]}},\n        {\"secretRef\": {\"name\": os.environ.get(\"CHIFFREMENT_SECRET\"\
+              , \"terraform-chiffrement\"),\n                       \"optional\":\
+              \ True}},\n      ]}\n    },\n  },\n}\n# \u2500\u2500 LE NIVEAU D'ADOPTION\
+              \ \u2192 les r\xE9glages du moteur (docs/ADOPTION-STANDARD.md \xA74)\
+              \ \u2500\u2500\nchamp_adoption = os.environ.get(\"ADOPTION_FIELD\",\
+              \ \"\")\nmode = str(spec.get(champ_adoption) or \"gere\") if champ_adoption\
+              \ else \"gere\"\nif mode == \"observe\":\n    # Lit et compare, ne touche\
+              \ RIEN : plan sans apply, jamais de destruction,\n    # cadence longue\
+              \ (une d\xE9tection de d\xE9rive n'a pas besoin de tourner \xE0 l'heure).\n\
+              \    tf[\"spec\"][\"planOnly\"] = True\n    tf[\"spec\"][\"destroyResourcesOnDeletion\"\
+              ] = False\n    tf[\"spec\"][\"interval\"] = os.environ.get(\"TF_INTERVAL_OBSERVE\"\
+              , \"24h\")\nelif mode == \"gouverne\":\n    # approvePlan ABSENT : le\
+              \ plan attend une approbation (pos\xE9e par PR, gat\xE9e\n    # par\
+              \ le portier ITSM \u2014 jamais appliqu\xE9e toute seule).\n    tf[\"\
+              spec\"][\"destroyResourcesOnDeletion\"] = False\nelif os.environ.get(\"\
+              APPROBATION\", \"auto\") == \"auto\":\n    tf[\"spec\"][\"approvePlan\"\
+              ] = \"auto\"\n\n# \u2500\u2500 ADOPTION-STANDARD \xA73bis : LA NON-DESTRUCTION\
+              \ D'UN ADOPT\xC9 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\
+              \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# La garantie\
+              \ ne d\xE9pend PAS du niveau : ce que la plateforme n'a pas cr\xE9\xE9\
+              , elle ne\n# le d\xE9truit pas en partant \u2014 G\xE9r\xE9 compris.\
+              \ Pour terraform le porteur est CE champ\n# (l'objet Terraform est l'ENTR\xC9\
+              E d'un contr\xF4leur : le prot\xE9ger du prune en ferait\n# un orphelin\
+              \ qui replanifie sans demandeur).\n# \u26A0\uFE0F Cette ligne DOIT rester\
+              \ la derni\xE8re \xE0 \xE9crire le champ : elle a le dernier mot\n#\
+              \ sur la branche `gere` ci-dessus, qui laisse le d\xE9faut destructeur.\n\
+              liaison = os.environ.get(\"ADOPTION_LIAISON_FIELD\", \"\")\nadopte =\
+              \ mode != \"gere\" or bool(str(spec.get(liaison) or \"\") if liaison\
+              \ else \"\")\nif adopte:\n    tf[\"spec\"][\"destroyResourcesOnDeletion\"\
+              ] = False\n\npathlib.Path(\"/kratix/output/terraform.yaml\").write_text(\n\
+              \    yaml.safe_dump(tf, sort_keys=False, allow_unicode=True))\nprint(\"\
+              rendu : Terraform/\" + nom + \" \xB7 mode=\" + mode\n      + (\" \xB7\
+              \ ADOPT\xC9 (non destructible)\" if adopte else \"\")\n      + \" (\"\
+              \ + str(len(variables)) + \" variable(s))\")\n"
+          - name: backstage
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+            env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
+          rbac: {}
+          jobOptions: {}
