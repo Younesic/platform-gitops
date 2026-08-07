@@ -1,0 +1,225 @@
+# ── AMORCE : la clé d'API que la PLATEFORME utilisera pour provisionner dans DT ──
+#
+# Pourquoi ce Job existe. Le moteur `api` (PROMISE-STANDARD §9quinquies) provisionne
+# des projets Dependency-Track par son API REST. Il lui faut un identifiant DURABLE et
+# ÉTROIT — une clé d'API portée par une équipe qui n'a QUE le nécessaire
+# (PORTFOLIO_MANAGEMENT + VIEW_PORTFOLIO). Cette clé se fabrique ICI, dans le cluster :
+# elle ne passe ni par Git, ni par un humain, ni par un journal.
+#
+# 🔑 LE POINT DÉLICAT, DIT EN ENTIER. Générer une clé d'API exige ACCESS_MANAGEMENT
+# dans DT, c'est-à-dire un privilège d'administration. Le Job ouvre donc une fenêtre
+# d'administration MINIMALE et la REFERME lui-même :
+#   1. il crée un client Keycloak ÉPHÉMÈRE avec un compte de service ;
+#   2. il place ce compte dans un groupe nommé `Administrators` — DT synchronise ses
+#      équipes sur le claim `groups` (ALPINE_OIDC_TEAM_SYNCHRONIZATION), et
+#      `Administrators` est son équipe d'administration par défaut ;
+#   3. il échange le jeton OIDC contre un JWT DT, crée l'équipe étroite et SA CLÉ ;
+#   4. il retire le compte du groupe, supprime le groupe s'il l'a créé et s'il est
+#      vide, et supprime le client éphémère.
+# À la fin il ne reste QUE : une équipe DT étroite, sa clé, et le Secret qui la porte.
+# La fenêtre dure quelques secondes et rien ne la rouvre — c'est le prix, une fois,
+# d'un identifiant durable et étroit ensuite.
+#
+# ⚠️ DEUX FAITS MESURÉS QUI RENDENT CE JOB POSSIBLE (payés au banc, 2026-08-07) :
+#   · DT n'accepte PAS un jeton OIDC sur ses points d'entrée ordinaires — il essaie de
+#     le valider comme SON PROPRE JWT (clé symétrique) et rend 401. L'échange passe
+#     obligatoirement par `POST /api/v1/user/oidc/login`.
+#   · Ce point d'entrée valide l'ID token avec nimbus, qui REFUSE une audience
+#     multiple dont l'`azp` ne correspond pas (« Unexpected JWT audience: [account] »).
+#     D'où `fullScopeAllowed: false` + scopes par défaut minimaux (qui font disparaître
+#     l'audience `account`) + un mappeur d'audience vers `dependency-track`. Et le
+#     jeton doit être demandé avec `scope=openid`, sinon userinfo rend 403.
+#
+# IDEMPOTENT : si le Secret porte déjà une clé qui répond 200, le Job ne fait RIEN et
+# le dit. Rejouer = forcer une synchro de l'app (hook BeforeHookCreation).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dtrack-api-seed
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+---
+# Lecture du seul secret dont le Job a besoin pour parler à Keycloak.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dtrack-api-seed-kc
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["keycloak-credentials"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dtrack-api-seed-kc
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-seed-kc }
+subjects:
+  - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
+---
+# Écriture de la clé DANS le namespace du LECTEUR : les pipelines Kratix et les
+# runners terraform tournent dans `default` — un secret hors du namespace de celui
+# qui le lit est un secret absent (leçon payée sur les jetons AWX, CD8-B).
+# ⚠️ `create` ne peut pas être restreint par nom (Kubernetes décide avant que le nom
+# existe) ; `get`/`patch` le sont.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dtrack-api-seed-write
+  namespace: default
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["dtrack-api-creds"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dtrack-api-seed-write
+  namespace: default
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-seed-write }
+subjects:
+  - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dtrack-api-seed
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: dtrack-api-seed
+      containers:
+        - name: seed
+          image: alpine/k8s:1.35.3
+          env:
+            - { name: DT, value: "http://dependency-track-api-server.dependency-track.svc:8080" }
+            - { name: TEAM, value: "plateforme-api" }
+            - { name: SECRET_NAME, value: "dtrack-api-creds" }
+            - { name: SECRET_NS, value: "default" }
+            - { name: TMP_CLIENT, value: "dtrack-bootstrap-tmp" }
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              # ── 0. déjà en place et VALIDE ? alors on ne fait rien ────────────
+              if kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" >/dev/null 2>&1; then
+                K=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
+                C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $K" "$DT/api/v1/project?pageSize=1")
+                if [ "$C" = 200 ]; then echo "clé déjà en place et valide — rien à faire"; exit 0; fi
+                echo "clé présente mais refusée par DT (HTTP $C) — on en refabrique une"
+              fi
+
+              KC=$(jq -r .url /kc/credentials); RE=$(jq -r .realm /kc/credentials)
+              CI=$(jq -r .client_id /kc/credentials)
+              AT=$(curl -s -d grant_type=client_credentials -d "client_id=$CI" \
+                   --data-urlencode "client_secret=$(jq -r .client_secret /kc/credentials)" \
+                   "$KC/realms/$RE/protocol/openid-connect/token" | jq -r .access_token)
+              [ "$AT" != null ] || { echo "ECHEC : pas de jeton d'administration Keycloak"; exit 1; }
+              A="Authorization: Bearer $AT"; R="$KC/admin/realms/platform"
+
+              # ── 1. client éphémère (audience UNIQUE, sinon nimbus refuse) ─────
+              curl -s -o /dev/null -X DELETE -H "$A" \
+                "$R/clients/$(curl -s -H "$A" "$R/clients?clientId=$TMP_CLIENT" | jq -r '.[0].id // "aucun"')" || true
+              curl -s -o /dev/null -X POST -H "$A" -H 'Content-Type: application/json' -d "{
+                \"clientId\":\"$TMP_CLIENT\",\"enabled\":true,\"publicClient\":false,
+                \"serviceAccountsEnabled\":true,\"standardFlowEnabled\":false,
+                \"fullScopeAllowed\":false,\"defaultClientScopes\":[\"profile\",\"email\"],\"optionalClientScopes\":[],
+                \"protocolMappers\":[
+                  {\"name\":\"groups\",\"protocol\":\"openid-connect\",\"protocolMapper\":\"oidc-group-membership-mapper\",
+                   \"config\":{\"claim.name\":\"groups\",\"full.path\":\"false\",\"access.token.claim\":\"true\",\"id.token.claim\":\"true\",\"userinfo.token.claim\":\"true\"}},
+                  {\"name\":\"aud-dt\",\"protocol\":\"openid-connect\",\"protocolMapper\":\"oidc-audience-mapper\",
+                   \"config\":{\"included.client.audience\":\"dependency-track\",\"access.token.claim\":\"true\",\"id.token.claim\":\"true\"}}]}" "$R/clients"
+              ID=$(curl -s -H "$A" "$R/clients?clientId=$TMP_CLIENT" | jq -r '.[0].id')
+              SA=$(curl -s -H "$A" "$R/clients/$ID/service-account-user" | jq -r .id)
+
+              # ── 2. la fenêtre d'administration ────────────────────────────────
+              GID=$(curl -s -H "$A" "$R/groups?search=Administrators" | jq -r '.[] | select(.name=="Administrators") | .id' | head -1)
+              CREE_GROUPE=non
+              if [ -z "$GID" ]; then
+                curl -s -o /dev/null -X POST -H "$A" -H 'Content-Type: application/json' -d '{"name":"Administrators"}' "$R/groups"
+                GID=$(curl -s -H "$A" "$R/groups?search=Administrators" | jq -r '.[] | select(.name=="Administrators") | .id' | head -1)
+                CREE_GROUPE=oui
+              fi
+              curl -s -o /dev/null -X PUT -H "$A" "$R/users/$SA/groups/$GID"
+              echo "fenêtre d'administration ouverte (groupe créé par ce Job : $CREE_GROUPE)"
+
+              # ── 3. la clé, par l'API DT ───────────────────────────────────────
+              SEC=$(curl -s -H "$A" "$R/clients/$ID/client-secret" | jq -r .value)
+              TK=$(curl -s -d grant_type=client_credentials -d "client_id=$TMP_CLIENT" \
+                   --data-urlencode "client_secret=$SEC" -d scope=openid \
+                   "$KC/realms/platform/protocol/openid-connect/token" | jq -r .access_token)
+              JWT=$(curl -s -X POST --data-urlencode "idToken=$TK" --data-urlencode "accessToken=$TK" "$DT/api/v1/user/oidc/login")
+              case "$JWT" in ey*) : ;; *) echo "ECHEC échange OIDC→JWT : $(echo "$JWT" | head -c 120)"; FATAL=1 ;; esac
+              if [ "${FATAL:-0}" = 0 ]; then
+                J="Authorization: Bearer $JWT"
+                TU=$(curl -s -H "$J" "$DT/api/v1/team" | jq -r --arg n "$TEAM" '.[] | select(.name==$n) | .uuid' | head -1)
+                if [ -z "$TU" ]; then
+                  TU=$(curl -s -X PUT -H "$J" -H 'Content-Type: application/json' -d "{\"name\":\"$TEAM\"}" "$DT/api/v1/team" | jq -r .uuid)
+                  echo "équipe « $TEAM » créée"
+                else
+                  echo "équipe « $TEAM » déjà présente"
+                fi
+                for P in PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO; do
+                  curl -s -o /dev/null -X POST -H "$J" "$DT/api/v1/permission/$P/team/$TU"
+                done
+                KEY=$(curl -s -X PUT -H "$J" "$DT/api/v1/team/$TU/key" | jq -r '.key // empty')
+                [ -n "$KEY" ] || { echo "ECHEC : aucune clé rendue"; FATAL=1; }
+              fi
+
+              # ── 4. la fenêtre se REFERME, quoi qu'il arrive ───────────────────
+              curl -s -o /dev/null -X DELETE -H "$A" "$R/users/$SA/groups/$GID"
+              if [ "$CREE_GROUPE" = oui ]; then
+                N=$(curl -s -H "$A" "$R/groups/$GID/members" | jq 'length')
+                [ "$N" = 0 ] && curl -s -o /dev/null -X DELETE -H "$A" "$R/groups/$GID" && echo "groupe Administrators supprimé (vide)"
+              fi
+              curl -s -o /dev/null -X DELETE -H "$A" "$R/clients/$ID"
+              echo "fenêtre d'administration refermée · client éphémère supprimé"
+              [ "${FATAL:-0}" = 0 ] || exit 1
+
+              # ── 5. la clé va au Secret, JAMAIS au journal ─────────────────────
+              kubectl -n "$SECRET_NS" create secret generic "$SECRET_NAME" \
+                --from-literal=DTRACK_API_KEY="$KEY" \
+                --from-literal=DTRACK_URL="$DT" \
+                --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+              C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $KEY" "$DT/api/v1/project?pageSize=1")
+              echo "clé déposée dans $SECRET_NS/$SECRET_NAME · contrôle d'usage : HTTP $C"
+              [ "$C" = 200 ]
+          volumeMounts: [{ name: kc, mountPath: /kc }]
+      volumes:
+        - name: kc
+          secret: { secretName: keycloak-credentials }
