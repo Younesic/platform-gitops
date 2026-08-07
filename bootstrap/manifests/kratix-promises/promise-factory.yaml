@@ -350,8 +350,8 @@ spec:
                     required:
                     - gate
                     description: >-
-                      Faut-il une approbation dans l''ITSM pour demander ce produit ? La
-                      réponse se DÉCLARE — « aucune » est valide, le silence ne l''est pas.
+                      Faut-il une approbation dans l'ITSM pour demander ce produit ? La
+                      réponse se DÉCLARE — « aucune » est valide, le silence ne l'est pas.
                       Posée en annotation platform.kratix.io/approval sur la promesse, lue
                       par le portier qui bloque la fusion des demandes non approuvées.
                     properties:
@@ -362,25 +362,25 @@ spec:
                         - auto
                         - standard
                         description: >-
-                          aucune = ce produit ne passe pas par l''ITSM (un espace de travail
-                          isolé, que son propriétaire peut détruire lui-même, n''a pas à
+                          aucune = ce produit ne passe pas par l'ITSM (un espace de travail
+                          isolé, que son propriétaire peut détruire lui-même, n'a pas à
                           attendre un comité — mais il doit le DIRE). auto = un ticket est
-                          ouvert et tracé, personne n''a à l''approuver. standard = un ticket
+                          ouvert et tracé, personne n'a à l'approuver. standard = un ticket
                           doit être APPROUVÉ par un humain avant que la demande soit
                           fusionnée ; sans quoi la fusion est refusée, administrateur compris.
                       class:
                         type: string
                         default: UserRequest
                         description: >-
-                          La classe de ticket de l''ITSM (UserRequest, NormalChange,
-                          RoutineChange…). C''est ELLE qui porte le dosage : chaque classe a
-                          sa propre requête d''approbation côté portail. Ignorée si
+                          La classe de ticket de l'ITSM (UserRequest, NormalChange,
+                          RoutineChange…). C'est ELLE qui porte le dosage : chaque classe a
+                          sa propre requête d'approbation côté portail. Ignorée si
                           gate vaut « aucune ».
                       service:
                         type: string
                         description: >-
                           Le service auquel rattacher le ticket, quand la classe en porte un.
-                          Optionnel : omis, aucun service n''est déclaré (et non « le service
+                          Optionnel : omis, aucun service n'est déclaré (et non « le service
                           vide »).
                   curation:
                     type: object
