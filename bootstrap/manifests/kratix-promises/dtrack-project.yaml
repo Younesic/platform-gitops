@@ -105,7 +105,7 @@ spec:
       interval: 10m
       url: https://github.com/Younesic/platform-gitops
       ref:
-        commit: '2c347bfdf9892323972897fafe3f5138d13867d2'
+        commit: '52168698e40026239abb76a2fd07d859eaa28328'
       provider: github
       secretRef:
         name: github-app
