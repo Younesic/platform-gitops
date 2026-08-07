@@ -40,7 +40,7 @@ metadata:
     # RETIRE le sous-champ du SCHÉMA de la branche (le ui:widget hidden posé
     # dans une branche était aplati globalement par rjsf — vécu, source.path
     # invisible en crossplane avec 0.4.5→0.4.8).
-    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script","contract"],"awx":["automation"]}}'
+    backstage.example.io/form-switch: '{"field":"type","cases":{"helm":[{"field":"source","hide":["path","apiSchemaFrom","omit"]}],"crossplane":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]}],"terraform":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"terraform"],"operator":[{"field":"source","hide":["chartName"]}],"compound":["recipe"],"script":[{"field":"source","hide":["chartName","apiSchemaFrom","omit"]},"script","contract"],"awx":["automation"],"api":["api"]}}'
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -96,10 +96,23 @@ spec:
                 # mentir. `spec.script` est OPTIONNEL (il ne porte que les identifiants).
                 - rule: self.type != 'script' || (has(self.source) && has(self.source.url) && has(self.source.version) && has(self.source.path))
                   message: 'type script : source.url (dépôt de la source), source.version (tag ou SHA) et source.path (dossier portant contract.schema.json et les verbes) sont requis (pin de gouvernance)'
+                # api (moteur 8) : la SPEC est le contrat. Deux exigences, et elles
+                # disent la même chose — on ne lit jamais une spec à chaud (specPath +
+                # specSha256 = le pin de gouvernance, exactement comme un tag de module),
+                # et on ne DEVINE jamais ce que fait une opération. Le fait qui fonde ce
+                # refus est mesuré : chez Dependency-Track, PUT crée et POST modifie —
+                # l'inverse de la convention. Une plateforme qui devine se trompera sur
+                # cette API-là, en silence, et détruira ou créera à contretemps.
+                - rule: self.type != 'api' || (has(self.api) && has(self.api.specPath) && has(self.api.specSha256))
+                  message: 'type api : api.specPath (le SNAPSHOT de la spec dans le dépôt de la plateforme) et api.specSha256 (son empreinte) sont requis — une spec se PIN comme un module. Sans empreinte, l''éditeur de l''API peut changer le contrat de votre offre sans que personne ne le voie.'
+                - rule: self.type != 'api' || (has(self.api) && has(self.api.designation) && has(self.api.designation.create))
+                  message: 'type api : api.designation.create est requis — l''opération qui CRÉE se désigne, elle ne se devine pas. Mesuré sur une API réelle : PUT /v1/project crée et POST /v1/project modifie, l''inverse de la convention REST. Désigner create seul = une ACTION ; create+read+delete = une RESSOURCE.'
+                - rule: self.type != 'api' || !has(self.api.designation.delete) || (has(self.api.designation.read) && has(self.api.designation.create))
+                  message: 'type api : désigner delete exige create ET read — sans lecture, la plateforme ne peut ni constater l''état ni adopter l''existant, et une suppression qu''on ne peut pas vérifier n''est pas une garantie.'
                 properties:
                   type:
                     type: string
-                    description: Moteur de la future promesse (helm, crossplane, terraform, operator, compound, script, awx)
+                    description: Moteur de la future promesse (helm, crossplane, terraform, operator, compound, script, awx, api)
                     enum:
                     - helm
                     - crossplane
@@ -108,6 +121,7 @@ spec:
                     - compound
                     - script
                     - awx
+                    - api
                     default: helm
                   kind:
                     type: string
@@ -220,6 +234,60 @@ spec:
                         type: string
                         pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
                         description: 'Secret portant les identifiants du système CIBLE, montés et lus en VARIABLES D''ENVIRONNEMENT par le runner — jamais en argument (un argument finit dans les journaux). Omis = le script ne doit avoir besoin d''aucun identifiant.'
+                  api:
+                    type: object
+                    description: 'api (moteur 8) : ce que le produit DÉCLARE en plus de sa spec. La spec porte le CONTRAT (les champs, leurs types, leurs contraintes) ; ce bloc porte ce qu''une spec ne peut pas dire — quelles opérations comptent, où vit son snapshot, et avec quelle identité on l''appelle.'
+                    properties:
+                      specPath:
+                        type: string
+                        pattern: ^[A-Za-z0-9][A-Za-z0-9._/-]*\.json$
+                        description: 'Chemin du SNAPSHOT de la spec dans le dépôt de la plateforme (ex. sources/api/dtrack-project/spec.json). La spec est VENDORISÉE, jamais lue à chaud : une plateforme qui va chercher son contrat sur un serveur tiers voit son contrat changer sans commit, sans revue et sans personne.'
+                      specSha256:
+                        type: string
+                        pattern: ^[a-f0-9]{64}$
+                        description: 'Empreinte du snapshot. C''est le pin de gouvernance : si la spec bouge, la génération REFUSE et renvoie relire le diff. Le calcul : sha256sum <fichier>.'
+                      designation:
+                        type: object
+                        description: 'QUELLE opération joue QUEL rôle. C''est la pièce que personne ne peut deviner à notre place — et la seule chose qu''on demande à l''auteur. Chaque valeur est un operationId de la spec ; la sortie du dériveur les liste si vous ne les connaissez pas. Si la spec est à NOUS, ces rôles se co-localisent dedans (extensions x-platform-create/read/update/delete) et la source GAGNE sur cette déclaration (règle de précédence CT5).'
+                        properties:
+                          create:
+                            type: string
+                            description: 'L''opération qui CRÉE. Seule désignée ⇒ l''offre est une ACTION (supprimer la demande ne défait rien).'
+                          read:
+                            type: string
+                            description: 'L''opération qui LIT un élément. Elle apporte l''identifiant — donc la LIAISON d''adoption, donc la possibilité de reprendre l''existant.'
+                          update:
+                            type: string
+                            description: 'L''opération qui MODIFIE. Sans elle, un changement de demande se traduira par une recréation.'
+                          delete:
+                            type: string
+                            description: 'L''opération qui SUPPRIME. Avec create et read ⇒ l''offre est une RESSOURCE (converge au changement déclaré · destruction pilotée).'
+                          omit:
+                            type: array
+                            items:
+                              type: string
+                            description: 'Champs du contrat à RETIRER du formulaire, nommément. Le retrait est rendu à l''auteur avec sa raison — on ne rogne jamais un contrat en silence.'
+                      credsSecret:
+                        type: string
+                        pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                        description: 'Secret portant les identifiants de l''API, montés en FICHIERS et lus par le module. Jamais des variables : une variable atterrit dans l''état ET dans le plan lisible, et « sensitive » masque l''affichage, pas le stockage.'
+                      authFamille:
+                        type: string
+                        enum: [apikey, bearer, basic, oauth2cc]
+                        description: 'Famille d''authentification, SEULEMENT si la spec ne la déclare pas. Quand elle la déclare (securitySchemes en 3.x, securityDefinitions en 2.0), elle est LUE — déclarer ici ce que la spec dit déjà, c''est ouvrir une porte à la divergence.'
+                      approval:
+                        type: string
+                        enum: [auto, manuelle]
+                        default: auto
+                        description: 'Ressource seulement. SURVEILLÉE ou APPROUVÉE — pas les deux (le même arbitrage que terraform, dont ce moteur hérite l''exécution). « manuelle » = chaque changement attend une décision, et le portier iTop la porte.'
+                      interval:
+                        type: string
+                        pattern: ^[0-9]+(s|m|h)$
+                        default: 1h
+                        x-kubernetes-validations:
+                          - rule: "!self.endsWith('s') && int(self.substring(0, self.size()-1)) >= (self.endsWith('h') ? 1 : 5)"
+                            message: 'cadence trop rapide : chaque tour fait naître un POD, et frappe l''API du fournisseur. Minimum 5m, secondes refusées. 1h = 24 tours/jour/demande ; 2m en ferait 720.'
+                        description: 'Ressource seulement. Cadence de réconciliation — l''horloge ne sert QU''À guetter la dérive : un changement de demande ou de spec déclenche déjà tout seul. Sur une API tierce, elle est aussi une charge que VOUS imposez à quelqu''un d''autre.'
                   contract:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
