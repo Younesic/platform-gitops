@@ -105,7 +105,7 @@ spec:
       interval: 10m
       url: https://github.com/Younesic/platform-gitops
       ref:
-        commit: '22d8c5338296a1d87b11f3537c0440614a4b6fb3'
+        commit: '2c347bfdf9892323972897fafe3f5138d13867d2'
       provider: github
       secretRef:
         name: github-app
@@ -137,7 +137,7 @@ spec:
         spec:
           containers:
           - name: rendu-terraform
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:649571fed7b90521e917d022d208ef0bc3f10d28ab1207e73ddc66cbe4a667c0
             env:
             - name: MODULE_PATH
               value: ./sources/api/dtrack-project
@@ -147,6 +147,8 @@ spec:
               value: default
             - name: CREDS_SECRET
               value: dtrack-api-creds
+            - name: CREDS_MOUNT_PATH
+              value: /api-creds
             - name: CHIFFREMENT_SECRET
               value: terraform-chiffrement
             - name: TF_INTERVAL
@@ -196,15 +198,39 @@ spec:
               : [\n        {\"secretRef\": {\"name\": os.environ[\"CREDS_SECRET\"\
               ]}},\n        {\"secretRef\": {\"name\": os.environ.get(\"CHIFFREMENT_SECRET\"\
               , \"terraform-chiffrement\"),\n                       \"optional\":\
-              \ True}},\n      ]}\n    },\n  },\n}\n# \u2500\u2500 LE NIVEAU D'ADOPTION\
-              \ \u2192 les r\xE9glages du moteur (docs/ADOPTION-STANDARD.md \xA74)\
-              \ \u2500\u2500\nchamp_adoption = os.environ.get(\"ADOPTION_FIELD\",\
-              \ \"\")\nmode = str(spec.get(champ_adoption) or \"gere\") if champ_adoption\
-              \ else \"gere\"\nif mode == \"observe\":\n    # Lit et compare, ne touche\
-              \ RIEN : plan sans apply, jamais de destruction,\n    # cadence longue\
-              \ (une d\xE9tection de d\xE9rive n'a pas besoin de tourner \xE0 l'heure).\n\
-              \    tf[\"spec\"][\"planOnly\"] = True\n    tf[\"spec\"][\"destroyResourcesOnDeletion\"\
-              ] = False\n    tf[\"spec\"][\"interval\"] = os.environ.get(\"TF_INTERVAL_OBSERVE\"\
+              \ True}},\n      ]}\n    },\n  },\n}\n# \u2500\u2500 LES IDENTIFIANTS\
+              \ EN FICHIERS, quand le provider ne lit pas l'environnement \u2500\u2500\
+              \n# Certains providers (le REST g\xE9n\xE9rique, par exemple) n'ont\
+              \ AUCUN support des\n# variables d'environnement : le module lit alors\
+              \ des FICHIERS, et il faut donc\n# les monter. Une variable terraform\
+              \ ferait voyager l'identifiant dans l'\xE9tat ET\n# dans le plan lisible\
+              \ \u2014 `sensitive` masque l'affichage, pas le stockage.\n#\n# \u26A0\
+              \uFE0F Sur D\xC9CLARATION : sans CREDS_MOUNT_PATH, rien ne change \u2014\
+              \ un module dont le\n# provider lit l'environnement n'a pas \xE0 porter\
+              \ un montage inutile.\n# \u26A0\uFE0F Le chemin doit \xEAtre EXACTEMENT\
+              \ celui que le module lit. S'ils divergent, le\n# plan \xE9choue \xE0\
+              \ chaque tour sur un message qui parle d'un fichier absent, jamais\n\
+              # du secret \u2014 et l'\xE9chec reste invisible tant que la demande\
+              \ d\xE9clare la m\xEAme\n# valeur que le r\xE9el. C'est le d\xE9faut\
+              \ qui a co\xFBt\xE9 une preuve fausse.\nchemin_creds = os.environ.get(\"\
+              CREDS_MOUNT_PATH\", \"\").strip()\nif chemin_creds and os.environ.get(\"\
+              CREDS_SECRET\"):\n    pod = tf[\"spec\"][\"runnerPodTemplate\"][\"spec\"\
+              ]\n    pod[\"volumes\"] = [{\"name\": \"creds-fichiers\",\n        \
+              \               \"secret\": {\"secretName\": os.environ[\"CREDS_SECRET\"\
+              ],\n                                  # 0444 : le runner ne tourne pas\
+              \ en root, et\n                                  # un secret illisible\
+              \ ferait \xE9chouer le plan.\n                                  \"defaultMode\"\
+              : 292}}]\n    pod[\"volumeMounts\"] = [{\"name\": \"creds-fichiers\"\
+              ,\n                            \"mountPath\": chemin_creds, \"readOnly\"\
+              : True}]\n\n# \u2500\u2500 LE NIVEAU D'ADOPTION \u2192 les r\xE9glages\
+              \ du moteur (docs/ADOPTION-STANDARD.md \xA74) \u2500\u2500\nchamp_adoption\
+              \ = os.environ.get(\"ADOPTION_FIELD\", \"\")\nmode = str(spec.get(champ_adoption)\
+              \ or \"gere\") if champ_adoption else \"gere\"\nif mode == \"observe\"\
+              :\n    # Lit et compare, ne touche RIEN : plan sans apply, jamais de\
+              \ destruction,\n    # cadence longue (une d\xE9tection de d\xE9rive\
+              \ n'a pas besoin de tourner \xE0 l'heure).\n    tf[\"spec\"][\"planOnly\"\
+              ] = True\n    tf[\"spec\"][\"destroyResourcesOnDeletion\"] = False\n\
+              \    tf[\"spec\"][\"interval\"] = os.environ.get(\"TF_INTERVAL_OBSERVE\"\
               , \"24h\")\nelif mode == \"gouverne\":\n    # approvePlan ABSENT : le\
               \ plan attend une approbation (pos\xE9e par PR, gat\xE9e\n    # par\
               \ le portier ITSM \u2014 jamais appliqu\xE9e toute seule).\n    tf[\"\
