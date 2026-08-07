@@ -113,6 +113,10 @@ spec:
           env:
             - { name: DT, value: "http://dependency-track-api-server.dependency-track.svc:8080" }
             - { name: TEAM, value: "plateforme-api" }
+            # Les permissions de l'équipe, DÉCLARÉES : elles suivent ce que la
+            # plateforme OFFRE. `VULNERABILITY_ANALYSIS` est là pour l'offre
+            # « lancer une analyse » (OA3) — sans elle, DT rend 403.
+            - { name: PERMS, value: "PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO VULNERABILITY_ANALYSIS" }
             - { name: SECRET_NAME, value: "dtrack-api-creds" }
             - { name: SECRET_NS, value: "default" }
             - { name: TMP_CLIENT, value: "dtrack-bootstrap" }
@@ -121,11 +125,28 @@ spec:
             - |
               set -eu
               # ── 0. déjà en place et VALIDE ? alors on ne fait rien ────────────
+              # ⚠️ La question n'est pas seulement « la clé répond-elle ? » mais « la clé
+              # peut-elle faire ce que la plateforme OFFRE ? ». Une clé valide dont
+              # l'équipe a perdu (ou n'a jamais eu) une permission déclarée est un défaut
+              # qui ne se voit qu'au premier 403 en production — payé sur l'offre
+              # d'analyse d'OA3. Le contrôle porte donc sur les DEUX.
+              MANQUANTES=""
               if kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" >/dev/null 2>&1; then
                 K=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
                 C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $K" "$DT/api/v1/project?pageSize=1")
-                if [ "$C" = 200 ]; then echo "clé déjà en place et valide — rien à faire"; exit 0; fi
-                echo "clé présente mais refusée par DT (HTTP $C) — on en refabrique une"
+                if [ "$C" = 200 ]; then
+                  ACTUELLES=$(curl -s -H "X-Api-Key: $K" "$DT/api/v1/team/self" | jq -r '[.permissions[].name] | join(" ")')
+                  for P in $PERMS; do
+                    echo " $ACTUELLES " | grep -q " $P " || MANQUANTES="$MANQUANTES $P"
+                  done
+                  if [ -z "$MANQUANTES" ]; then
+                    echo "clé en place, valide, et l'équipe porte les permissions déclarées — rien à faire"
+                    exit 0
+                  fi
+                  echo "clé valide mais permissions MANQUANTES :$MANQUANTES — on les ajoute"
+                else
+                  echo "clé présente mais refusée par DT (HTTP $C) — on en refabrique une"
+                fi
               fi
 
               KC=$(jq -r .url /kc/credentials); RE=$(jq -r .realm /kc/credentials)
@@ -187,11 +208,18 @@ spec:
                 else
                   echo "équipe « $TEAM » déjà présente"
                 fi
-                for P in PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO; do
+                for P in $PERMS; do
                   curl -s -o /dev/null -X POST -H "$J" "$DT/api/v1/permission/$P/team/$TU"
                 done
-                KEY=$(curl -s -X PUT -H "$J" "$DT/api/v1/team/$TU/key" | jq -r '.key // empty')
-                [ -n "$KEY" ] || { echo "ECHEC : aucune clé rendue"; FATAL=1; }
+                if [ -n "$MANQUANTES" ]; then
+                  # La clé existe et fonctionne : on ne la remplace PAS pour une
+                  # permission manquante — la remplacer casserait tout ce qui l'utilise.
+                  echo "permissions ajoutées à l'équipe existante · clé CONSERVÉE"
+                  KEY=""
+                else
+                  KEY=$(curl -s -X PUT -H "$J" "$DT/api/v1/team/$TU/key" | jq -r '.key // empty')
+                  [ -n "$KEY" ] || { echo "ECHEC : aucune clé rendue"; FATAL=1; }
+                fi
               fi
 
               # ── 4. la fenêtre se REFERME, quoi qu'il arrive ───────────────────
@@ -204,13 +232,19 @@ spec:
               [ "${FATAL:-0}" = 0 ] || exit 1
 
               # ── 5. la clé va au Secret, JAMAIS au journal ─────────────────────
-              kubectl -n "$SECRET_NS" create secret generic "$SECRET_NAME" \
-                --from-literal=DTRACK_API_KEY="$KEY" \
-                --from-literal=DTRACK_URL="$DT" \
-                --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-              C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $KEY" "$DT/api/v1/project?pageSize=1")
-              echo "clé déposée dans $SECRET_NS/$SECRET_NAME · contrôle d'usage : HTTP $C"
-              [ "$C" = 200 ]
+              if [ -n "$KEY" ]; then
+                kubectl -n "$SECRET_NS" create secret generic "$SECRET_NAME" \
+                  --from-literal=DTRACK_API_KEY="$KEY" \
+                  --from-literal=DTRACK_URL="$DT" \
+                  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                echo "clé déposée dans $SECRET_NS/$SECRET_NAME"
+              else
+                KEY=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
+              fi
+              MANQUE=$(curl -s -H "X-Api-Key: $KEY" "$DT/api/v1/team/self" | jq -r --arg p "$PERMS" \
+                '[.permissions[].name] as $a | ($p | split(" ")) - $a | join(",")')
+              echo "contrôle final · permissions manquantes : ${MANQUE:-aucune}"
+              [ -z "$MANQUE" ]
           volumeMounts: [{ name: kc, mountPath: /kc }]
       volumes:
         - name: kc
