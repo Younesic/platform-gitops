@@ -171,6 +171,26 @@ spec:
               # qui ne se voit qu'au premier 403 en production — payé sur l'offre
               # d'analyse d'OA3. Le contrôle porte donc sur les DEUX.
               MANQUANTES=""
+              # ── Le dépôt chez les AUTRES lecteurs, en FONCTION ───────────────
+              # ⚠️ Deux fois de suite j'ai placé ce dépôt sur UN chemin, et deux fois il a
+              # été sauté : d'abord dans la branche « clé neuve », puis après le chemin
+              # rapide « clé déjà en place » — qui sort par `exit 0`. En régime normal,
+              # c'est précisément ce chemin-là qui s'exécute.
+              # 🔑 Un geste qui doit avoir lieu QUOI QU'IL ARRIVE ne se place pas sur un
+              # chemin : il devient une fonction, appelée à chaque sortie. Sinon le
+              # prochain raccourci ajouté l'oubliera à son tour, en silence.
+              deposer_chez_les_lecteurs() {
+                for NS_LECTEUR in $EXTRA_NS; do
+                  [ -n "$NS_LECTEUR" ] || continue
+                  kubectl -n "$NS_LECTEUR" create secret generic "$SECRET_NAME" \
+                    --from-literal=DTRACK_API_KEY="$1" \
+                    --from-literal=DTRACK_URL="$DT" \
+                    --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
+                    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                  echo "clé déposée dans $NS_LECTEUR/$SECRET_NAME"
+                done
+              }
+
               if kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" >/dev/null 2>&1; then
                 K=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
                 C=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Api-Key: $K" "$DT/api/v1/project?pageSize=1")
@@ -186,6 +206,7 @@ spec:
                     # d'identifiant (défaut attrapé en ajoutant l'adresse publique).
                     kubectl -n "$SECRET_NS" patch secret "$SECRET_NAME" --type merge -p \
                       "{\"stringData\":{\"DTRACK_URL\":\"$DT\",\"DTRACK_PUBLIC_URL\":\"$DT_PUBLIC\"}}" >/dev/null
+                    deposer_chez_les_lecteurs "$K"
                     echo "clé en place, valide, permissions déclarées portées — adresses mises à niveau"
                     exit 0
                   fi
@@ -295,20 +316,8 @@ spec:
               else
                 KEY=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
               fi
-              # ── 5bis. les AUTRES lecteurs ────────────────────────────────────
-              # ⚠️ HORS du « si la clé est neuve » : sur le chemin idempotent — celui
-              # qui tourne en régime normal — la clé existe déjà, et un dépôt enfermé
-              # dans la branche « clé neuve » ne s'exécuterait JAMAIS. C'est la leçon
-              # de CD8-B mot pour mot : le seed dépose chez les deux, ET son
-              # idempotence regarde celui du LECTEUR, pas seulement le premier.
-              for NS_LECTEUR in $EXTRA_NS; do
-                kubectl -n "$NS_LECTEUR" create secret generic "$SECRET_NAME" \
-                  --from-literal=DTRACK_API_KEY="$KEY" \
-                  --from-literal=DTRACK_URL="$DT" \
-                  --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
-                  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-                echo "clé déposée dans $NS_LECTEUR/$SECRET_NAME"
-              done
+              # ── 5bis. les AUTRES lecteurs, sur le chemin NORMAL ──────────────
+              deposer_chez_les_lecteurs "$KEY"
               MANQUE=$(curl -s -H "X-Api-Key: $KEY" "$DT/api/v1/team/self" | jq -r --arg p "$PERMS" \
                 '[.permissions[].name] as $a | ($p | split(" ")) - $a | join(",")')
               echo "contrôle final · permissions manquantes : ${MANQUE:-aucune}"
