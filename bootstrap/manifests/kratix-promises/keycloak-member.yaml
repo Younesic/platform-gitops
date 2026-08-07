@@ -6,15 +6,15 @@ metadata:
     platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/contracts: '{"requires": [{"kind": "keycloak-group", "name":
       "${spec.group}", "origin": "derived"}]}'
-    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
-      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
-      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"\
-      group\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
-      :{\"kind\":\"Group\"}}},\"users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\"\
-      :{\"catalogFilter\":{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\",\"liaison\"\
-      ,\"*\"]}"
+    backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
+      Observ\xE9\",\"G\xE9r\xE9\"]},\"liaison\":{\"ui:title\":\"\xC9l\xE9ment existant\
+      \ \xE0 lier\"},\"group\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\"\
+      :{\"catalogFilter\":{\"kind\":\"Group\"}}},\"users\":{\"ui:field\":\"CatalogNamePicker\"\
+      ,\"ui:options\":{\"catalogFilter\":{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\"\
+      ,\"liaison\",\"*\"]}"
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
+    platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
   labels:
     kratix.io/promise-version: v0.0.1
   name: keycloak-member
@@ -264,15 +264,15 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 58b095ea5a68
+              value: a936f3c0c8f9
             - name: CONTRACTS_REV
               value: 9e3c0b0f1cbd
             - name: CURATION_REV
-              value: 51b01245bae8
+              value: 7214b366ee8f
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -293,7 +293,7 @@ spec:
           - env:
             - name: ADOPTION_NON_DESTRUCTION
               value: moteur
-            image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
           jobOptions: {}
           rbac: {}
