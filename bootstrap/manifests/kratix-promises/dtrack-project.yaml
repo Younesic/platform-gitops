@@ -208,8 +208,13 @@ spec:
                           "spec": {
                             "volumes": [
                               {"name": "dtrack",
+                               # ⚠️ 0444 et non 0400 : le fichier d'un volume de Secret
+                               # appartient à root, et le runner terraform tourne en
+                               # NON-root — à 0400 il obtient « permission denied » sur
+                               # sa propre configuration (mesuré). Sans conséquence :
+                               # seul ce pod voit ce montage.
                                "secret": {"secretName": os.environ["CREDS_SECRET_NAME"],
-                                          "defaultMode": 256}},
+                                          "defaultMode": 292}},
                             ],
                             "volumeMounts": [
                               {"name": "dtrack",
