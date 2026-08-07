@@ -1,0 +1,138 @@
+# PROMESSE PILOTE — LA PORTE ACTION DU MOTEUR `api` (objectif OA3).
+#
+# ÉCRITE À LA MAIN, comme annonce-github/CD2 : la porte éprouve la mécanique avant
+# toute industrialisation. OA4 fera dériver ce manifeste de la spec + la désignation,
+# et l'écart sera le témoin d'équivalence.
+#
+# 🔑 LA CLASSE VIENT DES OPÉRATIONS (PROMISE-STANDARD §9quinquies). La désignation ne
+# porte QU'UNE opération de création — `POST /api/v1/finding/project/{uuid}/analyze`
+# (operationId `analyzeProject`). Pas de `read`, pas de `delete` : il n'y a rien à
+# posséder, donc c'est une ACTION, et sa garantie est celle des actions :
+#   « la plateforme exécute et rend compte · ne surveille rien · supprimer la
+#     demande ne défait rien »
+# Personne n'a coché « action » : c'est une conséquence de ce qui a été désigné.
+#
+# L'EXÉCUTION est celle du moteur `script` (§9quater), sans une ligne de neuf : le
+# runner partagé clone la source pinnée et lance son `run.sh`. C'est la deuxième
+# moitié de la décision d'architecture du set OA — ressources → terraform,
+# actions → script, jamais un runtime propre au moteur `api`.
+#
+# CE QUE CE MANIFESTE NE FAIT PAS, à dessein (les mêmes raisons qu'annonce-github) :
+#   - aucun document rendu : une action ne possède rien ;
+#   - pas de pipeline resource.delete : rien à défaire ;
+#   - pas de conteneur backstage-component sur le pipeline RESOURCE : une action n'a
+#     pas sa place dans la console de suivi ; le résultat vit sur le STATUS du claim ;
+#   - aucune Permission Kratix (`rbac: {}`) : le périmètre est l'EXTÉRIEUR du cluster.
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: dtrack-analyse
+  labels:
+    kratix.io/promise-version: v0.1.0
+  annotations:
+    platform.kratix.io/provider: platform
+    platform.kratix.io/exposure: product
+    platform.kratix.io/public: "true"
+    # LA CLASSE — le discriminant LG9 porté par le bus de curation : le marketplace
+    # range cette offre en section ACTIONS, jamais parmi les ressources.
+    platform.kratix.io/entry-kind: action
+    # Libellés FR. ⚠️ Format EMBALLÉ obligatoire ({"properties": …}).
+    backstage.example.io/ui-schema: '{"properties": {"projetUuid": {"title": "Projet à analyser", "ui:title": "Projet à analyser", "ui:placeholder": "UUID du projet Dependency-Track"}}, "ui:order": ["projetUuid", "*"]}'
+    # Sorties étiquetées — ce que le demandeur récupère du geste.
+    platform.kratix.io/status-schema: '{"resultat": {"path": ".status.resultat", "label": "Résultat du lancement.", "type": "string"}, "reference": {"path": ".status.reference", "label": "Jeton de suivi rendu par Dependency-Track.", "type": "string"}, "projetUrl": {"path": ".status.projetUrl", "label": "Page des vulnérabilités du projet.", "type": "string"}}'
+spec:
+  destinationSelectors:
+    - matchLabels:
+        environment: platform
+
+  # ── LE CONTRAT ────────────────────────────────────────────────────────────────
+  # Transcription de sources/script/dtrack-analyse/contract.schema.json (+ le champ
+  # plateforme `team`). Ce contrat est lui-même DÉRIVABLE de la spec : le paramètre
+  # de chemin `uuid` de l'opération désignée.
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: dtrackanalyses.platform.example.io
+    spec:
+      group: platform.example.io
+      names:
+        kind: DtrackAnalyse
+        plural: dtrackanalyses
+        singular: dtrackanalyse
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [projetUuid, team]
+                  properties:
+                    projetUuid:
+                      type: string
+                      pattern: ^[0-9a-fA-F-]{36}$
+                      description: >-
+                        UUID du projet Dependency-Track à analyser. L'action ne CRÉE
+                        rien : le projet doit exister, sinon la demande échoue
+                        visiblement.
+                    team:
+                      type: string
+                      description: Équipe demandeuse (posée par le portail).
+
+  # ── AUCUNE dépendance : une action n'installe rien ────────────────────────────
+  # ⚠️ Et la clé ne s'écrit PAS : `dependencies: []` (tableau VIDE) fait boucler le
+  # contrôleur Kratix à l'infini. L'ABSENCE de clé EST « aucune dépendance ».
+
+  workflows:
+    config: {}
+
+    promise:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: promise-configure
+          spec:
+            containers:
+              - name: backstage
+                image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+
+    resource:
+      configure:
+        - apiVersion: platform.kratix.io/v1alpha1
+          kind: Pipeline
+          metadata:
+            name: instance-configure
+          spec:
+            volumes:
+              # Les identifiants de l'API. OPTIONNEL : un secret pas encore frappé ne
+              # doit pas empêcher le pod de NAÎTRE — le geste échouera alors avec une
+              # cause nommée, ce qui est le comportement voulu.
+              # ⚠️ 0444 et non 0400 : le runner tourne en NON-root et les fichiers d'un
+              # volume de Secret appartiennent à root (mesuré en OA2).
+              - name: creds
+                secret:
+                  secretName: dtrack-api-creds
+                  optional: true
+                  defaultMode: 292
+            containers:
+              - name: geste
+                image: harbor.212-47-226-56.nip.io/platform/script-runner:0.2.0@sha256:e04188641bf1494d180483ad44802e0438ab9f62b614ccaf5f11c1b5f026d72f
+                env:
+                  - { name: SOURCE_URL, value: "https://github.com/Younesic/platform-gitops" }
+                  - { name: SOURCE_REF, value: "v0.29.0" }
+                  - { name: SOURCE_PATH, value: "sources/script/dtrack-analyse" }
+                  - { name: VERBE, value: "run" }
+                volumeMounts:
+                  # Chaque clé du secret monté ici devient une variable d'environnement
+                  # du script (le contrat `credsSecret` du runner, §9quater).
+                  - name: creds
+                    mountPath: /kratix/secrets/creds
+                    readOnly: true
+            rbac: {}
+            jobOptions: {}
