@@ -127,7 +127,7 @@ spec:
               # MÊME image que la fabrique : mêmes outils, même identité, un seul
               # digest à suivre. Le script n'affiche JAMAIS le jeton — il irait
               # dans les journaux du pod.
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.3-cles@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.4-montage@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
               command: [python, /app/github_token.py]
               env:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
@@ -197,7 +197,7 @@ spec:
                 defaultMode: 0400
           containers:
             - name: frappe
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.3-cles@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.4-montage@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
               command: [python, /app/github_token.py]
               env:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }
@@ -273,7 +273,7 @@ spec:
                 defaultMode: 0400
           containers:
             - name: frappe
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.3-cles@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.4-montage@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
               command: [python, /app/github_token.py]
               env:
                 - { name: GITHUB_APP_CREDENTIALS, value: /app/github-app/github-app-credentials.yaml }

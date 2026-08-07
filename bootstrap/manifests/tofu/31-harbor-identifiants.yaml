@@ -191,7 +191,7 @@ spec:
               configMap: { name: harbor-identifiants }
           containers:
             - name: recopie
-              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.3-cles@sha256:4f96f16c2ff99128c63bd3a97a5782088f90209b2095d378c7636ae21ca96577
+              image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.4-montage@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
               command: [python, /script/recopie.py]
               env:
                 - { name: SECRET_NAME, value: harbor-identifiants }
