@@ -151,7 +151,7 @@ spec:
               # on veut savoir si la plateforme accueille le résultat, pas fabriquer l'outil.
               # L'image est celle de la fabrique — déjà pinnée, déjà présente.
               - name: rendu-terraform
-                image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.4-montage@sha256:4601da20f07bd959cfb78acd1058083c5625821014738725fc614bc327684a94
+                image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.5-racine@sha256:d401ed09e3fd902f25e3a4a70926967fe24838d74f0f234072666d0efd4491fc
                 env:
                   - { name: MODULE_PATH, value: ./sources/terraform/harbor-project }
                   - { name: SOURCE_NAME, value: harbor-tf-module }
