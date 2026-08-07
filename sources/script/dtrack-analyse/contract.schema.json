@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "projetUuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F-]{36}$",
+      "description": "UUID du projet Dependency-Track sur lequel lancer l'analyse de vulnérabilités."
+    }
+  },
+  "required": ["projetUuid"]
+}

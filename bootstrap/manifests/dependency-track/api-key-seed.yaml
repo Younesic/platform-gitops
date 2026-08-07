@@ -112,6 +112,10 @@ spec:
           image: alpine/k8s:1.35.3
           env:
             - { name: DT, value: "http://dependency-track-api-server.dependency-track.svc:8080" }
+            # L'adresse PUBLIQUE : celle qu'un humain peut ouvrir. L'adresse interne
+            # sert aux appels, jamais aux liens rendus au demandeur — un lien qui ne
+            # s'ouvre pas est un lien menteur.
+            - { name: DT_PUBLIC, value: "https://dtrack.212-47-226-56.nip.io" }
             - { name: TEAM, value: "plateforme-api" }
             # Les permissions de l'équipe, DÉCLARÉES : elles suivent ce que la
             # plateforme OFFRE, et RIEN de plus. Le Job les met à niveau dans les
@@ -249,6 +253,7 @@ spec:
                 kubectl -n "$SECRET_NS" create secret generic "$SECRET_NAME" \
                   --from-literal=DTRACK_API_KEY="$KEY" \
                   --from-literal=DTRACK_URL="$DT" \
+                  --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
                   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
                 echo "clé déposée dans $SECRET_NS/$SECRET_NAME"
               else
