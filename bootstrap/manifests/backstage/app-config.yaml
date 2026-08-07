@@ -491,6 +491,53 @@ data:
             schedule:
               frequency: { minutes: 10 }
               timeout: { minutes: 2 }
+          # ── OA7 — LE NIVEAU 0 : « Répertorié » ───────────────────────────────
+          # Le premier barreau de l'échelle, et le seul qui ne coûte rien : la
+          # plateforme SAIT que ces projets existent. Elle ne les regarde pas, ne les
+          # touche pas — elle offre juste de les adopter.
+          #
+          # UNE SOURCE = UN BLOC DE CONFIG. Aucun code n'est écrit pour
+          # Dependency-Track : ni son nom ni ses champs n'apparaissent ailleurs. Une
+          # deuxième API répertoriée sera un deuxième bloc, pas un deuxième connecteur.
+          dtrackProjects:
+            url: https://dtrack.212-47-226-56.nip.io/api/v1/project
+            auth:
+              # ⚠️ MESURÉ, pas supposé : sur ses routes ordinaires, DT refuse
+              # « Authorization: Bearer <clé> » (401) et n'accepte que « X-Api-Key ».
+              # Le nom de l'en-tête se DÉCLARE donc — deux API qui font la même chose
+              # ne l'appellent pas pareil.
+              type: apiKeyHeader
+              header: X-Api-Key
+              valueFrom: /dtrack/DTRACK_API_KEY
+            # ⚠️ MESURÉ aussi : DT ne pose NI header « Link », NI champ « next » dans
+            # le corps — les deux styles que le connecteur connaissait tombent à plat,
+            # et le parc serait tronqué EN SILENCE au-delà de la première page. Il
+            # pagine par compteur et annonce le total dans « X-Total-Count ».
+            pageCounter:
+              pageParam: pageNumber
+              sizeParam: pageSize
+              size: 200
+              totalHeader: x-total-count
+            entity:
+              kind: Component
+              name: 'dtrack-{name}'
+              title: '{name}'
+              annotations:
+                # Ce que la console lit pour dire « hors échelle · jamais vérifié », et
+                # ce qui pré-remplit le formulaire d'adoption : la LIAISON, sans
+                # laquelle la plateforme créerait un doublon au lieu de reprendre.
+                platform.kratix.io/repertorie-source: dependency-track
+                platform.kratix.io/repertorie-id: '{uuid}'
+                platform.kratix.io/repertorie-offre: dtrack-project
+                platform.kratix.io/repertorie-nom: '{name}'
+                platform.kratix.io/repertorie-version: '{version}'
+              spec:
+                type: kratix-repertorie
+                lifecycle: production
+                owner: group:default/team-platform
+            schedule:
+              frequency: { minutes: 30 }
+              timeout: { minutes: 2 }
       import:
         entityFilename: catalog-info.yaml
         pullRequestBranchName: backstage-integration

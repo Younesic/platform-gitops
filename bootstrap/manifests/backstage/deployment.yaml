@@ -92,6 +92,10 @@ spec:
             # d'inventaire (auth bearerFile) : kubelet rafraîchit le montage ~1 min,
             # là où une variable d'env serait figée au boot et morte à l'expiration.
             - { name: github-org-token, mountPath: /app/github-org-token, readOnly: true }
+            # OA7 — la clé d'API du niveau 0 (Répertorié), lue en FICHIER par le
+            # connecteur : elle ne devient jamais une variable d'environnement,
+            # donc n'apparaît dans aucun `env` ni journal de démarrage.
+            - { name: dtrack-creds, mountPath: /dtrack, readOnly: true }
           readinessProbe:
             httpGet: { path: /healthcheck, port: 7007 }
             initialDelaySeconds: 30
@@ -103,6 +107,14 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
       volumes:
+        - name: dtrack-creds
+          secret:
+            secretName: dtrack-api-creds
+            # 0444 : le processus ne tourne pas en root, et un secret illisible
+            # ferait échouer la source au démarrage — l'inverse du but.
+            defaultMode: 292
+            # sans la clé, la source échoue SEULE : le portail démarre quand même.
+            optional: true
         - name: backstage-config
           configMap:
             name: backstage-config
