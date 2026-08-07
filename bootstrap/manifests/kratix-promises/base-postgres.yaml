@@ -33,9 +33,13 @@ metadata:
     platform.kratix.io/public: "true"
     # CD9 : dérivée de la PRÉSENCE d'observe.sh dans la source (jamais cochée).
     platform.kratix.io/adoptable: "true"
+    # §3bis — le porteur de la non-destruction est le MOTEUR : le runner saute
+    # destroy.sh sur un adopté (mode≠gere OU marqueur durable status.adopte).
+    # La même valeur que le plugin script pose désormais sur toute promesse.
+    platform.kratix.io/adoption-non-destruction: moteur
     # RESSOURCE (pas d'entry-kind: action) : elle possède, converge au changement
-    # déclaré, se détruit au retrait de la demande — et sa fiche entre dans la
-    # console, hors échelle d'adoption (« sans objet » en dérive : conforme).
+    # déclaré, se détruit au retrait de la demande (greenfield seulement — un
+    # ADOPTÉ survit, §3bis ci-dessus).
     backstage.example.io/ui-schema: '{"properties": {"nom": {"title": "Nom de la base", "ui:title": "Nom de la base", "ui:placeholder": "ventes_reporting"}, "proprietaire": {"title": "Rôle propriétaire", "ui:title": "Rôle propriétaire", "ui:placeholder": "equipe_ventes"}, "commentaire": {"title": "Commentaire (COMMENT ON DATABASE)", "ui:title": "Commentaire (COMMENT ON DATABASE)"}}, "ui:order": ["mode", "nom", "proprietaire", "commentaire", "*"]}'
 spec:
   destinationSelectors:
