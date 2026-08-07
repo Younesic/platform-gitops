@@ -8,6 +8,10 @@ metadata:
     platform.kratix.io/provider: cloud
     platform.kratix.io/exposure: product
     platform.kratix.io/public: 'false'
+    platform.kratix.io/adoption-non-destruction: moteur
+    platform.kratix.io/adoptable: 'true'
+    backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
+      Observ\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"]}"
 spec:
   destinationSelectors:
   - matchLabels:
@@ -47,6 +51,16 @@ spec:
                     minLength: 1
                     maxLength: 255
                     default: gere par la plateforme
+                  mode:
+                    type: string
+                    enum:
+                    - observe
+                    - gere
+                    default: gere
+                    description: "Niveau d'adoption. observe = la plateforme lit et\
+                      \ compare (observe.sh / mode check), ne modifie rien \xB7 gere\
+                      \ = converge au changement d\xE9clar\xE9. Gouvern\xE9 : non\
+                      \ offert pour ce moteur (pas de plan)."
                   team:
                     type: string
                     description: "\xC9quipe propri\xE9taire de la demande."
@@ -67,6 +81,8 @@ spec:
           - name: backstage
             image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             env:
+            - name: UI_SCHEMA_REV
+              value: 632f21d86a44
             - name: CURATION_REV
               value: 1cc1f5a4af7a
     resource:
@@ -94,7 +110,7 @@ spec:
             - name: SOURCE_URL
               value: https://github.com/Younesic/platform-gitops
             - name: SOURCE_REF
-              value: v0.26.0
+              value: v0.27.0
             - name: SOURCE_PATH
               value: sources/script/awx-lancement-ressource
             - name: VERBE
@@ -120,6 +136,9 @@ spec:
               readOnly: true
           - name: backstage
             image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+            env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
           rbac: {}
           jobOptions: {}
       delete:
@@ -146,7 +165,7 @@ spec:
             - name: SOURCE_URL
               value: https://github.com/Younesic/platform-gitops
             - name: SOURCE_REF
-              value: v0.26.0
+              value: v0.27.0
             - name: SOURCE_PATH
               value: sources/script/awx-lancement-ressource
             - name: VERBE
