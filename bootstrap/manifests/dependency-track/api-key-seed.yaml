@@ -292,21 +292,23 @@ spec:
                   --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
                   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
                 echo "clé déposée dans $SECRET_NS/$SECRET_NAME"
-                # OA7 — le NIVEAU 0 : le portail répertorie les projets existants, et
-                # il lit cette clé DANS SON PROPRE namespace. Un secret hors du
-                # namespace de son lecteur est un secret ABSENT — la leçon a déjà été
-                # payée sur les jetons AWX (CD8-B). On dépose donc chez les deux.
-                for NS_LECTEUR in $EXTRA_NS; do
-                  kubectl -n "$NS_LECTEUR" create secret generic "$SECRET_NAME" \
-                    --from-literal=DTRACK_API_KEY="$KEY" \
-                    --from-literal=DTRACK_URL="$DT" \
-                    --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
-                    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-                  echo "clé déposée dans $NS_LECTEUR/$SECRET_NAME"
-                done
               else
                 KEY=$(kubectl -n "$SECRET_NS" get secret "$SECRET_NAME" -o jsonpath='{.data.DTRACK_API_KEY}' | base64 -d)
               fi
+              # ── 5bis. les AUTRES lecteurs ────────────────────────────────────
+              # ⚠️ HORS du « si la clé est neuve » : sur le chemin idempotent — celui
+              # qui tourne en régime normal — la clé existe déjà, et un dépôt enfermé
+              # dans la branche « clé neuve » ne s'exécuterait JAMAIS. C'est la leçon
+              # de CD8-B mot pour mot : le seed dépose chez les deux, ET son
+              # idempotence regarde celui du LECTEUR, pas seulement le premier.
+              for NS_LECTEUR in $EXTRA_NS; do
+                kubectl -n "$NS_LECTEUR" create secret generic "$SECRET_NAME" \
+                  --from-literal=DTRACK_API_KEY="$KEY" \
+                  --from-literal=DTRACK_URL="$DT" \
+                  --from-literal=DTRACK_PUBLIC_URL="$DT_PUBLIC" \
+                  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+                echo "clé déposée dans $NS_LECTEUR/$SECRET_NAME"
+              done
               MANQUE=$(curl -s -H "X-Api-Key: $KEY" "$DT/api/v1/team/self" | jq -r --arg p "$PERMS" \
                 '[.permissions[].name] as $a | ($p | split(" ")) - $a | join(",")')
               echo "contrôle final · permissions manquantes : ${MANQUE:-aucune}"
