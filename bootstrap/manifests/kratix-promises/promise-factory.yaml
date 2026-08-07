@@ -70,6 +70,17 @@ spec:
                 # validation par type (CEL). ⚠️ source n'est plus requis globalement
                 # (compound inline) → chaque règle DOIT garder has(self.source).
                 x-kubernetes-validations:
+                # ⚠️ DEUX CHAMPS PORTANT LE MÊME MOT, C'EST LE DÉFAUT QU'ON FERME.
+                # `spec.api.approval` règle le MOTEUR (le approvePlan de terraform) ;
+                # celui-ci règle la GOUVERNANCE. Les confondre a coûté une preuve.
+                # On refuse donc de déclarer l'approbation aux DEUX endroits.
+                - rule: "!(has(self.approval) && has(self.curation) && 'approval' in self.curation)"
+                  message: "l'approbation se déclare dans spec.approval (champ nommé), plus dans curation.approval — retirez la clé libre"
+                # Une classe vide rendrait la politique ILLISIBLE pour le portier, qui
+                # traiterait alors l'offre comme non gouvernée : un « standard » qui ne
+                # gouverne personne, en silence. Exactement ce qu'on ferme.
+                - rule: "!has(self.approval) || self.approval.gate == 'aucune' || (has(self.approval.class) && self.approval.class != '')"
+                  message: "spec.approval.class est obligatoire dès que gate vaut auto ou standard (la classe porte le circuit d'approbation)"
                 - rule: self.type != 'helm' || (has(self.source) && has(self.source.url) && has(self.source.version))
                   message: 'type helm : source.url et source.version sont requis (pin de gouvernance)'
                 - rule: self.type != 'crossplane' || (has(self.source) && has(self.source.url) && has(self.source.version))
@@ -313,6 +324,53 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                     description: 'Présentation du formulaire des demandeurs (pickers dynamiques par champ) — réglée À LA CRÉATION par le composer LeafPresentationComposer (champs dérivés de la source). Recopiée en annotation ui-schema sur la promesse générée. Compound : la présentation vit dans recipe.uiSchema (composer inline).'
+                  # ── LA QUESTION QU'ON NE DEVINE PLUS ─────────────────────────────────
+                  # L'approbation vivait comme une clé quelconque de la carte libre
+                  # `curation`. Conséquence mesurée : une offre qui reprend le patrimoine
+                  # d'un client pouvait sortir NON GOUVERNÉE parce que personne n'avait
+                  # posé la question — pas parce que quelqu'un avait répondu « non ».
+                  #
+                  # ⚠️ Pourquoi un champ À CÔTÉ et non une propriété nommée DANS
+                  # `curation` : Kubernetes refuse `properties` et `additionalProperties`
+                  # au même niveau (« mutual exclusive », mesuré au banc jetable). Une
+                  # carte libre ne peut pas contenir de champ nommé.
+                  approval:
+                    type: object
+                    required:
+                    - gate
+                    description: >-
+                      Faut-il une approbation dans l''ITSM pour demander ce produit ? La
+                      réponse se DÉCLARE — « aucune » est valide, le silence ne l''est pas.
+                      Posée en annotation platform.kratix.io/approval sur la promesse, lue
+                      par le portier qui bloque la fusion des demandes non approuvées.
+                    properties:
+                      gate:
+                        type: string
+                        enum:
+                        - aucune
+                        - auto
+                        - standard
+                        description: >-
+                          aucune = ce produit ne passe pas par l''ITSM (un espace de travail
+                          isolé, que son propriétaire peut détruire lui-même, n''a pas à
+                          attendre un comité — mais il doit le DIRE). auto = un ticket est
+                          ouvert et tracé, personne n''a à l''approuver. standard = un ticket
+                          doit être APPROUVÉ par un humain avant que la demande soit
+                          fusionnée ; sans quoi la fusion est refusée, administrateur compris.
+                      class:
+                        type: string
+                        default: UserRequest
+                        description: >-
+                          La classe de ticket de l''ITSM (UserRequest, NormalChange,
+                          RoutineChange…). C''est ELLE qui porte le dosage : chaque classe a
+                          sa propre requête d''approbation côté portail. Ignorée si
+                          gate vaut « aucune ».
+                      service:
+                        type: string
+                        description: >-
+                          Le service auquel rattacher le ticket, quand la classe en porte un.
+                          Optionnel : omis, aucun service n''est déclaré (et non « le service
+                          vide »).
                   curation:
                     type: object
                     additionalProperties:
@@ -547,7 +605,7 @@ spec:
             # ⚠️ NE JAMAIS pinner `0.7.32-awx` = arm64 (construite sans
             #    --platform linux/amd64) : `exec format error` sur ce cluster x86,
             #    et les frappes de jeton s'arrêtent avec elle. 0.7.33 = même code, amd64.
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.5-racine@sha256:d401ed09e3fd902f25e3a4a70926967fe24838d74f0f234072666d0efd4491fc
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory:0.8.6-approbation@sha256:30606bd6e57f61dbb1e4d92795eff866b2871e15da51c2d49167305e8bc743c8
             env:
             # Identifiants de REGISTRE au format dockerconfigjson. Posée sans
             # condition : vérifié sur helm 3.16, un fichier absent ou ne couvrant
