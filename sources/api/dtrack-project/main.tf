@@ -19,10 +19,16 @@ terraform {
 # Les identifiants arrivent par des FICHIERS montés dans le runner, jamais par des
 # variables terraform : une variable voyagerait dans le plan lisible. `file()` est
 # évalué à l'exécution — le plan ne garde que l'expression.
+#
+# ⚠️ LE SECRET DOIT PORTER CES CLÉS, exactement :
+#     DTRACK_URL · DTRACK_API_KEY   (et API_USER pour l'authentification basic)
+# Un nom qui ne correspond pas fait échouer le PLAN à chaque tour, avec un message
+# de terraform qui parle d'un fichier absent — jamais du secret. Les noms se
+# déclarent dans la demande (`api.credsKeys`) quand ils diffèrent de la convention.
 locals {
-  base_url    = trimspace(file("/dtrack/API_URL"))
-  jeton       = trimspace(file("/dtrack/API_TOKEN"))
-  utilisateur = fileexists("/dtrack/API_USER") ? trimspace(file("/dtrack/API_USER")) : ""
+  base_url    = trimspace(file("/api-creds/DTRACK_URL"))
+  jeton       = trimspace(file("/api-creds/DTRACK_API_KEY"))
+  utilisateur = fileexists("/api-creds/API_USER") ? trimspace(file("/api-creds/API_USER")) : ""
 }
 
 provider "restful" {
