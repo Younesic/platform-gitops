@@ -52,10 +52,6 @@ variable "description" {
     condition = var.description == "" || length(var.description) <= 255
     error_message = "La spec limite ce champ à 255 caractères."
   }
-  validation {
-    condition = var.description == "" || can(regex("^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$", var.description))
-    error_message = "La valeur ne respecte pas le motif déclaré par la spec."
-  }
 }
 
 variable "name" {
@@ -65,20 +61,12 @@ variable "name" {
     condition = var.name == "" || length(var.name) <= 255
     error_message = "La spec limite ce champ à 255 caractères."
   }
-  validation {
-    condition = var.name == "" || can(regex("^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$", var.name))
-    error_message = "La valeur ne respecte pas le motif déclaré par la spec."
-  }
 }
 
 variable "version_valeur" {
   type = string
   # ⚠️ le champ du contrat s'appelle `version` : ce nom est RÉSERVÉ par terraform, la variable est donc suffixée.
   default = ""
-  validation {
-    condition = var.version_valeur == "" || can(regex("^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$", var.version_valeur))
-    error_message = "La valeur ne respecte pas le motif déclaré par la spec."
-  }
 }
 
 # ── L'ADOPTION ─────────────────────────────────────────────────────────────────
