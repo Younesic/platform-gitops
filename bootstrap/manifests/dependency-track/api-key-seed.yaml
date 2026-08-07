@@ -31,16 +31,20 @@
 #     jeton doit être demandé avec `scope=openid`, sinon userinfo rend 403.
 #
 # IDEMPOTENT : si le Secret porte déjà une clé qui répond 200, le Job ne fait RIEN et
-# le dit. Rejouer = forcer une synchro de l'app (hook BeforeHookCreation).
+# le dit.
+#
+# ⚠️ C'est un Job ORDINAIRE, pas un hook PostSync — et c'est délibéré : un hook n'est
+# PAS une ressource suivie par ArgoCD, donc l'ajouter au dépôt ne rend l'app ni
+# OutOfSync ni synchronisée, et il ne part JAMAIS (mesuré ici : refresh hard + deux
+# synchros forcées, aucun Job créé — la même leçon que le seed AWX). Un Job ordinaire
+# est appliqué comme n'importe quelle ressource. Pas de ttlSecondsAfterFinished : s'il
+# disparaissait, selfHeal le recréerait en boucle. Pour REJOUER : supprimer le Job,
+# ArgoCD le recrée au tour suivant (son spec est immuable, on ne le modifie pas en place).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: dtrack-api-seed
   namespace: crossplane-system
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 ---
 # Lecture du seul secret dont le Job a besoin pour parler à Keycloak.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -48,10 +52,6 @@ kind: Role
 metadata:
   name: dtrack-api-seed-kc
   namespace: crossplane-system
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -63,10 +63,6 @@ kind: RoleBinding
 metadata:
   name: dtrack-api-seed-kc
   namespace: crossplane-system
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-seed-kc }
 subjects:
   - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
@@ -81,10 +77,6 @@ kind: Role
 metadata:
   name: dtrack-api-seed-write
   namespace: default
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -99,10 +91,6 @@ kind: RoleBinding
 metadata:
   name: dtrack-api-seed-write
   namespace: default
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: dtrack-api-seed-write }
 subjects:
   - { kind: ServiceAccount, name: dtrack-api-seed, namespace: crossplane-system }
@@ -112,13 +100,8 @@ kind: Job
 metadata:
   name: dtrack-api-seed
   namespace: crossplane-system
-  annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/sync-wave: "1"
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 2
-  ttlSecondsAfterFinished: 3600
   template:
     spec:
       restartPolicy: Never
