@@ -114,9 +114,15 @@ spec:
             - { name: DT, value: "http://dependency-track-api-server.dependency-track.svc:8080" }
             - { name: TEAM, value: "plateforme-api" }
             # Les permissions de l'équipe, DÉCLARÉES : elles suivent ce que la
-            # plateforme OFFRE. `VULNERABILITY_ANALYSIS` est là pour l'offre
-            # « lancer une analyse » (OA3) — sans elle, DT rend 403.
-            - { name: PERMS, value: "PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO VULNERABILITY_ANALYSIS" }
+            # plateforme OFFRE, et RIEN de plus. Le Job les met à niveau dans les
+            # DEUX SENS — il ajoute ce qui manque et RETIRE ce qui n'est pas
+            # déclaré : un droit ne remonte jamais par oubli (doctrine CD6).
+            # ⚠️ `VIEW_VULNERABILITY` est la permission de l'opération d'analyse
+            # (OA3) — et ce n'est pas une devinette : la SPEC le dit, dans la
+            # description de l'opération (« Requires permission VIEW_VULNERABILITY »).
+            # J'avais d'abord parié sur VULNERABILITY_ANALYSIS : 403. La spec
+            # documente ce qu'elle exige — il suffit de la lire.
+            - { name: PERMS, value: "PORTFOLIO_MANAGEMENT VIEW_PORTFOLIO VIEW_VULNERABILITY" }
             - { name: SECRET_NAME, value: "dtrack-api-creds" }
             - { name: SECRET_NS, value: "default" }
             - { name: TMP_CLIENT, value: "dtrack-bootstrap" }
@@ -210,6 +216,13 @@ spec:
                 fi
                 for P in $PERMS; do
                   curl -s -o /dev/null -X POST -H "$J" "$DT/api/v1/permission/$P/team/$TU"
+                done
+                # …et on RETIRE tout ce qui n'est pas déclaré : le droit redescend.
+                for P in $(curl -s -H "$J" "$DT/api/v1/team/$TU" | jq -r '.permissions[].name'); do
+                  echo " $PERMS " | grep -q " $P " || {
+                    curl -s -o /dev/null -X DELETE -H "$J" "$DT/api/v1/permission/$P/team/$TU"
+                    echo "permission NON déclarée retirée : $P"
+                  }
                 done
                 if [ -n "$MANQUANTES" ]; then
                   # La clé existe et fonctionne : on ne la remplace PAS pour une
