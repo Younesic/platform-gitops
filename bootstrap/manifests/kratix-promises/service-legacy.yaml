@@ -105,7 +105,7 @@ spec:
               defaultMode: 256
           containers:
           - name: geste
-            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e04188641bf1494d180483ad44802e0438ab9f62b614ccaf5f11c1b5f026d72f
             env:
             - name: SOURCE_URL
               value: https://github.com/Younesic/platform-gitops
@@ -160,7 +160,7 @@ spec:
               defaultMode: 256
           containers:
           - name: geste-destroy
-            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e1ea9f076faf2eb6d34e8c9b8678b0304f3d4c9c82d81b85a7ebc3bc88fa6d82
+            image: harbor.212-47-226-56.nip.io/platform/script-runner@sha256:e04188641bf1494d180483ad44802e0438ab9f62b614ccaf5f11c1b5f026d72f
             env:
             - name: SOURCE_URL
               value: https://github.com/Younesic/platform-gitops
