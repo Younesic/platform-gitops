@@ -136,7 +136,8 @@ ROUTAGE — C'EST CE QUE LE MOTEUR REND.** Deux cas, et un seul les sépare :
 | **compound** | rien en propre | **délègue** : chaque enfant applique SON porteur |
 | **crossplane** | l'**ENTRÉE** d'un contrôleur (un XR, qui porte un finalizer) | **`managementPolicies` sans `Delete`** sur la ressource managée (table AU4) |
 | **terraform** | l'**ENTRÉE** d'un contrôleur (un objet `Terraform`, finalizer `finalizers.tf.contrib.fluxcd.io`) | **`destroyResourcesOnDeletion: false`** sur l'objet `Terraform` |
-| **script / awx** (échelle gatée : CD9) | **rien dans le cluster** — le réel vit à l'EXTÉRIEUR (base, compte, geste sur un système cible) | **moteur** : le runner SAUTE `destroy` si `est_adopte` (mode ≠ `gere` OU marqueur durable) — gaté, CD9 phase B |
+| **script / awx** | **rien dans le cluster** — le réel vit à l'EXTÉRIEUR (base, compte, geste sur un système cible) | **moteur** : le runner SAUTE `destroy` si `est_adopte` (mode ≠ `gere` OU marqueur durable `status.adopte`) ✅ CD9 phase B |
+| **api** | rien en propre — la désignation produit un objet `Terraform` (ressource) ou une promesse `script` (action) | **hérité** : `destroyResourcesOnDeletion: false` pour une ressource ; une ACTION n'a rien à ne pas détruire |
 | répertorié | rien n'est rendu | sans objet |
 
 **LA RÈGLE, en une phrase** : *si le moteur offre un levier de non-destruction, on
@@ -277,19 +278,35 @@ geste humain) · géré = destruction pilotée.
 - Cas particulier conservé : un dépôt git CLIENT existant (legacy externe) suit la même
   échelle en pointant SON dépôt — même mot, même sens.
 
-### script · awx (moteur 7) — l'échelle GATÉE sur un fait (CD9)
+### script · awx (moteur 7) — l'échelle OUVERTE, mais gatée sur un FAIT par offre (CD9)
 
-L'Observé exige un LECTEUR que la v1 n'a pas : `observe.sh` pour `script` (l'auteur
-agit), le mode check pour `awx` (`ask_job_type_on_launch: true` — le client agit, mesuré
-`false` sur les templates réels). L'échelle est donc **gatée, et c'est DIT** — conditions
-de déblocage, refus du barreau déclaratif et déclencheur au **§9quater de
-PROMISE-STANDARD (bloc « L'échelle d'adoption »)**. Quand elle ouvrira : **2 barreaux**
-(`observe` | `gere`) — Gouverné non offert par conception (aucune notion de plan), comme
-crossplane. Non-destruction d'un adopté : porteur **moteur** (§3bis). En attendant, les
-deux bouts servent : Répertorié (déclarer sans confier) et Géré (le premier apply
-confronte la déclaration au réel — CD3).
+L'Observé exige un LECTEUR, et il se CONSTATE offre par offre : `observe.sh` présent dans
+la source pour `script` (**l'auteur agit**), `ask_job_type_on_launch: true` sur le job
+template pour `awx` (le mode check d'Ansible — **le client agit**). Une offre sans son
+fait n'est pas adoptable, et **déclarer l'adoption dessus est REFUSÉ à la génération**
+avec les deux sorties nommées : un Observé que le moteur ne peut pas exécuter serait un
+contrôle décoratif, pire qu'un contrôle absent. **2 barreaux** (`observe` | `gere`) —
+Gouverné non offert par conception (aucune notion de plan), comme crossplane.
+Non-destruction d'un adopté : porteur **moteur** — le runner saute `destroy` si
+`est_adopte` (§3bis). Le raisonnement complet, dont le **refus du barreau déclaratif**,
+est au **§9quater de PROMISE-STANDARD**.
 
-### La matrice complète — 7 moteurs × 4 niveaux, aucune case vide (AU1)
+### api (moteur 8) — l'échelle N'EST PAS À CONSTRUIRE, elle est HÉRITÉE
+
+Une offre `api` n'est pas exécutée par un runtime à elle : la désignation des opérations
+produit soit un **module terraform** (classe ressource), soit une **promesse script**
+(classe action). Conséquence directe, et c'est LA raison du choix d'architecture : une
+ressource `api` hérite de l'échelle terraform **en entier** — `planOnly` pour l'Observé,
+l'approbation du plan pour le Gouverné, la convergence pour le Géré, et
+`destroyResourcesOnDeletion` dérivé d'`est_adopte` comme porteur de non-destruction
+(§3bis). La **liaison** est l'identifiant de l'objet dans l'API (`import_id` = l'uuid, l'id
+numérique, la clé métier — celui qu'attend l'opération `read`). Le niveau 0 se sert de
+l'opération de LISTE de la même spec (connecteur config-driven), donc du même contrat.
+
+Une ACTION `api` (POST seul) n'a, elle, aucun barreau : elle ne possède rien — la règle
+générale des actions, pas une limite de ce moteur.
+
+### La matrice complète — 8 moteurs × 4 niveaux, aucune case vide (AU1)
 
 | Moteur \ Niveau | Répertorié (0) | Observé (1) | Gouverné (2) | Géré (3) |
 |---|---|---|---|---|
@@ -298,8 +315,9 @@ confronte la déclaration au réel — CD3).
 | helm | catalogue (par source) | app sans sync (le diff) ✅ AU2+AU3 (pilote produit : alignement 0-création, UID inchangés, reprise en place) | app sans selfHeal/prune ✅ AU2 (dérive tenue, objet survit) | l'actuel ✅ |
 | operator | catalogue (par source) | idem helm — **CR existant requis** → AU7 | idem helm (CR ; nuance enfants affichée) → AU7 | l'actuel ✅ |
 | compound | catalogue (par source) | hérite — tout-ou-rien → AU7 | hérite (sans enfant crossplane) → AU7 | l'actuel ✅ |
-| script | catalogue (par source git) | **gaté** — `observe.sh` (l'AUTEUR agit) → CD9-B | **non offert** (pas de plan — comme crossplane, l'enum diffère par conception) | l'actuel ✅ CD3 (premier apply = la confrontation ; garde d'appropriation du script) |
-| awx | catalogue (par source AWX ✅ CD7) | **gaté** — mode check (`ask_job_type_on_launch`, le CLIENT agit) → CD9-B | **non offert** (idem) | l'actuel ✅ CD8-B (`apply`=present · `destroy`=absent, identité du fournisseur) |
+| script | catalogue (par source git) | **par offre** — `observe.sh` présent (l'AUTEUR agit) ✅ CD9-B (observe.sh seul tourne, réel intact, marqueur `adopte` gravé) | **non offert** (pas de plan — comme crossplane, l'enum diffère par conception) | l'actuel ✅ CD3 (premier apply = la confrontation ; garde d'appropriation du script) |
+| awx | catalogue (par source AWX ✅ CD7) | **par offre** — mode check (`ask_job_type_on_launch`, le CLIENT agit) ✅ CD9-B (`job_type: check` au journal AWX, cible non touchée) | **non offert** (idem) | l'actuel ✅ CD8-B (`apply`=present · `destroy`=absent, identité du fournisseur) |
+| api (ressource) | catalogue par l'opération de LISTE de la spec → OA7 | `planOnly` — hérité de terraform → OA7 | `approvePlan` attend + portier iTop — hérité → OA7 | `approvePlan: auto` — hérité → OA2/OA7 (liaison = l'identifiant de l'API) |
 
 Une case « → AUx » = mécanisme DÉFINI, preuve à jouer dans l'objectif nommé. Un badge ne
 s'affiche pour un moteur QUE quand sa case est prouvée — jamais d'affichage en avance sur la
@@ -336,19 +354,27 @@ l'automatisation plus tard **derrière le même contrat**.
 
 | Ce que le système expose | → la voie |
 |---|---|
-| une API pilotable (écriture) | un moteur : terraform, crossplane, helm, operator |
-| une exécution possible mais **un contrat ILLISIBLE** — CONSTATÉ | le moteur **`script`** (contrat DÉCLARÉ) — ressource ou action **selon les VERBES** |
+| une API pilotable **avec un moteur/provider existant** | un moteur : terraform, crossplane, helm, operator |
+| une API pilotable **sans provider**, mais **une spec OpenAPI/Swagger — CONSTATÉE** | le moteur **`api`** : le contrat se DÉRIVE du schéma, les verbes se DÉSIGNENT parmi les opérations — ressource (CRUD désigné) ou action (POST seul) |
+| une exécution possible mais **un contrat ILLISIBLE** — CONSTATÉ | le moteur **`script`** (contrat DÉCLARÉ) — ressource ou action **selon les VERBES** ; y compris une API SANS spec, dont le contrat se compose au stylo du Studio |
 | une API en LECTURE seule | Répertorié (§2 niveau 0) ou Observé (§2 niveau 1) |
 | **aucune API — CONSTATÉE** | **la promesse-ticket** (LG10), classe « Action » |
 
-Deux précisions de frontière :
+Trois précisions de frontière :
 
 - un **survey AWX** est un contrat déclaré **dans un système tiers lisible par API** — même
   famille que la déclaration, servie par le moteur **`awx`** (`spec.type: awx` ; la classe
   action/ressource se déduit de la variable d'état du survey — décision CD7) ;
-- une **spec OpenAPI/Swagger constatée** rend le contrat **DÉRIVABLE** — c'est la PREMIÈRE
-  ligne (famille des moteurs qui LISENT), pas la deuxième ; moteur futur, cadré dans
-  `backstage-platform/Objectives/contrat-declare/NOTE-OPENAPI.md`.
+- une **spec OpenAPI/Swagger constatée** rend le contrat **DÉRIVABLE** : c'est la famille des
+  moteurs qui LISENT, servie par le moteur **`api`** (`spec.type: api`, § « Promesses API »
+  du PROMISE-STANDARD ; set `Objectives/api-derivable/`). L'ordre des deux premières lignes
+  est un ORDRE DE PRÉFÉRENCE : là où un provider existe déjà (un module Terraform, un
+  provider Crossplane), on le prend — le moteur `api` sert là où personne n'en a écrit,
+  ce qui est le cas ordinaire des API internes d'entreprise ;
+- une spec qui existe mais qu'on ne peut pas atteindre (derrière une authentification, ou
+  servie par une URL qui bouge) ne disqualifie pas ce moteur : la spec se **vendorise** en
+  snapshot pinné — c'est de toute façon la règle de gouvernance (voir le § du
+  PROMISE-STANDARD).
 
 ⚠️ **« Constaté » veut dire mesuré, pas affirmé — pour les DEUX lignes qui en portent la
 mention.** « Aucune API » : l'exemple de référence est la création d'une organisation
@@ -400,3 +426,8 @@ n'offre pas la même garantie que ses voisines doit se voir comme telle.
 | Une ressource `script` ne s'auto-guérit pas | dérive manuelle → PAS corrigée, et la fiche le dit | CD3 (b) |
 | Sans `observe.sh`, aucune surface de dérive | fiche SANS badge (ni « alignée » ni « je ne sais pas ») — la surface n'existe pas | CD3 (g) · CD4 |
 | La classe suit les verbes | `run.sh` seul ne peut produire qu'une ACTION ; `apply`+`destroy` qu'une RESSOURCE | CD4 (a) · CD5 (c) |
+| Une opération ne se devine jamais | sur une API où `PUT` crée et `POST` modifie (cas réel), la génération SANS désignation est refusée — jamais une déduction par convention | OA4 · OA2 |
+| Un contrat dérivé n'exige pas l'indérivable | un champ `required` par la spec mais produit par le SERVEUR (identifiant, horodatage) est retiré du formulaire, et le retrait est RENDU — jamais un formulaire insoumettable, jamais un retrait muet | OA4 (d) · OA2 (h) |
+| La spec ne se lit jamais à chaud | l'instance vit sur un snapshot pinné (sha256) : modifier la spec servie par l'API ne change RIEN tant qu'aucune régénération n'a été mergée | OA5 · OA8 |
+| La classe suit les OPÉRATIONS | une désignation `create` seule ne peut produire qu'une ACTION ; une combinaison incohérente (delete sans read) est refusée avec ses deux sorties nommées | OA4 (b) · OA3 |
+| Un dialecte non supporté est DIT | WSDL/GraphQL/RAML, ou un `$ref` distant → refus guidé nommant la sortie (moteur `script` + stylo, ou vendorisation) — jamais un parse silencieusement partiel | OA4 (b) |

@@ -543,15 +543,16 @@ abandonné (slot `ansible` retiré, CD8-B).
 
 ### L'échelle d'adoption — gatée sur un FAIT, jamais déclarée (CD9)
 
-**État v1 : `script` et `awx` ne sont PAS adoptables — c'est un CHOIX, le voici.**
-L'Observé promet *« la plateforme lit et compare, ne modifie rien »* ; il exige un
-LECTEUR, et chaque moteur a le sien :
+**État au 2026-08-07 : l'échelle est OUVERTE, mais UNE OFFRE À LA FOIS — la capacité se
+déduit d'un FAIT, jamais d'une case cochée.** L'Observé promet *« la plateforme lit et
+compare, ne modifie rien »* ; il exige un LECTEUR, et chaque moteur a le sien :
 
 - `script` → **`observe.sh`** (l'étage gaté du tableau des verbes) — **qui agit :
   l'AUTEUR de la source** ;
 - `awx` → le **mode check** d'Ansible (`job_type: check`), qui exige
   `ask_job_type_on_launch: true` sur le job template — **qui agit : le CLIENT, côté AWX**
-  (mesuré `false` sur les templates réels au 2026-08-06).
+  (mesuré `false` par défaut ; activé sur `legacy-service` le 2026-08-06, toujours `false`
+  sur `compte-service` — dont l'offre n'est donc PAS adoptable, et le refus le dit).
 
 Sans lecteur, pas d'Observé ; sans Observé, pas d'échelle. **La capacité se DÉDUIT de ce
 fait** — personne ne coche jamais « adoptable » — et publier un Observé que le moteur ne
@@ -576,15 +577,148 @@ déjà et suffisent :
   réel — il converge ou échoue visiblement (CD3 : oid stable ; la garde d'appropriation
   du script décide la politique).
 
-**Déclencheur de l'implémentation (CD9 phase B) : un besoin réel CONSTATÉ** — un
-consommateur qui exige de « regarder avant de confier » sur une offre de ces moteurs.
-Rien ne se construit d'avance. Non-destruction d'un adopté : porteur **moteur** (le
-runner SAUTE `destroy` si `est_adopte`) — déclinaison au §3bis d'ADOPTION-STANDARD.
+**Implémenté (CD9 phase B, 2026-08-07)** : le runner lit `mode` dans le claim et remplace
+`apply` par `observe` au barreau Observé ; le champ `mode` entre au contrat SEULEMENT si
+le fait est là. Non-destruction d'un adopté : porteur **moteur** — le runner SAUTE
+`destroy` si `est_adopte` (mode ≠ gere OU marqueur durable `status.adopte`, perpétué : un
+adopté promu Géré reste un adopté) — déclinaison au §3bis d'ADOPTION-STANDARD.
 
 ### Slugs figés
 
 `script` · `awx` · `run` / `apply` / `destroy` / `observe` ·
 `contract.schema.json` · `SPEC_<CHAMP>` · `SORTIES`.
+
+## 9quinquies. Promesses API — la spec EST le contrat (moteur 8)
+
+> Pour une API **documentée par une spec OpenAPI/Swagger** et dont personne n'a écrit de
+> provider. La niche ordinaire en entreprise : les API internes ont presque toujours un
+> Swagger sur le portail d'API, presque jamais un module Terraform.
+
+### Le principe : la dérivation prend les SCHÉMAS, la désignation prend les CHEMINS
+
+Une spec décrit un **transport**, pas un modèle de ressource. Elle dit quelles requêtes
+existent ; elle ne dit pas laquelle *crée*, où vit l'identifiant, ni comment relire ce
+qu'on a créé. Les conventions REST donnent l'illusion du contraire — jusqu'au premier
+contre-exemple, et il arrive tout de suite.
+
+**Le contre-exemple qui fonde la règle, mesuré sur une API réelle de ce cluster** : chez
+Dependency-Track, `PUT /v1/project` **crée** et `POST /v1/project` **modifie** — l'inverse
+exact de la convention. Une déduction automatique aurait produit un moteur qui modifie
+quand on lui demande de créer, et l'aurait fait **silencieusement**. Donc :
+
+> **Les opérations se DÉSIGNENT. Elles ne se devinent jamais.** Une génération sans
+> désignation est refusée — pas complétée par une convention.
+
+C'est le geste `apiSchemaFrom` du moteur operator, et le même geste que l'industrie :
+Speakeasy fait désigner les opérations par des annotations `x-speakeasy-entity` pour
+générer un provider Terraform depuis une spec.
+
+### La désignation — quatre rôles, deux canaux, une précédence
+
+Quatre rôles nommés : **`create`**, **`read`**, **`update`** (optionnel), **`delete`**.
+Chacun désigne une opération de la spec, par `operationId` ou par `MÉTHODE /chemin`.
+
+Deux canaux, avec la précédence **source > claim** (la règle CT5, comme partout) :
+
+1. **Co-localisée** — extensions `x-platform-create` / `-read` / `-update` / `-delete`
+   DANS la spec, quand la spec nous appartient : la désignation vit avec ce qu'elle
+   décrit, et survit à qui la publie.
+2. **Au claim** — le bloc de désignation de la demande, quand la spec est tierce (le cas
+   ordinaire : on ne modifie pas le Swagger d'un éditeur).
+
+Si les deux existent et divergent, **la source gagne et le conflit est DIT**.
+
+### La classe suit les OPÉRATIONS
+
+C'est la généralisation de « la classe suit les verbes » (§9quater) : ce n'est pas une
+case à cocher, c'est une conséquence de ce qui a été désigné.
+
+| Désigné | Classe | Garantie (gelée, à reprendre TELLE QUELLE sur les cartes) | Exécuté par |
+|---|---|---|---|
+| `create` + `read` + `delete` (+`update`) | **RESSOURCE** | « converge au changement déclaré · destruction pilotée · dérive détectée » | le moteur **terraform** (module généré sur un provider REST générique) |
+| `create` SEUL | **ACTION** | « la plateforme exécute et rend compte · ne surveille rien · supprimer la demande ne défait rien » | le moteur **script** (`run.sh` généré) |
+| `read`-liste seul | *pas ce moteur* | — | le **niveau 0 Répertorié** (connecteur config-driven) |
+| toute autre combinaison | *refusée* | — | refus GUIDÉ à la génération, nommant ce qui manque **et les deux sorties** |
+
+**Aucun runtime n'est écrit pour ce moteur** — c'est la décision d'architecture, et elle
+paye deux fois : une ressource `api` hérite de l'état, du plan lisible, de l'approbation,
+de la détection de dérive et de l'échelle d'adoption **entière** ; une action `api` hérite
+du runner partagé, de ses `SPEC_<CHAMP>` et de ses sorties au status. Si l'implémentation
+donne envie d'écrire un exécuteur HTTP maison, c'est le signe qu'on s'est trompé de route.
+
+### Le pin de gouvernance : la spec est un ARTEFACT, pas une URL
+
+Le snapshot de la spec est **commité** (`sources/api/<offre>/spec.json`) et son **sha256
+déclaré** au claim. La plateforme ne lit **jamais** une spec à chaud.
+
+*Pourquoi* : une URL vivante peut disparaître, exiger une authentification, ou changer
+sous les pieds d'une instance déjà provisionnée — un contrat qui bouge sans que personne
+ne l'ait décidé n'est pas un contrat. Une spec qui change = une **régénération**, par les
+portes normales (PR, revue, merge). C'est exactement le pin d'un chart ou d'un tag de
+module, appliqué à un document.
+
+Corollaire utile : une spec **derrière une authentification** ne disqualifie rien — on la
+vendorise, ce qu'il fallait faire de toute façon.
+
+### La règle des `required` menteurs
+
+Une spec réelle marque très souvent `required` des champs que **le serveur produit**.
+Mesuré sur Dependency-Track : le schéma `Project` exige `uuid` **et** `lastBomImport` —
+que le demandeur ne peut pas connaître. Un dériveur naïf produit alors un formulaire
+**insoumettable**, et personne ne comprend pourquoi.
+
+Le dériveur **croise** donc les `required` de la spec avec la désignation. Est retiré du
+contrat demandeur tout champ qui est :
+
+- explicitement `readOnly` ; **ou**
+- l'**identifiant** que `read`/`delete` attendent en chemin et que `create` retourne ; **ou**
+- listé dans l'omission explicite de la désignation.
+
+**Chaque retrait est RENDU** (résumé de génération, aperçu du Studio) : jamais un
+formulaire inutilisable en silence, jamais un retrait muet. *Le seul défaut acceptable
+d'un dériveur, c'est celui qui se voit.*
+
+### L'authentification
+
+Familles v1 : **clé en en-tête** (`X-Api-Key`…), **Bearer** statique, **Basic**, **OAuth2
+client-credentials**. Elle se **lit** dans les `securitySchemes` de la spec quand ils y
+sont, se **déclare** sinon.
+
+Le transport ne change pas : un `credsSecret` monté → l'environnement du runner (ou le
+ProviderConfig terraform). **Jamais** une valeur dans un claim git, jamais en argument de
+commande, jamais dans un journal.
+
+### Les sorties sensibles
+
+Un champ de réponse `writeOnly`, `format: password`, ou désigné sensible est **exclu du
+sélecteur de sorties** : le demandeur le reçoit par Secret, pas sur une fiche de
+catalogue. (La règle du `robot_secret` de TN5 : on filtre le SÉLECTEUR, pas le Secret —
+sinon on casse le produit.)
+
+### Ce que ce moteur REFUSE, en le disant
+
+- **Dialectes hors OpenAPI/Swagger** (WSDL/SOAP — très réel en banque —, GraphQL, RAML) →
+  refus guidé qui nomme la sortie : le moteur `script` et le stylo du Studio permettent de
+  déclarer le contrat à la main ; une famille de dériveurs viendra si le besoin se répète.
+- **`$ref` distants** (une spec qui référence une autre URL) → refus guidé : vendorise la
+  spec complète. La plateforme ne suit pas une référence externe au moment de générer —
+  ce serait la lecture à chaud par la porte de derrière.
+- **Opérations asynchrones** (202 + polling) sans endpoint de statut lisible → la limite
+  est dite à la génération, pas découverte à l'exécution.
+
+### L'échelle d'adoption — héritée, pas construite
+
+Une ressource `api` **est** une promesse terraform : elle hérite des quatre barreaux
+(Répertorié par l'opération de liste · Observé par `planOnly` · Gouverné par le plan
+approuvé · Géré), de la **liaison** `import_id` (l'identifiant de l'objet dans l'API) et
+du porteur §3bis (`destroyResourcesOnDeletion` dérivé d'`est_adopte`). Rien de spécifique
+n'est à écrire — et c'est la raison pour laquelle cette route a été choisie.
+
+### Slugs figés
+
+`api` · `create` / `read` / `update` / `delete` ·
+`x-platform-create` / `-read` / `-update` / `-delete` ·
+`spec.json` + `specSha256` · `import_id`.
 
 ## 10. Encapsulation d'abord (loi 6 / CT3 — hiérarchie des fixes)
 
