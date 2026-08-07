@@ -9,13 +9,14 @@
 # 🔑 LE POINT DÉLICAT, DIT EN ENTIER. Générer une clé d'API exige ACCESS_MANAGEMENT
 # dans DT, c'est-à-dire un privilège d'administration. Le Job ouvre donc une fenêtre
 # d'administration MINIMALE et la REFERME lui-même :
-#   1. il crée un client Keycloak ÉPHÉMÈRE avec un compte de service ;
+#   1. il s'assure qu'un client Keycloak de bootstrap existe (DURABLE : DT refuse une
+#      identité dont le `sub` change) — au repos ce compte n'est dans aucun groupe ;
 #   2. il place ce compte dans un groupe nommé `Administrators` — DT synchronise ses
 #      équipes sur le claim `groups` (ALPINE_OIDC_TEAM_SYNCHRONIZATION), et
 #      `Administrators` est son équipe d'administration par défaut ;
 #   3. il échange le jeton OIDC contre un JWT DT, crée l'équipe étroite et SA CLÉ ;
-#   4. il retire le compte du groupe, supprime le groupe s'il l'a créé et s'il est
-#      vide, et supprime le client éphémère.
+#   4. il retire le compte du groupe et supprime le groupe s'il l'a créé et qu'il est
+#      vide. Le client reste, désarmé.
 # À la fin il ne reste QUE : une équipe DT étroite, sa clé, et le Secret qui la porte.
 # La fenêtre dure quelques secondes et rien ne la rouvre — c'est le prix, une fois,
 # d'un identifiant durable et étroit ensuite.
@@ -114,7 +115,7 @@ spec:
             - { name: TEAM, value: "plateforme-api" }
             - { name: SECRET_NAME, value: "dtrack-api-creds" }
             - { name: SECRET_NS, value: "default" }
-            - { name: TMP_CLIENT, value: "dtrack-bootstrap-tmp" }
+            - { name: TMP_CLIENT, value: "dtrack-bootstrap" }
           command: ["sh", "-c"]
           args:
             - |
@@ -135,9 +136,14 @@ spec:
               [ "$AT" != null ] || { echo "ECHEC : pas de jeton d'administration Keycloak"; exit 1; }
               A="Authorization: Bearer $AT"; R="$KC/admin/realms/platform"
 
-              # ── 1. client éphémère (audience UNIQUE, sinon nimbus refuse) ─────
-              curl -s -o /dev/null -X DELETE -H "$A" \
-                "$R/clients/$(curl -s -H "$A" "$R/clients?clientId=$TMP_CLIENT" | jq -r '.[0].id // "aucun"')" || true
+              # ── 1. le client de bootstrap : DURABLE, créé une seule fois ─────
+              # ⚠️ NE PAS le recréer à chaque passage : DT mémorise le `sub` de
+              # l'utilisateur OIDC et REFUSE de l'authentifier si l'identifiant change
+              # (« subject identifier has changed » — protection anti-reprise de compte,
+              # payée ici). L'identité est donc DURABLE ; seul le PRIVILÈGE est
+              # éphémère — au repos, ce client n'appartient à aucun groupe et ne peut
+              # donc rien faire dans DT.
+              if [ "$(curl -s -H "$A" "$R/clients?clientId=$TMP_CLIENT" | jq 'length')" = 0 ]; then
               curl -s -o /dev/null -X POST -H "$A" -H 'Content-Type: application/json' -d "{
                 \"clientId\":\"$TMP_CLIENT\",\"enabled\":true,\"publicClient\":false,
                 \"serviceAccountsEnabled\":true,\"standardFlowEnabled\":false,
@@ -147,6 +153,10 @@ spec:
                    \"config\":{\"claim.name\":\"groups\",\"full.path\":\"false\",\"access.token.claim\":\"true\",\"id.token.claim\":\"true\",\"userinfo.token.claim\":\"true\"}},
                   {\"name\":\"aud-dt\",\"protocol\":\"openid-connect\",\"protocolMapper\":\"oidc-audience-mapper\",
                    \"config\":{\"included.client.audience\":\"dependency-track\",\"access.token.claim\":\"true\",\"id.token.claim\":\"true\"}}]}" "$R/clients"
+                echo "client de bootstrap créé"
+              else
+                echo "client de bootstrap déjà en place (identité conservée)"
+              fi
               ID=$(curl -s -H "$A" "$R/clients?clientId=$TMP_CLIENT" | jq -r '.[0].id')
               SA=$(curl -s -H "$A" "$R/clients/$ID/service-account-user" | jq -r .id)
 
@@ -190,8 +200,7 @@ spec:
                 N=$(curl -s -H "$A" "$R/groups/$GID/members" | jq 'length')
                 [ "$N" = 0 ] && curl -s -o /dev/null -X DELETE -H "$A" "$R/groups/$GID" && echo "groupe Administrators supprimé (vide)"
               fi
-              curl -s -o /dev/null -X DELETE -H "$A" "$R/clients/$ID"
-              echo "fenêtre d'administration refermée · client éphémère supprimé"
+              echo "fenêtre d'administration refermée (le client reste, sans aucun groupe)"
               [ "${FATAL:-0}" = 0 ] || exit 1
 
               # ── 5. la clé va au Secret, JAMAIS au journal ─────────────────────
