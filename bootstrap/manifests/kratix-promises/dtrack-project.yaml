@@ -17,6 +17,7 @@ metadata:
     backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
       Observ\xE9\",\"Gouvern\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"\
       ]}"
+    platform.kratix.io/approval: '{"class":"UserRequest","service":"Plateforme interne","gate":"standard"}'
     platform.kratix.io/tier: standard
 spec:
   destinationSelectors:
@@ -127,7 +128,7 @@ spec:
             - name: UI_SCHEMA_REV
               value: 3a415027514a
             - name: CURATION_REV
-              value: aa48971ae711
+              value: c3916a52d4e4
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
