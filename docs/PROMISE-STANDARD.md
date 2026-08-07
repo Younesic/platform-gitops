@@ -706,6 +706,24 @@ sinon on casse le produit.)
 - **Opérations asynchrones** (202 + polling) sans endpoint de statut lisible → la limite
   est dite à la génération, pas découverte à l'exécution.
 
+**🔑 Un motif d'un autre dialecte est PIRE qu'aucun motif** *(appris en production,
+et il a coûté une demande refusée)*. Une expression régulière n'a de sens que dans
+le dialecte qui la lit. Une spec peut parfaitement déclarer
+`^[\p{IsWhite_Space}\p{L}\p{M}\p{S}\p{N}\p{P}]*$` — de la regex Java, valide
+chez elle. Kubernetes, lui, valide en **RE2**, qui ne connaît pas
+`\p{IsWhite_Space}` : mesuré, le serveur d'API **refuse la CRD entière**
+(« invalid character class range »). Et si le motif franchit malgré tout la
+barrière sous une forme dégradée, il refuse alors des valeurs parfaitement
+légitimes — à l'admission, loin de sa cause, avec un message qui ne désigne rien.
+
+On ne traduit pas : une traduction approximative d'une contrainte est une
+contrainte fausse. **On retire, et on le dit** — le motif rejoint la liste des
+retraits rendus à l'auteur, avec sa raison. Les constructions écartées :
+propriétés Unicode de style Java (`\p{Is…}`, `\p{In…}`), assertions avant/arrière,
+références arrière, groupes atomiques, quantificateurs possessifs, motifs
+conditionnels. Un motif ordinaire, lui, traverse **intact** — on ne rogne pas par
+excès de zèle.
+
 ### L'échelle d'adoption — héritée, pas construite
 
 Une ressource `api` **est** une promesse terraform : elle hérite des quatre barreaux
