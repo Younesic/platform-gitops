@@ -68,16 +68,13 @@ spec:
                   description:
                     type: string
                     maxLength: 255
-                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
                     default: ''
                   name:
                     type: string
                     maxLength: 255
-                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
                     default: ''
                   versionValeur:
                     type: string
-                    pattern: ^$|^[\\p{IsWhite_Space}\\p{L}\\p{M}\\p{S}\\p{N}\\p{P}]*$
                     default: ''
                   importId:
                     type: string
@@ -108,7 +105,7 @@ spec:
       interval: 10m
       url: https://github.com/Younesic/platform-gitops
       ref:
-        commit: '7351c33d93911abeb99cf4ea4a9f6eb32ba70182'
+        commit: '22d8c5338296a1d87b11f3537c0440614a4b6fb3'
       provider: github
       secretRef:
         name: github-app
@@ -140,7 +137,7 @@ spec:
         spec:
           containers:
           - name: rendu-terraform
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:03b20bacf3808c94dcd9a146bb75c774d1cea580bd7d266ee2d438beed39831b
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:dea4f6181901804d3a1c9445b1c683da3b472142be0b371e2d63ef0f76f0d544
             env:
             - name: MODULE_PATH
               value: ./sources/api/dtrack-project
