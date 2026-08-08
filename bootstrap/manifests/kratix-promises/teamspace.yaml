@@ -16,6 +16,7 @@ metadata:
       ]}"
     platform.kratix.io/provider: cloud
     platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
+    platform.kratix.io/moteur: compound
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -132,6 +133,8 @@ spec:
               value: efaa45bf2565
             - name: CURATION_REV
               value: e089b7b5c945
+            - name: MOTEUR_REV
+              value: 614e3beac1b4
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
