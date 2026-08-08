@@ -1,10 +1,8 @@
 apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
-  labels:
-    kratix.io/promise-version: v0.0.1
-  name: harbor-base
   annotations:
+    platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/status-schema: "{\"projectName\": {\"path\": \".status.projectName\"\
       , \"label\": \"Nom du projet Harbor provisionn\xE9.\", \"type\": \"string\"\
       }, \"robotName\": {\"path\": \".status.robotName\", \"label\": \"Nom complet\
@@ -12,6 +10,10 @@ metadata:
     platform.kratix.io/contracts: '{"requires": [{"kind": "keycloak-group", "name":
       "${spec.group}", "origin": "claim"}]}'
     platform.kratix.io/provider: indus
+    platform.kratix.io/moteur: crossplane
+  labels:
+    kratix.io/promise-version: v0.0.1
+  name: harbor-base
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -230,13 +232,15 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
             env:
             - name: CONTRACTS_REV
               value: f4337e9e9108
             - name: CURATION_REV
               value: 8d6474e96568
+            - name: MOTEUR_REV
+              value: d6c9fca98846
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -254,7 +258,10 @@ spec:
               value: XHarborProject
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
           jobOptions: {}
           rbac: {}
