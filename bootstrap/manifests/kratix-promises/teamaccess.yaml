@@ -9,16 +9,16 @@ metadata:
     platform.kratix.io/adoptable: 'true'
     backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
       Observ\xE9\",\"G\xE9r\xE9\"]},\"liaison\":{\"ui:title\":\"\xC9l\xE9ment existant\
-      \ \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique. En Observ\xE9\
-      , rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"group\":{\"ui:field\"\
-      :\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\":{\"kind\":\"Group\"\
-      }}},\"users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
-      :{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\",\"liaison\",\"*\"]}"
+      \ \xE0 lier\"},\"group\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\"\
+      :{\"catalogFilter\":{\"kind\":\"Group\"}}},\"users\":{\"ui:field\":\"CatalogNamePicker\"\
+      ,\"ui:options\":{\"catalogFilter\":{\"kind\":\"User\"}}}},\"ui:order\":[\"mode\"\
+      ,\"liaison\",\"*\"]}"
     platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
       "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
       "origin": "claim"}]}'
     platform.kratix.io/provider: cloud
     platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
+    platform.kratix.io/moteur: compound
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -110,11 +110,13 @@ spec:
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 2e7b58760c39
+              value: a936f3c0c8f9
             - name: CONTRACTS_REV
               value: c6656a3b479e
             - name: CURATION_REV
               value: e089b7b5c945
+            - name: MOTEUR_REV
+              value: 614e3beac1b4
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
