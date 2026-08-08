@@ -5,9 +5,16 @@ metadata:
     kratix.io/promise-version: v0.0.1
   name: harbor-project
   annotations:
-    backstage.example.io/ui-schema: '{"properties":{"users":{"ui:field":"CatalogNamePicker","ui:options":{"catalogFilter":{"kind":"User"}}}},"ui:order":["project","storageQuotaGb","users","team","*"]}'
-    platform.kratix.io/approval: '{"class":"UserRequest","service":"Plateforme interne","gate":"standard"}'
+    platform.kratix.io/adoption-non-destruction: moteur
+    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
+      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
+      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"},\"\
+      users\":{\"ui:field\":\"CatalogNamePicker\",\"ui:options\":{\"catalogFilter\"\
+      :{\"kind\":\"User\"}}}},\"ui:order\":[\"project\",\"storageQuotaGb\",\"users\"\
+      ,\"team\",\"*\"]}"
     platform.kratix.io/provider: indus
+    platform.kratix.io/approval: '{"class":"UserRequest","service":"Plateforme interne","gate":"standard"}'
+    platform.kratix.io/moteur: compound
 spec:
   api:
     apiVersion: apiextensions.k8s.io/v1
@@ -28,6 +35,12 @@ spec:
             properties:
               spec:
                 properties:
+                  liaison:
+                    description: "ADOPTION \u2014 identifiant du groupe Keycloak EXISTANT\
+                      \ dont on reprend les membres (le m\xEAme UUID que la liaison\
+                      \ du claim keycloak-group fr\xE8re). Omis = cr\xE9ation classique."
+                    maxLength: 63
+                    type: string
                   project:
                     description: Nom du projet Harbor (le registre du fournisseur,
                       ex. team-paiement).
@@ -55,6 +68,13 @@ spec:
                 - users
                 - team
                 type: object
+                x-kubernetes-validations:
+                - message: "adoption : le niveau \xAB observe \xBB exige \xAB liaison\
+                    \ \xBB (l'UUID du groupe Keycloak existant dont on reprend les\
+                    \ membres). Sans lui, la plateforme n'aurait rien \xE0 observer\
+                    \ et cr\xE9erait."
+                  rule: '!has(self.mode) || self.mode != ''observe'' || (has(self.liaison)
+                    && self.liaison != '''')'
             type: object
         served: true
         storage: true
@@ -76,13 +96,15 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: e08477857898
+              value: 08e390e9b6e1
             - name: CURATION_REV
               value: a531fbd5fa92
+            - name: MOTEUR_REV
+              value: 614e3beac1b4
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -100,22 +122,35 @@ spec:
                 \      maxLength: 255\n      pattern: ^[a-z][a-z0-9-]*$\n      type:\
                 \ string\n    storageQuotaGb:\n      default: -1\n      description:\
                 \ Quota de stockage du projet en Go (-1 = illimit\xE9).\n      type:\
-                \ integer\n    users:\n      description: Usernames Keycloak membres\
-                \ du groupe \u2014 ce claim g\xE8re LA liste compl\xE8te\n       \
-                \ (1 claim par groupe).\n      items:\n        maxLength: 63\n   \
-                \     minLength: 1\n        type: string\n      minItems: 1\n    \
-                \  type: array\n    team:\n      type: string\n  required:\n  - project\n\
-                \  - users\n  - team\nchildren:\n- name: harbor-base\n  promise: harbor-base\n\
-                \  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n \
-                \ kind: HarborBase\n  spec:\n    group: harbor-${spec.project}\n \
-                \   project: ${spec.project}\n    storageQuotaGb: ${spec.storageQuotaGb}\n\
-                - name: teamaccess\n  promise: teamaccess\n  version: v0.0.1\n  apiVersion:\
-                \ platform.example.io/v1alpha1\n  kind: TeamAccess\n  spec:\n    group:\
-                \ harbor-${spec.project}\n    users: ${spec.users}\n"
+                \ integer\n    liaison:\n      description: ADOPTION \u2014 identifiant\
+                \ du groupe Keycloak EXISTANT dont on reprend\n        les membres\
+                \ (le m\xEAme UUID que la liaison du claim keycloak-group fr\xE8re).\
+                \ Omis\n        = cr\xE9ation classique.\n      maxLength: 63\n  \
+                \    type: string\n    users:\n      description: Usernames Keycloak\
+                \ membres du groupe \u2014 ce claim g\xE8re LA liste compl\xE8te\n\
+                \        (1 claim par groupe).\n      items:\n        maxLength: 63\n\
+                \        minLength: 1\n        type: string\n      minItems: 1\n \
+                \     type: array\n    team:\n      type: string\n  required:\n  -\
+                \ project\n  - users\n  - team\n  x-kubernetes-validations:\n  - message:\
+                \ 'adoption : le niveau \xAB observe \xBB exige \xAB liaison \xBB\
+                \ (l''UUID du groupe\n      Keycloak existant dont on reprend les\
+                \ membres). Sans lui, la plateforme n''aurait\n      rien \xE0 observer\
+                \ et cr\xE9erait.'\n    rule: '!has(self.mode) || self.mode != ''observe''\
+                \ || (has(self.liaison) && self.liaison\n      != '''')'\nchildren:\n\
+                - name: harbor-base\n  promise: harbor-base\n  version: v0.0.1\n \
+                \ apiVersion: platform.example.io/v1alpha1\n  kind: HarborBase\n \
+                \ spec:\n    group: harbor-${spec.project}\n    project: ${spec.project}\n\
+                \    storageQuotaGb: ${spec.storageQuotaGb}\n- name: teamaccess\n\
+                \  promise: teamaccess\n  version: v0.0.1\n  apiVersion: platform.example.io/v1alpha1\n\
+                \  kind: TeamAccess\n  spec:\n    group: harbor-${spec.project}\n\
+                \    liaison: ${spec.liaison}\n    users: ${spec.users}\n"
             - name: COMPOUND_STAGE
               value: emit
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
+            env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
           jobOptions: {}
           rbac: {}
 status:
