@@ -2,21 +2,20 @@ apiVersion: platform.kratix.io/v1alpha1
 kind: Promise
 metadata:
   annotations:
-    # ADOPTION-STANDARD 3bis : porteur de la non-destruction d'un adopte.
-    platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/adoptable: 'true'
+    platform.kratix.io/adoption-non-destruction: moteur
     platform.kratix.io/status-schema: "{\"groupId\": {\"path\": \".status.groupId\"\
       , \"label\": \"UUID Keycloak du groupe cr\xE9\xE9 (status.atProvider.id).\"\
       , \"type\": \"string\"}}"
     platform.kratix.io/contracts: '{"provides": [{"kind": "keycloak-group", "name":
       "${spec.group}", "defaultName": "team-${spec.team}", "severity": "suggest",
       "origin": "source"}]}'
-    backstage.example.io/ui-schema: "{\"properties\":{\"liaison\":{\"ui:title\":\"\
-      \xC9l\xE9ment existant \xE0 lier\",\"ui:description\":\"Vide = cr\xE9ation classique.\
-      \ En Observ\xE9, rien n'est modifi\xE9 : la plateforme lit et compare.\"}},\"\
-      ui:order\":[\"mode\",\"liaison\",\"*\"]}"
+    backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
+      Observ\xE9\",\"G\xE9r\xE9\"]},\"liaison\":{\"ui:title\":\"\xC9l\xE9ment existant\
+      \ \xE0 lier\"}},\"ui:order\":[\"mode\",\"liaison\",\"*\"]}"
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
+    platform.kratix.io/moteur: crossplane
   labels:
     kratix.io/promise-version: v0.0.1
   name: keycloak-group
@@ -270,15 +269,17 @@ spec:
           name: promise-configure
         spec:
           containers:
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
             env:
             - name: UI_SCHEMA_REV
-              value: 194e87ce373d
+              value: 9b5a681bb587
             - name: CONTRACTS_REV
               value: 59e32cc2a610
             - name: CURATION_REV
               value: 51b01245bae8
+            - name: MOTEUR_REV
+              value: d6c9fca98846
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -296,7 +297,10 @@ spec:
               value: XKeycloakGroup
             image: ghcr.io/syntasso/kratix-cli/from-api-to-crossplane-claim:v0.2.2
             name: from-api-to-crossplane-claim
-          - image: harbor.212-47-226-56.nip.io/platform/backstage-component:0.5.6-fr@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
+          - env:
+            - name: ADOPTION_NON_DESTRUCTION
+              value: moteur
+            image: harbor.212-47-226-56.nip.io/platform/backstage-component@sha256:13d1bb9e4e5d252455e54321154670b9e06bac6a88774cfb5ac69a7325db8479
             name: backstage
           jobOptions: {}
           rbac: {}
