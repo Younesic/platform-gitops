@@ -13,6 +13,7 @@ metadata:
     backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
       Observ\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"]}"
     platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
+    platform.kratix.io/moteur: awx
 spec:
   destinationSelectors:
   - matchLabels:
@@ -86,6 +87,8 @@ spec:
               value: 632f21d86a44
             - name: CURATION_REV
               value: e089b7b5c945
+            - name: MOTEUR_REV
+              value: 0abacc3d1d0e
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
