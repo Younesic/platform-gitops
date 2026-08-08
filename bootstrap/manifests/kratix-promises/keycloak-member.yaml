@@ -15,6 +15,7 @@ metadata:
     platform.kratix.io/exposure: internal
     platform.kratix.io/provider: identity
     platform.kratix.io/approval: '{"class":"UserRequest","gate":"standard"}'
+    platform.kratix.io/moteur: crossplane
   labels:
     kratix.io/promise-version: v0.0.1
   name: keycloak-member
@@ -273,6 +274,8 @@ spec:
               value: 9e3c0b0f1cbd
             - name: CURATION_REV
               value: 7214b366ee8f
+            - name: MOTEUR_REV
+              value: d6c9fca98846
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
