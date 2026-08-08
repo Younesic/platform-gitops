@@ -17,8 +17,9 @@ metadata:
     backstage.example.io/ui-schema: "{\"properties\":{\"mode\":{\"ui:enumNames\":[\"\
       Observ\xE9\",\"Gouvern\xE9\",\"G\xE9r\xE9\"]}},\"ui:order\":[\"mode\",\"*\"\
       ]}"
-    platform.kratix.io/approval: '{"class":"UserRequest","service":"Plateforme interne","gate":"standard"}'
     platform.kratix.io/tier: standard
+    platform.kratix.io/approval: '{"class":"UserRequest","service":"Plateforme interne","gate":"standard"}'
+    platform.kratix.io/moteur: api
 spec:
   destinationSelectors:
   - matchLabels:
@@ -129,6 +130,8 @@ spec:
               value: 3a415027514a
             - name: CURATION_REV
               value: c3916a52d4e4
+            - name: MOTEUR_REV
+              value: 1d62b9cfd5ed
     resource:
       configure:
       - apiVersion: platform.kratix.io/v1alpha1
@@ -138,7 +141,7 @@ spec:
         spec:
           containers:
           - name: rendu-terraform
-            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:649571fed7b90521e917d022d208ef0bc3f10d28ab1207e73ddc66cbe4a667c0
+            image: harbor.212-47-226-56.nip.io/platform/promise-factory@sha256:e3d73b71cb12ffab2b2b9d34a129bc2d7902046f1b99689117a4399877e3a73d
             env:
             - name: MODULE_PATH
               value: ./sources/api/dtrack-project
